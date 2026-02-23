@@ -1,0 +1,194 @@
+"use client";
+
+import { useState } from "react";
+import { signIn } from "next-auth/react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+
+export default function RegisterPage() {
+  const router = useRouter();
+  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
+  const [displayName, setDisplayName] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError("");
+
+    if (password !== confirmPassword) {
+      setError("Passwords do not match");
+      return;
+    }
+
+    if (password.length < 8) {
+      setError("Password must be at least 8 characters");
+      return;
+    }
+
+    if (!/^[a-zA-Z0-9_]+$/.test(username)) {
+      setError("Username can only contain letters, numbers, and underscores");
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const res = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, username, displayName, password }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.error || "Registration failed");
+        return;
+      }
+
+      // Auto sign-in after successful registration
+      const result = await signIn("credentials", {
+        email,
+        password,
+        redirect: false,
+      });
+
+      if (result?.error) {
+        setError("Account created but sign-in failed. Please log in manually.");
+        return;
+      }
+
+      router.push("/");
+    } catch {
+      setError("Something went wrong. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="rounded-lg bg-background-floating p-8 shadow-xl">
+      <div className="mb-6 text-center">
+        <h1 className="text-2xl font-bold text-text-primary">
+          Create an account
+        </h1>
+      </div>
+
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {error && (
+          <div className="rounded bg-status-dnd/10 px-3 py-2 text-sm text-status-dnd">
+            {error}
+          </div>
+        )}
+
+        <div>
+          <label
+            htmlFor="email"
+            className="mb-2 block text-xs font-bold uppercase text-text-secondary"
+          >
+            Email
+          </label>
+          <input
+            id="email"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            className="w-full rounded bg-background-tertiary px-3 py-2 text-text-primary outline-none ring-1 ring-transparent transition focus:ring-brand"
+          />
+        </div>
+
+        <div>
+          <label
+            htmlFor="displayName"
+            className="mb-2 block text-xs font-bold uppercase text-text-secondary"
+          >
+            Display Name
+          </label>
+          <input
+            id="displayName"
+            type="text"
+            value={displayName}
+            onChange={(e) => setDisplayName(e.target.value)}
+            required
+            maxLength={32}
+            className="w-full rounded bg-background-tertiary px-3 py-2 text-text-primary outline-none ring-1 ring-transparent transition focus:ring-brand"
+          />
+        </div>
+
+        <div>
+          <label
+            htmlFor="username"
+            className="mb-2 block text-xs font-bold uppercase text-text-secondary"
+          >
+            Username
+          </label>
+          <input
+            id="username"
+            type="text"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            required
+            minLength={3}
+            maxLength={20}
+            className="w-full rounded bg-background-tertiary px-3 py-2 text-text-primary outline-none ring-1 ring-transparent transition focus:ring-brand"
+          />
+        </div>
+
+        <div>
+          <label
+            htmlFor="password"
+            className="mb-2 block text-xs font-bold uppercase text-text-secondary"
+          >
+            Password
+          </label>
+          <input
+            id="password"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            minLength={8}
+            className="w-full rounded bg-background-tertiary px-3 py-2 text-text-primary outline-none ring-1 ring-transparent transition focus:ring-brand"
+          />
+        </div>
+
+        <div>
+          <label
+            htmlFor="confirmPassword"
+            className="mb-2 block text-xs font-bold uppercase text-text-secondary"
+          >
+            Confirm Password
+          </label>
+          <input
+            id="confirmPassword"
+            type="password"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            required
+            className="w-full rounded bg-background-tertiary px-3 py-2 text-text-primary outline-none ring-1 ring-transparent transition focus:ring-brand"
+          />
+        </div>
+
+        <button
+          type="submit"
+          disabled={loading}
+          className="w-full rounded bg-brand py-2.5 font-medium text-background-floating transition hover:bg-brand-hover disabled:opacity-50"
+        >
+          {loading ? "Creating account..." : "Continue"}
+        </button>
+
+        <p className="text-sm text-text-muted">
+          Already have an account?{" "}
+          <Link href="/login" className="text-text-link hover:underline">
+            Log In
+          </Link>
+        </p>
+      </form>
+    </div>
+  );
+}

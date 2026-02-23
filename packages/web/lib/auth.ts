@@ -1,13 +1,13 @@
 /**
  * NextAuth.js configuration
  * Uses JWT strategy for cross-service auth (see docs/DECISIONS.md DEC-0003)
- *
- * TODO: Implement full auth in TASK-0002
- * This is a placeholder showing the JWT strategy configuration.
+ * JWT structure matches PROTOCOL.md §6: {sub, username, displayName, email, iat, exp}
  */
 
 import type { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
+import bcrypt from "bcryptjs";
+import { prisma } from "./db";
 
 export const authOptions: NextAuthOptions = {
   session: {
@@ -23,30 +23,51 @@ export const authOptions: NextAuthOptions = {
         password: { label: "Password", type: "password" },
       },
       async authorize(credentials) {
-        // TODO: Implement actual credential validation in TASK-0002
-        // 1. Look up user by email
-        // 2. Compare bcrypt hash
-        // 3. Return user object or null
-        return null;
+        if (!credentials?.email || !credentials?.password) {
+          return null;
+        }
+
+        const user = await prisma.user.findUnique({
+          where: { email: credentials.email },
+        });
+
+        if (!user) {
+          return null;
+        }
+
+        const isValid = await bcrypt.compare(credentials.password, user.password);
+        if (!isValid) {
+          return null;
+        }
+
+        return {
+          id: user.id,
+          email: user.email,
+          username: user.username,
+          displayName: user.displayName,
+        };
       },
     }),
   ],
 
   callbacks: {
     async jwt({ token, user }) {
-      // On sign-in, add custom claims from the user object
       if (user) {
         token.sub = user.id;
-        // TODO: Add username, displayName from User model
+        token.username = user.username;
+        token.displayName = user.displayName;
+        token.email = user.email;
       }
       return token;
     },
 
     async session({ session, token }) {
-      // Expose custom claims in the session
-      if (session.user && token.sub) {
-        session.user.id = token.sub;
-      }
+      session.user = {
+        id: token.sub,
+        username: token.username,
+        displayName: token.displayName,
+        email: token.email,
+      };
       return session;
     },
   },

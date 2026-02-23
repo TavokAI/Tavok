@@ -7,7 +7,7 @@
 
 ## TASK-0001: Scaffold Project
 
-**Status**: IN PROGRESS
+**Status**: DONE
 **Priority**: P0 — Foundation
 **Assignee**: Builder
 
@@ -15,24 +15,24 @@
 Set up the complete project structure from zero. All three services, Docker infrastructure, documentation, and a working `docker-compose up` with health checks passing.
 
 ### Acceptance Criteria
-- [ ] All docs moved to `docs/` directory
-- [ ] `docs/PROTOCOL.md` defines all cross-service contracts
-- [ ] `docs/DECISIONS.md` seeded with DEC-0001 through DEC-0007
-- [ ] `prisma/schema.prisma` has all models with ULIDs, indexes, enums
-- [ ] Next.js app scaffolded with health endpoint
-- [ ] Elixir/Phoenix gateway scaffolded with health endpoint and stub socket
-- [ ] Go streaming proxy scaffolded with health endpoint
-- [ ] `docker-compose.yml` starts all 5 containers (db, redis, web, gateway, streaming)
-- [ ] `make health` returns 3 OK responses
-- [ ] Prisma migration applies cleanly
-- [ ] `.env.example` documents every variable
-- [ ] `CLAUDE.md` provides AI agent entry point
+- [x] All docs moved to `docs/` directory
+- [x] `docs/PROTOCOL.md` defines all cross-service contracts
+- [x] `docs/DECISIONS.md` seeded with DEC-0001 through DEC-0007
+- [x] `prisma/schema.prisma` has all models with ULIDs, indexes, enums
+- [x] Next.js app scaffolded with health endpoint
+- [x] Elixir/Phoenix gateway scaffolded with health endpoint and stub socket
+- [x] Go streaming proxy scaffolded with health endpoint
+- [x] `docker-compose.yml` starts all 5 containers (db, redis, web, gateway, streaming)
+- [x] `make health` returns 3 OK responses
+- [x] Prisma migration applies cleanly
+- [x] `.env.example` documents every variable
+- [x] `CLAUDE.md` provides AI agent entry point
 
 ---
 
 ## TASK-0002: Implement Foundation (Phase 2a)
 
-**Status**: TODO
+**Status**: DONE
 **Priority**: P0 — Foundation
 **Assignee**: Builder
 
@@ -40,12 +40,12 @@ Set up the complete project structure from zero. All three services, Docker infr
 User registration/login, NextAuth with JWT strategy, basic Discord-like app shell layout.
 
 ### Acceptance Criteria
-- [ ] User can register with email/password
-- [ ] User can log in and receive JWT
-- [ ] App shell renders: server sidebar, channel sidebar, chat area, member list
-- [ ] Dark theme applied (default and only theme)
-- [ ] Auth state persists across page refreshes
-- [ ] Unauthenticated users redirected to login
+- [x] User can register with email/password
+- [x] User can log in and receive JWT
+- [x] App shell renders: server sidebar, channel sidebar, chat area, member list
+- [x] Dark theme applied (default and only theme)
+- [x] Auth state persists across page refreshes
+- [x] Unauthenticated users redirected to login
 
 ---
 

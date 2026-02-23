@@ -9,6 +9,7 @@ if config_env() == :prod do
       raise "SECRET_KEY_BASE not set. Generate with: mix phx.gen.secret"
 
   config :hive_gateway, HiveGatewayWeb.Endpoint,
+    adapter: Bandit.PhoenixAdapter,
     http: [
       ip: {0, 0, 0, 0},
       port: String.to_integer(System.get_env("GATEWAY_PORT") || "4001")
