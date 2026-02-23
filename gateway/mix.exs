@@ -41,7 +41,10 @@ defmodule HiveGateway.MixProject do
       {:cors_plug, "~> 3.0"},
 
       # ULID generation
-      {:ulid, "~> 0.2"}
+      {:ulid, "~> 0.2"},
+
+      # HTTP client (for calling Next.js internal API)
+      {:req, "~> 0.5"}
     ]
   end
 
