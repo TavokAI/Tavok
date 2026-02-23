@@ -33,7 +33,8 @@ RUN mix compile
 RUN mix release
 
 # --- Stage 2: Runtime ---
-FROM alpine:3.20 AS runner
+# Must match Alpine version from elixir:1.17-alpine (3.22) for OpenSSL compatibility
+FROM alpine:3.22 AS runner
 
 RUN apk add --no-cache libstdc++ openssl ncurses-libs curl
 

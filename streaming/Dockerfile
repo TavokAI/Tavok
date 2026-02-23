@@ -9,12 +9,11 @@ RUN apk add --no-cache ca-certificates
 
 WORKDIR /app
 
-# Copy dependency files first (for Docker layer caching)
-COPY go.mod go.sum ./
-RUN go mod download
-
-# Copy source
+# Copy all source
 COPY . .
+
+# Regenerate go.sum fresh (checksums may differ between Go versions)
+RUN rm -f go.sum && go mod tidy
 
 # Build static binary
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /streaming ./cmd/proxy

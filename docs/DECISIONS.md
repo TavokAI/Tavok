@@ -103,3 +103,36 @@
 **Decision**: Scaffold all three services from day 1. Architecture honest from the start.
 **Rationale**: Option B (temporary Node.js WS) creates throwaway code and teaches bad habits. The inter-service contracts need to be exercised immediately to catch design issues early. Longer ramp to first visible UI, but no technical debt from day one.
 **Consequences**: More complex initial setup. Docker Compose required from the start. Higher bar for "hello world" but cleaner foundation.
+
+---
+
+## DEC-0008 — NextAuth v4 with CredentialsProvider
+
+**Date**: 2026-02-23
+**Status**: Accepted
+**Context**: Need authentication for the web frontend. Options: NextAuth v5, NextAuth v4, custom JWT.
+**Decision**: NextAuth v4 with CredentialsProvider (email/password) and JWT session strategy.
+**Rationale**: v4 is stable and widely documented. JWT strategy (not database sessions) means the JWT can be validated by the Gateway without session lookups. CredentialsProvider handles the custom email/password flow. Custom callbacks inject `username` and `displayName` into the JWT claims for cross-service use.
+**Consequences**: Custom type extensions for NextAuth (`next-auth.d.ts`). JWT claims match PROTOCOL.md §6. NEXTAUTH_SECRET must equal JWT_SECRET for Gateway validation.
+
+---
+
+## DEC-0009 — Bandit over Cowboy for Phoenix HTTP adapter
+
+**Date**: 2026-02-23
+**Status**: Accepted
+**Context**: Phoenix 1.8 defaults to Cowboy2Adapter but the dependency we have is Bandit. Attempting to start with Cowboy fails (`Plug.Cowboy.child_spec/1 is undefined`).
+**Decision**: Explicitly configure `adapter: Bandit.PhoenixAdapter` in the endpoint config.
+**Rationale**: Bandit is a pure Elixir HTTP server — simpler dependency tree (no C NIFs), better alignment with the BEAM philosophy. Phoenix 1.8 supports it as a first-class option.
+**Consequences**: Must set adapter explicitly in `runtime.exs`. Runtime Alpine version must match build Alpine for OpenSSL compatibility (both Alpine 3.22).
+
+---
+
+## DEC-0010 — Health check uses 127.0.0.1 instead of localhost in Docker
+
+**Date**: 2026-02-23
+**Status**: Accepted
+**Context**: Docker health check for web service used `wget -qO- http://localhost:3000/api/health` but always returned "Connection refused" even though the server was listening on `0.0.0.0:3000`.
+**Decision**: Use `127.0.0.1` explicitly instead of `localhost` in all Docker health checks.
+**Rationale**: Alpine Linux resolves `localhost` to `::1` (IPv6) first. Next.js standalone server only binds to `0.0.0.0` (IPv4). Using `127.0.0.1` explicitly bypasses the IPv6 resolution and connects to the correct address.
+**Consequences**: All health check URLs in docker-compose.yml use `127.0.0.1` instead of `localhost`.
