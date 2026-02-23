@@ -51,7 +51,7 @@ User registration/login, NextAuth with JWT strategy, basic Discord-like app shel
 
 ## TASK-0003: Implement Core Chat (Phase 2b)
 
-**Status**: TODO
+**Status**: DONE
 **Priority**: P0 — Core
 **Assignee**: Builder
 
@@ -59,15 +59,15 @@ User registration/login, NextAuth with JWT strategy, basic Discord-like app shel
 Server CRUD, channel CRUD, real-time messaging through Elixir gateway, message persistence, history with scroll-back, user presence.
 
 ### Acceptance Criteria
-- [ ] User can create a server
-- [ ] User can create text channels in a server
-- [ ] User can join a server (via invite or direct join for MVP)
-- [ ] Messages sent via WebSocket through Elixir gateway
-- [ ] Messages persisted to PostgreSQL via internal API
-- [ ] Messages broadcast to all connected clients in channel
-- [ ] Message history loads on channel view (cursor pagination)
-- [ ] User presence shows online/offline in member list
-- [ ] Reconnection syncs missed messages (sequence-based)
+- [x] User can create a server
+- [x] User can create text channels in a server
+- [x] User can join a server (via invite or direct join for MVP)
+- [x] Messages sent via WebSocket through Elixir gateway
+- [x] Messages persisted to PostgreSQL via internal API
+- [x] Messages broadcast to all connected clients in channel
+- [x] Message history loads on channel view (cursor pagination)
+- [x] User presence shows online/offline in member list
+- [x] Reconnection syncs missed messages (sequence-based)
 
 ---
 

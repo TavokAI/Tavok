@@ -136,3 +136,25 @@
 **Decision**: Use `127.0.0.1` explicitly instead of `localhost` in all Docker health checks.
 **Rationale**: Alpine Linux resolves `localhost` to `::1` (IPv6) first. Next.js standalone server only binds to `0.0.0.0` (IPv4). Using `127.0.0.1` explicitly bypasses the IPv6 resolution and connects to the correct address.
 **Consequences**: All health check URLs in docker-compose.yml use `127.0.0.1` instead of `localhost`.
+
+---
+
+## DEC-0011 — Persist-first message pipeline
+
+**Date**: 2026-02-23
+**Status**: Accepted
+**Context**: When a user sends a message, the Gateway could either broadcast immediately and persist asynchronously, or persist first then broadcast.
+**Decision**: Persist-first — Gateway calls Next.js internal API to write the message to PostgreSQL before broadcasting to other clients.
+**Rationale**: Reliability over speed. A message that was broadcast but failed to persist would appear in real-time but vanish on refresh. Persist-first guarantees that any message visible in real-time is also in the database. Latency increase is minimal (~10ms for internal API call on the Docker network).
+**Consequences**: Gateway depends on Next.js internal API being available. Uses `Req` HTTP client in Elixir. Message broadcast is atomic with persistence success.
+
+---
+
+## DEC-0012 — Phoenix Presence integrated into useChannel hook
+
+**Date**: 2026-02-23
+**Status**: Accepted
+**Context**: Presence tracking could be a separate React hook (`usePresence`) or integrated into the channel subscription hook.
+**Decision**: Integrate presence tracking directly into `useChannel` hook, which returns a `presenceMap` alongside messages and typing indicators.
+**Rationale**: Presence is scoped to a channel — when you join a channel, you get presence for that channel. Keeping it in one hook means one subscription lifecycle, one cleanup, one source of truth. The channel page component passes `presenceMap` to the MemberList component.
+**Consequences**: `useChannel` returns more data but has a single lifecycle. MemberList receives presenceMap as a prop and splits members into online/offline groups.

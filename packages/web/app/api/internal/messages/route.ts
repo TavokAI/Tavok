@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/db";
 
 // Internal API secret validation
 function validateInternalSecret(request: NextRequest): boolean {
@@ -16,14 +17,95 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // TODO: Implement message persistence via Prisma
-  // For now, return a stub response
-  const body = await request.json();
+  try {
+    const body = await request.json();
 
-  return NextResponse.json(
-    { message: "Message persistence not yet implemented", received: body },
-    { status: 201 }
-  );
+    const {
+      id,
+      channelId,
+      authorId,
+      authorType,
+      content,
+      type,
+      streamingStatus,
+      sequence,
+    } = body;
+
+    // Validate required fields
+    if (!id || !channelId || !authorId || !authorType || content === undefined || !type || !sequence) {
+      return NextResponse.json(
+        { error: "Missing required fields" },
+        { status: 400 }
+      );
+    }
+
+    // Persist message and update channel lastSequence in a transaction
+    const [message] = await prisma.$transaction([
+      prisma.message.create({
+        data: {
+          id,
+          channelId,
+          authorId,
+          authorType,
+          content,
+          type,
+          streamingStatus: streamingStatus || null,
+          sequence: BigInt(sequence),
+        },
+      }),
+      prisma.channel.update({
+        where: { id: channelId },
+        data: { lastSequence: BigInt(sequence) },
+      }),
+    ]);
+
+    // Fetch author info for the response payload
+    let authorName = "Unknown";
+    let authorAvatarUrl: string | null = null;
+
+    if (authorType === "USER") {
+      const user = await prisma.user.findUnique({
+        where: { id: authorId },
+        select: { displayName: true, avatarUrl: true },
+      });
+      if (user) {
+        authorName = user.displayName;
+        authorAvatarUrl = user.avatarUrl;
+      }
+    } else if (authorType === "BOT") {
+      const bot = await prisma.bot.findUnique({
+        where: { id: authorId },
+        select: { name: true, avatarUrl: true },
+      });
+      if (bot) {
+        authorName = bot.name;
+        authorAvatarUrl = bot.avatarUrl;
+      }
+    }
+
+    return NextResponse.json(
+      {
+        id: message.id,
+        channelId: message.channelId,
+        authorId: message.authorId,
+        authorType: message.authorType,
+        authorName,
+        authorAvatarUrl,
+        content: message.content,
+        type: message.type,
+        streamingStatus: message.streamingStatus,
+        sequence: Number(message.sequence),
+        createdAt: message.createdAt.toISOString(),
+      },
+      { status: 201 }
+    );
+  } catch (error) {
+    console.error("Failed to persist message:", error);
+    return NextResponse.json(
+      { error: "Failed to persist message" },
+      { status: 500 }
+    );
+  }
 }
 
 /**
@@ -46,9 +128,76 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  // TODO: Implement message fetching via Prisma
-  return NextResponse.json({
-    messages: [],
-    hasMore: false,
-  });
+  try {
+    const afterSequence = searchParams.get("afterSequence");
+    const before = searchParams.get("before");
+    const limit = Math.min(
+      parseInt(searchParams.get("limit") || "50", 10),
+      100
+    );
+
+    // Build where clause
+    const where: Record<string, unknown> = { channelId };
+
+    if (afterSequence) {
+      // Reconnection sync: messages with sequence > N
+      where.sequence = { gt: BigInt(afterSequence) };
+    } else if (before) {
+      // History cursor: messages with id < ULID (older messages)
+      where.id = { lt: before };
+    }
+
+    // Fetch one extra to determine hasMore
+    const messages = await prisma.message.findMany({
+      where,
+      orderBy: afterSequence
+        ? { sequence: "asc" }  // sync: oldest first
+        : { id: "desc" },      // history: newest first (we'll reverse)
+      take: limit + 1,
+      include: {
+        author: {
+          select: {
+            displayName: true,
+            avatarUrl: true,
+          },
+        },
+      },
+    });
+
+    const hasMore = messages.length > limit;
+    if (hasMore) {
+      messages.pop();
+    }
+
+    // For history mode (no afterSequence), reverse to chronological order
+    if (!afterSequence) {
+      messages.reverse();
+    }
+
+    // Map to MessagePayload shape
+    const payload = messages.map((m) => ({
+      id: m.id,
+      channelId: m.channelId,
+      authorId: m.authorId,
+      authorType: m.authorType,
+      authorName: m.author?.displayName || "Unknown",
+      authorAvatarUrl: m.author?.avatarUrl || null,
+      content: m.content,
+      type: m.type,
+      streamingStatus: m.streamingStatus,
+      sequence: Number(m.sequence),
+      createdAt: m.createdAt.toISOString(),
+    }));
+
+    return NextResponse.json({
+      messages: payload,
+      hasMore,
+    });
+  } catch (error) {
+    console.error("Failed to fetch messages:", error);
+    return NextResponse.json(
+      { error: "Failed to fetch messages" },
+      { status: 500 }
+    );
+  }
 }

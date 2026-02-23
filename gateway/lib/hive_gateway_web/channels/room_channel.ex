@@ -16,6 +16,7 @@ defmodule HiveGatewayWeb.RoomChannel do
   use Phoenix.Channel
 
   alias HiveGatewayWeb.Presence
+  alias HiveGateway.WebClient
 
   require Logger
 
@@ -30,18 +31,17 @@ defmodule HiveGatewayWeb.RoomChannel do
     # Track presence on join
     send(self(), :after_join)
 
-    # If client provides lastSequence, handle reconnection sync
+    # If client provides lastSequence, schedule sync after join completes
     case Map.get(params, "lastSequence") do
       nil ->
         {:ok, socket}
 
       last_sequence ->
-        # TODO: Fetch missed messages from Next.js internal API
-        # For now, just acknowledge the join
         Logger.info(
           "Reconnection sync requested: channel=#{channel_id} lastSequence=#{last_sequence}"
         )
 
+        send(self(), {:sync_on_join, last_sequence})
         {:ok, socket}
     end
   end
@@ -64,19 +64,82 @@ defmodule HiveGatewayWeb.RoomChannel do
   end
 
   @impl true
+  def handle_info({:sync_on_join, last_sequence}, socket) do
+    case WebClient.get_messages(%{
+           channelId: socket.assigns.channel_id,
+           afterSequence: last_sequence,
+           limit: 100
+         }) do
+      {:ok, body} ->
+        push(socket, "sync_response", body)
+
+      {:error, _reason} ->
+        push(socket, "sync_response", %{"messages" => [], "hasMore" => false})
+    end
+
+    {:noreply, socket}
+  end
+
+  @impl true
   def handle_in("new_message", %{"content" => content}, socket) do
-    # TODO: Implement in TASK-0003
-    # 1. Generate ULID for message
+    channel_id = socket.assigns.channel_id
+    user_id = socket.assigns.user_id
+    display_name = socket.assigns.display_name
+
+    # 1. Generate ULID for the message
+    message_id = Ulid.generate()
+
     # 2. Get next sequence number from Redis INCR
-    # 3. Persist via POST /api/internal/messages
-    # 4. Broadcast message_new to all clients
-    # 5. Check if channel has a default bot and trigger if needed
+    case Redix.command(:redix, ["INCR", "hive:channel:#{channel_id}:seq"]) do
+      {:ok, sequence} ->
+        # 3. Build persist request body (matches PersistMessageRequest type)
+        body = %{
+          id: message_id,
+          channelId: channel_id,
+          authorId: user_id,
+          authorType: "USER",
+          content: content,
+          type: "STANDARD",
+          streamingStatus: nil,
+          sequence: sequence
+        }
 
-    Logger.info(
-      "Message received: channel=#{socket.assigns.channel_id} user=#{socket.assigns.user_id} content_length=#{String.length(content)}"
-    )
+        # 4. Persist via internal API
+        case WebClient.post_message(body) do
+          {:ok, _response} ->
+            # 5. Build MessagePayload for broadcast
+            message_payload = %{
+              id: message_id,
+              channelId: channel_id,
+              authorId: user_id,
+              authorType: "USER",
+              authorName: display_name,
+              authorAvatarUrl: nil,
+              content: content,
+              type: "STANDARD",
+              streamingStatus: nil,
+              sequence: sequence,
+              createdAt: DateTime.utc_now() |> DateTime.to_iso8601()
+            }
 
-    {:reply, {:ok, %{status: "received"}}, socket}
+            # 6. Broadcast to all clients in channel
+            broadcast!(socket, "message_new", message_payload)
+
+            # 7. Reply to sender with message id and sequence
+            {:reply, {:ok, %{id: message_id, sequence: sequence}}, socket}
+
+          {:error, reason} ->
+            Logger.error(
+              "Failed to persist message: channel=#{channel_id} error=#{inspect(reason)}"
+            )
+
+            {:reply, {:error, %{reason: "persistence_failed"}}, socket}
+        end
+
+      {:error, reason} ->
+        Logger.error("Redis INCR failed: #{inspect(reason)}")
+        {:reply, {:error, %{reason: "sequence_failed"}}, socket}
+    end
   end
 
   @impl true
@@ -92,19 +155,40 @@ defmodule HiveGatewayWeb.RoomChannel do
   end
 
   @impl true
-  def handle_in("sync", %{"lastSequence" => _last_sequence}, socket) do
-    # TODO: Implement reconnection sync in TASK-0003
-    push(socket, "sync_response", %{messages: [], hasMore: false})
+  def handle_in("sync", %{"lastSequence" => last_sequence}, socket) do
+    case WebClient.get_messages(%{
+           channelId: socket.assigns.channel_id,
+           afterSequence: last_sequence,
+           limit: 100
+         }) do
+      {:ok, body} ->
+        push(socket, "sync_response", body)
+
+      {:error, _reason} ->
+        push(socket, "sync_response", %{"messages" => [], "hasMore" => false})
+    end
+
     {:noreply, socket}
   end
 
   @impl true
   def handle_in("history", params, socket) do
-    # TODO: Implement message history in TASK-0003
-    _before = Map.get(params, "before")
-    _limit = Map.get(params, "limit", 50)
+    before = Map.get(params, "before")
+    limit = min(Map.get(params, "limit", 50), 100)
 
-    push(socket, "history_response", %{messages: [], hasMore: false})
+    query_params = %{channelId: socket.assigns.channel_id, limit: limit}
+
+    query_params =
+      if before, do: Map.put(query_params, :before, before), else: query_params
+
+    case WebClient.get_messages(query_params) do
+      {:ok, body} ->
+        push(socket, "history_response", body)
+
+      {:error, _reason} ->
+        push(socket, "history_response", %{"messages" => [], "hasMore" => false})
+    end
+
     {:noreply, socket}
   end
 end
