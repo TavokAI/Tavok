@@ -243,7 +243,7 @@ For errors:
 
 Per-channel sequence numbers are assigned via Redis atomic increment:
 
-```
+```text
 INCR hive:channel:{channelId}:seq
 ```
 
