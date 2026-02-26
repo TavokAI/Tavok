@@ -150,4 +150,31 @@ defmodule HiveGateway.WebClient do
         {:error, reason}
     end
   end
+
+  @doc """
+  Fetch one message via GET /api/internal/messages/{messageId}.
+  Returns {:ok, message} | {:ok, nil} (404) | {:error, reason}.
+  """
+  def get_message(message_id) do
+    url = "#{web_url()}/api/internal/messages/#{message_id}"
+
+    case Req.get(url,
+           headers: [{"x-internal-secret", internal_secret()}],
+           receive_timeout: 10_000
+         ) do
+      {:ok, %Req.Response{status: 200, body: response_body}} ->
+        {:ok, response_body}
+
+      {:ok, %Req.Response{status: 404}} ->
+        {:ok, nil}
+
+      {:ok, %Req.Response{status: status, body: response_body}} ->
+        Logger.error("get_message failed: status=#{status} body=#{inspect(response_body)}")
+        {:error, {:http_error, status, response_body}}
+
+      {:error, reason} ->
+        Logger.error("get_message request failed: #{inspect(reason)}")
+        {:error, reason}
+    end
+  end
 end

@@ -191,3 +191,33 @@
 **Decision**: Use Go stdlib only (`net/http`, `bufio`, `encoding/json`). Custom SSE parser in `internal/sse/parser.go`.
 **Rationale**: SSE is a simple line-based protocol — parsing it is ~70 lines of code. Using stdlib means zero external dependencies beyond `go-redis`. The Go binary stays small (~8MB). No dependency supply chain risk for a security-critical component (it handles API keys).
 **Consequences**: SSE parser handles both OpenAI format (`data: [DONE]` termination) and Anthropic format (`event: content_block_delta`). Provider registry maps `llmProvider` to the correct parser. Only dependency: `github.com/redis/go-redis/v9`.
+
+---
+
+## DEC-0016 — Socket auth failures return transport-level close only
+
+**Date**: 2026-02-25
+**Status**: Accepted
+**Context**: `PROTOCOL.md` stated that failed WebSocket authentication returns `{reason: "unauthorized"}`. In Phoenix `UserSocket.connect/3`, returning `:error` rejects the handshake without a custom payload.
+**Decision**: Keep auth rejection in `UserSocket.connect/3` as `:error` and document the real behavior as a transport-level close with no structured payload.
+**Rationale**: This preserves secure fail-closed behavior with the framework-default handshake path and avoids introducing custom transport logic solely to shape an error payload.
+**Consequences**: Clients must treat connect failures as unauthorized based on close outcome and logs, not a JSON reason payload at socket connect time.
+
+---
+
+## DEC-0017 — Gateway-side stream watchdog for terminal event reliability
+
+**Date**: 2026-02-25
+**Status**: Accepted
+**Context**: Redis pub/sub is fire-and-forget. If the Gateway's subscription connection
+experiences a transient disconnect while the Go Proxy publishes a terminal status event,
+the message is permanently lost. Clients see streams stuck in ACTIVE state until refresh.
+**Decision**: Add a Gateway-side watchdog that polls the DB as a fallback when no terminal
+event arrives via Redis within 45 seconds of stream_start.
+**Rationale**: Defense-in-depth. The Go Proxy correctly publishes and persists. The issue
+is transport reliability between Redis pub/sub and the Gateway subscriber. The watchdog
+makes the system self-healing without changing the primary delivery path or switching
+message brokers.
+**Consequences**: Adds one GenServer to the Gateway supervision tree. Worst case adds
+one internal API call per stream (only when Redis delivery fails). Does not affect
+happy-path latency.

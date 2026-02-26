@@ -15,6 +15,7 @@ defmodule HiveGatewayWeb.RoomChannel do
   """
   use Phoenix.Channel
 
+  alias HiveGateway.StreamWatchdog
   alias HiveGatewayWeb.Presence
   alias HiveGateway.WebClient
 
@@ -154,6 +155,11 @@ defmodule HiveGatewayWeb.RoomChannel do
 
   @impl true
   def handle_in("new_message", %{"content" => content}, socket) when is_binary(content) do
+    case String.trim(content) do
+      "" ->
+        {:reply, {:error, %{reason: "empty_content"}}, socket}
+
+      _ ->
     channel_id = socket.assigns.channel_id
     user_id = socket.assigns.user_id
     display_name = socket.assigns.display_name
@@ -214,6 +220,7 @@ defmodule HiveGatewayWeb.RoomChannel do
       {:error, reason} ->
         Logger.error("Redis INCR failed: #{inspect(reason)}")
         {:reply, {:error, %{reason: "sequence_failed"}}, socket}
+    end
     end
   end
 
@@ -350,6 +357,9 @@ defmodule HiveGatewayWeb.RoomChannel do
               botAvatarUrl: bot_avatar_url,
               sequence: Integer.to_string(sequence)
             })
+
+            # Register fallback watchdog in case terminal status is missed on Redis pub/sub.
+            StreamWatchdog.register_stream(channel_id, message_id)
 
             # 5. Build context messages for the LLM
             context_messages = fetch_context_messages(channel_id)

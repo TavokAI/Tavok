@@ -283,6 +283,12 @@ streamDone:
 			"messageId", req.MessageID,
 			"error", err,
 		)
+	} else {
+		m.logger.Info("Completion status published to Redis",
+			"messageId", req.MessageID,
+			"channelId", req.ChannelID,
+			"status", "complete",
+		)
 	}
 
 	// 8. Persist final message content
@@ -318,6 +324,12 @@ func (m *Manager) publishError(ctx context.Context, req streamRequest, partialCo
 		m.logger.Error("Failed to publish error status",
 			"messageId", req.MessageID,
 			"error", err,
+		)
+	} else {
+		m.logger.Info("Error status published to Redis",
+			"messageId", req.MessageID,
+			"channelId", req.ChannelID,
+			"status", "error",
 		)
 	}
 

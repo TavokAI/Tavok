@@ -26,6 +26,9 @@ defmodule HiveGateway.Application do
       # Presence tracking
       HiveGatewayWeb.Presence,
 
+      # Stream watchdog — fallback terminal event recovery
+      HiveGateway.StreamWatchdog,
+
       # Stream listener — Redis pub/sub → Phoenix Channel bridge
       HiveGateway.StreamListener,
 

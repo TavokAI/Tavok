@@ -1,6 +1,52 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 
+function validateInternalSecret(request: NextRequest): boolean {
+  const secret = request.headers.get("x-internal-secret");
+  return secret === process.env.INTERNAL_API_SECRET;
+}
+
+/**
+ * GET /api/internal/messages/{messageId}
+ *
+ * Fetch one message by id for internal consumers (Gateway watchdog).
+ */
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ messageId: string }> }
+) {
+  if (!validateInternalSecret(request)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { messageId } = await params;
+
+  try {
+    const message = await prisma.message.findUnique({
+      where: { id: messageId },
+      select: {
+        id: true,
+        channelId: true,
+        content: true,
+        type: true,
+        streamingStatus: true,
+      },
+    });
+
+    if (!message) {
+      return NextResponse.json({ error: "Message not found" }, { status: 404 });
+    }
+
+    return NextResponse.json(message);
+  } catch (error) {
+    console.error("[Internal] Failed to fetch message:", error);
+    return NextResponse.json(
+      { error: "Failed to fetch message" },
+      { status: 500 }
+    );
+  }
+}
+
 /**
  * PUT /api/internal/messages/{messageId}
  *
@@ -11,9 +57,7 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ messageId: string }> }
 ) {
-  // Validate internal secret
-  const secret = request.headers.get("x-internal-secret");
-  if (secret !== process.env.INTERNAL_API_SECRET) {
+  if (!validateInternalSecret(request)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
