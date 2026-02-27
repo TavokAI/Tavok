@@ -24,7 +24,7 @@ export async function GET(
   const check = await checkMemberPermission(
     session.user.id,
     serverId,
-    Permissions.MANAGE_SERVER
+    Permissions.CREATE_INVITE
   );
   if (!check.allowed) {
     return NextResponse.json(
