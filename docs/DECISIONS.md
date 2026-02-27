@@ -249,3 +249,134 @@ forever on ACTIVE.
   infrastructure failure scenario.
 - The watchdog now makes write calls (PUT) to the web service, not just reads.
   This is a new dependency direction but justified by the safety-net role.
+
+---
+
+## DEC-0019 — Go owns orchestration, Elixir owns transport
+
+**Date**: 2026-02-27
+**Status**: Accepted
+**Context**: As V1 introduces multi-agent swarms, channel charters, and tool execution, orchestration logic needs a clear home. Both Go and Elixir are candidates. Ambiguity between "Go streaming service + lightweight orchestrator" and "Elixir OTP strengths for supervision" risked split-brain — state scattered across two services with no clear owner.
+**Decision**: Go Proxy is the orchestrator. All agent decision-making lives in Go: which agent runs next, charter rule evaluation, step sequencing, tool execution, retry logic, checkpoint/resume. Elixir Gateway is pure transport: WebSocket connections, presence, typing indicators, message fan-out. Elixir never makes an orchestration decision.
+**Rationale**:
+- Orchestration is algorithmic control flow — Go is built for this (deterministic, easy to test, easy to reason about)
+- Elixir/Phoenix Channels want to be a broadcast layer, not a workflow engine
+- OTP supervision trees are great for keeping connections alive, not for deciding what agents should do
+- Clear boundary: Go drives execution, Elixir moves bytes
+- Prevents the "second backend" problem where Go and Elixir accumulate overlapping responsibilities
+
+**Consequences**: All swarm/charter/agent-routing logic goes in `streaming/internal/`. Gateway's channel handlers remain thin relay layers. Stream requests flow: Elixir receives trigger → hands to Go → Go drives entire execution → pushes results back through Elixir to clients.
+
+---
+
+## DEC-0020 — pgvector as default memory backend
+
+**Date**: 2026-02-27
+**Status**: Accepted
+**Context**: V1 will need vector storage for agent long-term memory. Options: pgvector (extension in existing Postgres), Qdrant (separate container), Pinecone (managed SaaS).
+**Decision**: pgvector in existing PostgreSQL as the default and only V1 implementation. Design an abstract memory interface so alternative backends can be swapped in later.
+**Rationale**:
+- One database, one backup strategy, one fewer container for self-hosters
+- `docker-compose up` stays simple — no additional infrastructure
+- pgvector performance is sufficient for V1 workloads
+- Abstract interface allows Qdrant/Pinecone as optional paid-tier adapters later without changing application code
+
+**Consequences**: `CREATE EXTENSION vector` added to Postgres initialization. Memory table with embedding column alongside metadata. Go proxy calls memory interface for store/recall/forget. No separate vector database container in docker-compose.yml.
+
+---
+
+## DEC-0021 — JSON Schema for cross-service contracts (upgrade path to Protobuf)
+
+**Date**: 2026-02-27
+**Status**: Accepted
+**Context**: PROTOCOL.md defines contracts as documentation. The three services (TypeScript, Go, Elixir) can't share types directly across languages. Need a machine-enforceable contract format that works in all three.
+**Decision**: Define cross-service payload contracts as JSON Schema files stored in `packages/shared/schemas/`. Validate in each language: TypeScript (ajv), Go (gojsonschema), Elixir (ex_json_schema). Plan upgrade path to Protobuf for the hot path (Go ↔ Elixir token streaming).
+**Rationale**:
+- JSON Schema is language-agnostic and validatable in all three languages
+- Low adoption cost — contracts are already defined in PROTOCOL.md, just need formalization
+- Protobuf upgrade can happen incrementally on the hot path without rewriting everything
+- `.proto` files eventually become the machine-enforced version of PROTOCOL.md sections
+
+**Consequences**: `packages/shared/schemas/` becomes the source of truth for payload shapes. PROTOCOL.md still documents semantics and lifecycle, but payload validation is automated. Migration path: JSON Schema now → Protobuf on Go ↔ Elixir hot path → Full gRPC if load demands it.
+
+---
+
+## DEC-0022 — MCP-compatible tool interface in Go
+
+**Date**: 2026-02-27
+**Status**: Accepted
+**Context**: V1 tools (web search, file ops, git, code execution) need an abstraction layer. The Model Context Protocol (MCP) is becoming an industry standard for tool integration. Options: custom tool interface, or design to match MCP patterns from day one.
+**Decision**: Design the Go proxy's tool interface to match MCP's `tools/list` and `tools/call` JSON-RPC patterns. Not a full MCP implementation, but structurally compatible.
+**Rationale**:
+- MCP hosting is a planned V1 post-launch feature (any MCP-compatible tool plugs into HiveChat)
+- Designing tool interfaces to match MCP patterns now makes MCP hosting a natural extension, not a retrofit
+- The JSON-RPC format is simple and well-specified
+- ~2 extra hours of design work that saves a refactor later
+- Forrester predicts 30% of enterprise app vendors will launch MCP servers in 2026
+
+**Consequences**: Tool interface in `streaming/internal/tools/` uses `tools/list` and `tools/call` patterns. Each tool has name, description, and JSON Schema input definition. MCP server hosting can be added by wiring this interface to incoming MCP connections.
+
+---
+
+## DEC-0023 — Three-language stack confirmed (no rewrite)
+
+**Date**: 2026-02-27
+**Status**: Accepted
+**Context**: Multiple external analyses suggested language changes (rewrite to Rust, add Python for AI libraries, consolidate to one language). Full architecture audit conducted.
+**Decision**: Keep the three-language split exactly as-is. TypeScript (Next.js) for web, Elixir (Phoenix) for gateway, Go for streaming/orchestration. No rewrites. No additional languages.
+**Rationale**:
+- Each language excels at its specific job — this is a strength, not a liability
+- Elixir/BEAM is genuinely the best technology for the WebSocket/presence workload (built for telecom, 99.9999% uptime)
+- Go is ideal for concurrent I/O and algorithmic orchestration
+- Adding Python for AI libraries would add a 4th service, 4th language, and operational complexity for no architectural benefit — the Go proxy calls the same HTTP endpoints Python libraries call
+- Adding Rust would require rewriting working code for marginal performance gains on workloads that aren't CPU-bound
+- The key to making three languages work is strong contracts (PROTOCOL.md, JSON Schema, eventual Protobuf), not language consolidation
+
+**Consequences**: No language changes. Investment goes into strengthening the boundaries between services (better contracts, gRPC upgrade, JSON Schema validation) rather than collapsing them.
+
+---
+
+## DEC-0024 — Provider abstraction includes transport strategies
+
+**Date**: 2026-02-27
+**Status**: Accepted
+**Context**: LLM providers use different transports: OpenAI uses HTTP SSE (and is adding WebSocket via Responses API), Anthropic uses HTTP SSE, local models may use gRPC, and Bedrock has its own HTTP patterns. Phase 3 provider abstraction must account for this.
+**Decision**: The Go proxy's provider interface abstracts both the API format AND the transport. Each provider gets a transport strategy that implements a common `Stream(config, messages) → channel of TokenEvent` interface.
+**Rationale**:
+- Abstracting only the API format (payload shape normalization) is insufficient — transport differences affect performance, reconnection behavior, and error handling
+- When a provider offers a faster transport (e.g., OpenAI WebSocket), we write a new strategy without rewiring the system
+- The rest of the architecture (Elixir, clients) sees only `TokenEvent` and never knows which transport delivered it
+- This is the "fastest data flow" play — when better transports appear, we adopt them per-provider
+
+**Consequences**: Provider interface in Go has two layers: format adapter (how to build the request) and transport adapter (how to send/receive). Adding a new provider means implementing both. Adding a new transport to an existing provider means only implementing a new transport adapter.
+
+---
+
+## DEC-0025 — Two-track V1 development (agent wedge + chat completeness)
+
+**Date**: 2026-02-27
+**Status**: Accepted
+**Context**: V1 planning synthesized inputs from five sources (architecture review, competitive analysis, GPT feature ideation, Grok phased roadmap, Google market analysis). A tension emerged: the agent features (thinking timeline, multi-stream, provider abstraction) are the viral launch wedge, but chat features (edit/delete, mentions, unreads) keep users after the demo wears off. Building only the wedge leaves the chat feeling like a prototype. Building only the chat leaves us as "just another Discord clone."
+**Decision**: V1 runs two parallel tracks. Track A (Agent) ships the differentiators: thinking timeline, multi-stream, provider abstraction. Track B (Chat) ships completeness: edit/delete, mentions, unreads. Both tracks run simultaneously, with launch gated on all launch tasks from both tracks.
+**Rationale**:
+- The agent features are what make someone clone the repo and post about it
+- The chat features are what make someone keep using it the next day
+- Parallel execution is feasible because the tracks touch different parts of the codebase (Go proxy + protocol for agent, Next.js + Gateway for chat)
+- Sequential execution (chat first, then agent) would delay the differentiator and risk launching as "yet another Discord clone"
+
+**Consequences**: Launch requires 7 tasks complete (3 agent, 3 chat, 1 README). Task numbering unified across both tracks in TASKS.md. Detailed chat implementation specs preserved in V1-IMPLEMENTATION.md.
+
+---
+
+## DEC-0026 — V1-ROADMAP.md chat specs preserved as V1-IMPLEMENTATION.md
+
+**Date**: 2026-02-27
+**Status**: Accepted
+**Context**: Nick created a comprehensive V1-ROADMAP.md with detailed implementation specs (data models, API endpoints, protocol changes, file lists) for 16 chat-completeness tasks. After strategic review, task numbering was reorganized to interleave agent and chat tasks, and the document's role shifted from "the roadmap" to "the implementation reference."
+**Decision**: Rename and remap V1-ROADMAP.md to V1-IMPLEMENTATION.md. Preserve all detailed specs. Add a task-number mapping table at the top. Master strategic direction lives in ROADMAP.md.
+**Rationale**:
+- The detailed specs (Prisma models, API endpoints, protocol events, file lists) are too valuable to lose or rewrite
+- The strategic roadmap needs to show both tracks (agent + chat) in priority order
+- Separation of concerns: ROADMAP.md = "what and when", V1-IMPLEMENTATION.md = "how exactly"
+
+**Consequences**: Two roadmap docs: `docs/ROADMAP.md` (strategic, synthesized) and `docs/V1-IMPLEMENTATION.md` (detailed chat specs with task-number mapping).
