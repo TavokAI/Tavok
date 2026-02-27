@@ -91,3 +91,40 @@ Bot creation with LLM config, Go proxy streaming, smooth token rendering in the 
 - [x] Error state rendered when stream fails
 - [x] Support for any OpenAI-compatible API endpoint
 - [x] Streaming lifecycle follows PROTOCOL.md invariants exactly
+
+---
+
+## TASK-0005: Add Markdown Rendering to Chat Messages
+
+**Status**: DONE
+**Priority**: P1 — Polish
+**Assignee**: Builder
+
+### Description
+Render markdown in chat messages (including streaming bot messages) so code blocks, emphasis, lists, and other common formatting display correctly.
+
+### Acceptance Criteria
+- [x] Markdown renderer added for chat message content
+- [x] GFM support enabled (lists, tables, task list syntax)
+- [x] Syntax highlighting applied for fenced code blocks
+- [x] Copy button available on code blocks
+- [x] Streaming messages render markdown progressively and retain active cursor
+- [x] Markdown image nodes do not render `<img>` (show placeholder text instead)
+
+---
+
+## TASK-0006: Invite Links
+
+**Status**: TODO
+**Priority**: P1 — Core Collaboration
+**Assignee**: Builder
+
+### Description
+Implement server invite links so users can join servers via shareable invite URLs.
+
+### Acceptance Criteria
+- [ ] Server members with permission can create invite links
+- [ ] Invite links include token, optional expiration, and optional usage limit
+- [ ] Invite resolution endpoint validates invite and returns join target metadata
+- [ ] Authenticated users can join a server via valid invite
+- [ ] Invalid, expired, or exhausted invites show clear error states

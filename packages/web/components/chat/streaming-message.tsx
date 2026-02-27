@@ -1,6 +1,7 @@
 "use client";
 
 import type { MessagePayload } from "@/lib/hooks/use-channel";
+import { MarkdownContent } from "./markdown-content";
 
 interface StreamingMessageProps {
   message: MessagePayload;
@@ -45,10 +46,10 @@ export function StreamingMessage({ message, isGrouped }: StreamingMessageProps) 
       <div className="group flex gap-4 px-4 py-0.5 hover:bg-background-primary/30">
         <div className="w-10 flex-shrink-0" />
         <div className="min-w-0 flex-1">
-          <p className="text-sm text-text-primary whitespace-pre-wrap break-words">
-            {message.content}
+          <div>
+            <MarkdownContent content={message.content || ""} />
             {isActive && <span className="inline-block w-0.5 h-4 ml-0.5 bg-brand animate-pulse align-middle" />}
-          </p>
+          </div>
           {isError && (
             <p className="text-xs text-status-danger mt-1">
               Stream ended with an error
@@ -94,10 +95,10 @@ export function StreamingMessage({ message, isGrouped }: StreamingMessageProps) 
             {formatTime(message.createdAt)}
           </span>
         </div>
-        <p className="text-sm text-text-primary whitespace-pre-wrap break-words">
-          {message.content || (isActive ? "" : "")}
+        <div>
+          <MarkdownContent content={message.content || ""} />
           {isActive && <span className="inline-block w-0.5 h-4 ml-0.5 bg-brand animate-pulse align-middle" />}
-        </p>
+        </div>
         {isError && (
           <p className="text-xs text-status-danger mt-1">
             Stream ended with an error

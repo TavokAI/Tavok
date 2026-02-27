@@ -1,6 +1,7 @@
 "use client";
 
 import type { MessagePayload } from "@/lib/hooks/use-channel";
+import { MarkdownContent } from "./markdown-content";
 
 interface MessageItemProps {
   message: MessagePayload;
@@ -35,9 +36,7 @@ export function MessageItem({ message, isGrouped }: MessageItemProps) {
       <div className="group flex gap-4 px-4 py-0.5 hover:bg-background-primary/30">
         <div className="w-10 flex-shrink-0" />
         <div className="min-w-0 flex-1">
-          <p className="text-sm text-text-primary whitespace-pre-wrap break-words">
-            {message.content}
-          </p>
+          <MarkdownContent content={message.content || ""} />
         </div>
       </div>
     );
@@ -75,9 +74,7 @@ export function MessageItem({ message, isGrouped }: MessageItemProps) {
             {formatTime(message.createdAt)}
           </span>
         </div>
-        <p className="text-sm text-text-primary whitespace-pre-wrap break-words">
-          {message.content}
-        </p>
+        <MarkdownContent content={message.content || ""} />
       </div>
     </div>
   );
