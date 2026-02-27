@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Providers } from "@/components/providers";
 import "./globals.css";
+import "highlight.js/styles/github-dark.css";
 
 export const metadata: Metadata = {
   title: "HiveChat",
