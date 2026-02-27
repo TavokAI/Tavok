@@ -401,7 +401,7 @@ All services on a shared internal Docker network. Only web (3000) and gateway (4
 
 ## License
 
-MIT License — fully open source, permissive, community-friendly. Maximum adoption, no restrictions on self-hosting or commercial use.
+License: AGPL-3.0 — free to use, modify, and self-host. If you run a modified version as a service, you must publish your changes.
 
 ## Long-Term Vision
 

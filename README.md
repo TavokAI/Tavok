@@ -160,7 +160,7 @@ All docs live in `docs/`:
 
 ## Contributing
 
-HiveChat is MIT licensed and open to contributions. Read [docs/AGENTS.md](docs/AGENTS.md) for codebase conventions and [docs/OPERATIONS.md](docs/OPERATIONS.md) for workflow rules.
+HiveChat is AGPL-3.0 licensed and open to contributions. Read [docs/AGENTS.md](docs/AGENTS.md) for codebase conventions and [docs/OPERATIONS.md](docs/OPERATIONS.md) for workflow rules.
 
 Key principles:
 - `docs/PROTOCOL.md` is the contract bible — change the doc first, then the code
@@ -170,7 +170,7 @@ Key principles:
 
 ## License
 
-MIT License — fully open source, permissive, community-friendly. Maximum adoption, no restrictions on self-hosting or commercial use.
+License: AGPL-3.0 — free to use, modify, and self-host. If you run a modified version as a service, you must publish your changes.
 
 ---
 
