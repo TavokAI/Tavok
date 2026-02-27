@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import { usePathname } from "next/navigation";
+import { hasPermission as hasPermissionBit } from "@/lib/permissions";
 
 interface ServerData {
   id: string;
@@ -35,6 +36,12 @@ interface MemberData {
   avatarUrl: string | null;
 }
 
+interface BotData {
+  id: string;
+  name: string;
+  isActive: boolean;
+}
+
 interface ChatContextValue {
   servers: ServerData[];
   currentServerId: string | null;
@@ -43,9 +50,14 @@ interface ChatContextValue {
   currentServerOwnerId: string | null;
   channels: ChannelData[];
   members: MemberData[];
+  bots: BotData[];
   refreshServers: () => Promise<void>;
   refreshChannels: () => Promise<void>;
   refreshMembers: () => Promise<void>;
+  refreshBots: () => Promise<void>;
+  userPermissions: bigint;
+  isOwner: boolean;
+  hasPermission: (permission: bigint) => boolean;
 }
 
 const ChatContext = createContext<ChatContextValue | null>(null);
@@ -79,12 +91,15 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [servers, setServers] = useState<ServerData[]>([]);
   const [channels, setChannels] = useState<ChannelData[]>([]);
   const [members, setMembers] = useState<MemberData[]>([]);
+  const [bots, setBots] = useState<BotData[]>([]);
   const [currentServerName, setCurrentServerName] = useState<string | null>(
     null
   );
   const [currentServerOwnerId, setCurrentServerOwnerId] = useState<
     string | null
   >(null);
+  const [userPermissions, setUserPermissions] = useState<bigint>(BigInt(0));
+  const [isOwner, setIsOwner] = useState(false);
 
   const refreshServers = useCallback(async () => {
     try {
@@ -101,6 +116,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const refreshChannels = useCallback(async () => {
     if (!serverId) {
       setChannels([]);
+      setBots([]);
       setCurrentServerName(null);
       setCurrentServerOwnerId(null);
       return;
@@ -134,6 +150,54 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     }
   }, [serverId]);
 
+  const refreshBots = useCallback(async () => {
+    if (!serverId) {
+      setBots([]);
+      return;
+    }
+    try {
+      const res = await fetch(`/api/servers/${serverId}/bots`);
+      if (res.ok) {
+        const data = await res.json();
+        setBots((data.bots || []).filter((b: BotData) => b.isActive));
+      }
+    } catch (error) {
+      console.error("Failed to fetch bots:", error);
+    }
+  }, [serverId]);
+
+  const refreshPermissions = useCallback(async () => {
+    if (!serverId) {
+      setUserPermissions(BigInt(0));
+      setIsOwner(false);
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/servers/${serverId}/permissions`);
+      if (res.ok) {
+        const data = await res.json();
+        setUserPermissions(BigInt(data.permissions || "0"));
+        setIsOwner(!!data.isOwner);
+      } else {
+        setUserPermissions(BigInt(0));
+        setIsOwner(false);
+      }
+    } catch (error) {
+      console.error("Failed to fetch permissions:", error);
+      setUserPermissions(BigInt(0));
+      setIsOwner(false);
+    }
+  }, [serverId]);
+
+  const hasPermission = useCallback(
+    (permission: bigint) => {
+      if (isOwner) return true;
+      return hasPermissionBit(userPermissions, permission);
+    },
+    [userPermissions, isOwner]
+  );
+
   // Fetch servers on mount
   useEffect(() => {
     refreshServers();
@@ -143,7 +207,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     refreshChannels();
     refreshMembers();
-  }, [refreshChannels, refreshMembers]);
+    refreshBots();
+    refreshPermissions();
+  }, [refreshChannels, refreshMembers, refreshBots, refreshPermissions]);
 
   return (
     <ChatContext.Provider
@@ -155,9 +221,14 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         currentServerOwnerId,
         channels,
         members,
+        bots,
         refreshServers,
         refreshChannels,
         refreshMembers,
+        refreshBots,
+        userPermissions,
+        isOwner,
+        hasPermission,
       }}
     >
       {children}
