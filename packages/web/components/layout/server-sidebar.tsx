@@ -1,9 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useChatContext } from "@/components/providers/chat-provider";
 import { CreateServerModal } from "@/components/modals/create-server-modal";
+import { passthroughImageLoader } from "@/lib/image-loader";
 
 export function ServerSidebar() {
   const { servers, currentServerId } = useChatContext();
@@ -52,9 +54,13 @@ export function ServerSidebar() {
               }`}
             >
               {server.iconUrl ? (
-                <img
+                <Image
                   src={server.iconUrl}
                   alt={server.name}
+                  loader={passthroughImageLoader}
+                  unoptimized
+                  width={48}
+                  height={48}
                   className="h-full w-full rounded-[inherit] object-cover"
                 />
               ) : (

@@ -1,8 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Image from "next/image";
 import { useParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
+import { passthroughImageLoader } from "@/lib/image-loader";
 
 interface InviteInfo {
   serverName: string;
@@ -102,9 +104,13 @@ export default function InvitePage() {
 
             <div className="mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-2xl bg-brand/20">
               {inviteInfo.serverIconUrl ? (
-                <img
+                <Image
                   src={inviteInfo.serverIconUrl}
                   alt={inviteInfo.serverName}
+                  loader={passthroughImageLoader}
+                  unoptimized
+                  width={64}
+                  height={64}
                   className="h-16 w-16 rounded-2xl object-cover"
                 />
               ) : (

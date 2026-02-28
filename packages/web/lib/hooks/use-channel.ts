@@ -357,6 +357,9 @@ export function useChannel(channelId: string | null): UseChannelReturn {
 
     joinChannel();
 
+    const typingTimers = typingTimersRef.current;
+    const streamBuffer = streamBufferRef.current;
+
     return () => {
       mounted = false;
       if (channelRef.current) {
@@ -364,10 +367,10 @@ export function useChannel(channelId: string | null): UseChannelReturn {
         channelRef.current = null;
       }
       // Clear typing timers
-      typingTimersRef.current.forEach((timer) => clearTimeout(timer));
-      typingTimersRef.current.clear();
+      typingTimers.forEach((timer) => clearTimeout(timer));
+      typingTimers.clear();
       // Clear stream buffer and cancel rAF
-      streamBufferRef.current.clear();
+      streamBuffer.clear();
       if (rafRef.current !== null) {
         cancelAnimationFrame(rafRef.current);
         rafRef.current = null;

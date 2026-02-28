@@ -42,6 +42,12 @@ interface BotData {
   isActive: boolean;
 }
 
+interface ServerScopedData {
+  channels: ChannelData[];
+  members: MemberData[];
+  bots: BotData[];
+}
+
 interface ChatContextValue {
   servers: ServerData[];
   currentServerId: string | null;
@@ -51,10 +57,13 @@ interface ChatContextValue {
   channels: ChannelData[];
   members: MemberData[];
   bots: BotData[];
+  serverDataById: Record<string, ServerScopedData>;
   refreshServers: () => Promise<void>;
   refreshChannels: () => Promise<void>;
   refreshMembers: () => Promise<void>;
   refreshBots: () => Promise<void>;
+  ensureServerScopedData: (serverId: string) => Promise<void>;
+  refreshServerScopedData: (serverId: string) => Promise<void>;
   userPermissions: bigint;
   isOwner: boolean;
   hasPermission: (permission: bigint) => boolean;
@@ -92,6 +101,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [channels, setChannels] = useState<ChannelData[]>([]);
   const [members, setMembers] = useState<MemberData[]>([]);
   const [bots, setBots] = useState<BotData[]>([]);
+  const [serverDataById, setServerDataById] = useState<
+    Record<string, ServerScopedData>
+  >({});
   const [currentServerName, setCurrentServerName] = useState<string | null>(
     null
   );
@@ -125,9 +137,18 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       const res = await fetch(`/api/servers/${serverId}`);
       if (res.ok) {
         const data = await res.json();
-        setChannels(data.channels || []);
+        const nextChannels = data.channels || [];
+        setChannels(nextChannels);
         setCurrentServerName(data.name || null);
         setCurrentServerOwnerId(data.ownerId || null);
+        setServerDataById((prev) => ({
+          ...prev,
+          [serverId]: {
+            channels: nextChannels,
+            members: prev[serverId]?.members || [],
+            bots: prev[serverId]?.bots || [],
+          },
+        }));
       }
     } catch (error) {
       console.error("Failed to fetch channels:", error);
@@ -143,7 +164,16 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       const res = await fetch(`/api/servers/${serverId}/members`);
       if (res.ok) {
         const data = await res.json();
-        setMembers(data.members || []);
+        const nextMembers = data.members || [];
+        setMembers(nextMembers);
+        setServerDataById((prev) => ({
+          ...prev,
+          [serverId]: {
+            channels: prev[serverId]?.channels || [],
+            members: nextMembers,
+            bots: prev[serverId]?.bots || [],
+          },
+        }));
       }
     } catch (error) {
       console.error("Failed to fetch members:", error);
@@ -159,7 +189,16 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       const res = await fetch(`/api/servers/${serverId}/bots`);
       if (res.ok) {
         const data = await res.json();
-        setBots((data.bots || []).filter((b: BotData) => b.isActive));
+        const nextBots = (data.bots || []).filter((b: BotData) => b.isActive);
+        setBots(nextBots);
+        setServerDataById((prev) => ({
+          ...prev,
+          [serverId]: {
+            channels: prev[serverId]?.channels || [],
+            members: prev[serverId]?.members || [],
+            bots: nextBots,
+          },
+        }));
       }
     } catch (error) {
       console.error("Failed to fetch bots:", error);
@@ -198,6 +237,44 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     [userPermissions, isOwner]
   );
 
+  const refreshServerScopedData = useCallback(async (targetServerId: string) => {
+    if (!targetServerId) return;
+
+    try {
+      const [serverRes, membersRes, botsRes] = await Promise.all([
+        fetch(`/api/servers/${targetServerId}`),
+        fetch(`/api/servers/${targetServerId}/members`),
+        fetch(`/api/servers/${targetServerId}/bots`),
+      ]);
+
+      if (!serverRes.ok) return;
+
+      const serverJson = await serverRes.json();
+      const membersJson = membersRes.ok ? await membersRes.json() : { members: [] };
+      const botsJson = botsRes.ok ? await botsRes.json() : { bots: [] };
+
+      setServerDataById((prev) => ({
+        ...prev,
+        [targetServerId]: {
+          channels: serverJson.channels || [],
+          members: membersJson.members || [],
+          bots: (botsJson.bots || []).filter((b: BotData) => b.isActive),
+        },
+      }));
+    } catch (error) {
+      console.error("Failed to refresh server scoped data:", error);
+    }
+  }, []);
+
+  const ensureServerScopedData = useCallback(
+    async (targetServerId: string) => {
+      if (!targetServerId) return;
+      if (serverDataById[targetServerId]) return;
+      await refreshServerScopedData(targetServerId);
+    },
+    [serverDataById, refreshServerScopedData]
+  );
+
   // Fetch servers on mount
   useEffect(() => {
     refreshServers();
@@ -222,10 +299,13 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         channels,
         members,
         bots,
+        serverDataById,
         refreshServers,
         refreshChannels,
         refreshMembers,
         refreshBots,
+        ensureServerScopedData,
+        refreshServerScopedData,
         userPermissions,
         isOwner,
         hasPermission,

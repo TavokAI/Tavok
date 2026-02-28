@@ -177,13 +177,13 @@ export function ManageBotsModal({ isOpen, onClose }: ManageBotsModalProps) {
   }
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Manage Bots">
+    <Modal isOpen={isOpen} onClose={onClose} title="Manage Agents">
       {!showForm ? (
         <div>
           {/* Bot list */}
           {bots.length === 0 ? (
             <p className="text-sm text-text-muted py-4">
-              No bots yet. Create one to add AI to your channels.
+              No agents yet. Create one to add AI to your channels.
             </p>
           ) : (
             <div className="space-y-2 max-h-60 overflow-y-auto">
@@ -231,14 +231,14 @@ export function ManageBotsModal({ isOpen, onClose }: ManageBotsModalProps) {
                 setShowForm(true);
               }}
             >
-              Add Bot
+              Add Agent
             </Button>
           </div>
         </div>
       ) : (
         <form onSubmit={handleSubmit} className="space-y-3">
           <Input
-            label="Bot Name"
+            label="Agent Name"
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Claude Assistant"
@@ -344,7 +344,7 @@ export function ManageBotsModal({ isOpen, onClose }: ManageBotsModalProps) {
               Back
             </Button>
             <Button type="submit" loading={loading} disabled={!name.trim()}>
-              {editingBot ? "Save" : "Create Bot"}
+              {editingBot ? "Save" : "Create Agent"}
             </Button>
           </div>
         </form>

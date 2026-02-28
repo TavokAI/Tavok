@@ -53,7 +53,7 @@ export async function GET(
 
 /**
  * POST /api/servers/[serverId]/channels — Create a new channel
- * Body: { name: string }
+ * Body: { name: string; topic?: string | null; type?: "TEXT" | "ANNOUNCEMENT" }
  * Requires MANAGE_CHANNELS permission
  */
 export async function POST(
@@ -82,6 +82,11 @@ export async function POST(
 
     const body = await request.json();
     const name = body.name?.trim()?.toLowerCase()?.replace(/\s+/g, "-");
+    const topic =
+      typeof body.topic === "string" && body.topic.trim().length > 0
+        ? body.topic.trim().slice(0, 300)
+        : null;
+    const type = body.type === "ANNOUNCEMENT" ? "ANNOUNCEMENT" : "TEXT";
 
     if (!name || name.length < 1 || name.length > 100) {
       return NextResponse.json(
@@ -103,7 +108,8 @@ export async function POST(
         id: generateId(),
         serverId,
         name,
-        type: "TEXT",
+        topic,
+        type,
         position: nextPosition,
       },
     });

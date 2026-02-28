@@ -13,14 +13,40 @@ interface CreateServerModalProps {
 }
 
 export function CreateServerModal({ isOpen, onClose }: CreateServerModalProps) {
+  const [step, setStep] = useState<"name" | "config">("name");
   const [name, setName] = useState("");
+  const [iconUrl, setIconUrl] = useState("");
+  const [defaultChannelName, setDefaultChannelName] = useState("general");
+  const [defaultChannelTopic, setDefaultChannelTopic] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
   const { refreshServers } = useChatContext();
 
+  const resetModal = () => {
+    setStep("name");
+    setName("");
+    setIconUrl("");
+    setDefaultChannelName("general");
+    setDefaultChannelTopic("");
+    setError("");
+    setLoading(false);
+    onClose();
+  };
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+
+    if (step === "name") {
+      if (!name.trim()) {
+        setError("Server name is required");
+        return;
+      }
+      setError("");
+      setStep("config");
+      return;
+    }
+
     if (!name.trim()) return;
 
     setLoading(true);
@@ -30,7 +56,12 @@ export function CreateServerModal({ isOpen, onClose }: CreateServerModalProps) {
       const res = await fetch("/api/servers", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: name.trim() }),
+        body: JSON.stringify({
+          name: name.trim(),
+          iconUrl: iconUrl.trim() || null,
+          defaultChannelName: defaultChannelName.trim() || "general",
+          defaultChannelTopic: defaultChannelTopic.trim() || null,
+        }),
       });
 
       if (!res.ok) {
@@ -41,8 +72,7 @@ export function CreateServerModal({ isOpen, onClose }: CreateServerModalProps) {
 
       const data = await res.json();
       await refreshServers();
-      setName("");
-      onClose();
+      resetModal();
       router.push(`/servers/${data.id}/channels/${data.defaultChannelId}`);
     } catch {
       setError("Something went wrong");
@@ -52,24 +82,68 @@ export function CreateServerModal({ isOpen, onClose }: CreateServerModalProps) {
   }
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Create a Server">
+    <Modal isOpen={isOpen} onClose={resetModal} title="Create a Server">
       <form onSubmit={handleSubmit}>
-        <Input
-          label="Server Name"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="My Awesome Server"
-          error={error}
-          autoFocus
-        />
-        <div className="mt-4 flex justify-end gap-2">
-          <Button type="button" variant="ghost" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button type="submit" loading={loading} disabled={!name.trim()}>
-            Create
-          </Button>
-        </div>
+        {step === "name" ? (
+          <>
+            <Input
+              label="Server Name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="My Awesome Server"
+              error={error}
+              autoFocus
+            />
+            <div className="mt-4 flex justify-end gap-2">
+              <Button type="button" variant="ghost" onClick={resetModal}>
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={!name.trim()}
+              >
+                Configure
+              </Button>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="space-y-3">
+              <Input
+                label="Server Icon URL (optional)"
+                value={iconUrl}
+                onChange={(e) => setIconUrl(e.target.value)}
+                placeholder="https://example.com/icon.png"
+              />
+              <Input
+                label="Default Channel Name"
+                value={defaultChannelName}
+                onChange={(e) => setDefaultChannelName(e.target.value)}
+                placeholder="general"
+              />
+              <Input
+                label="Default Channel Topic (optional)"
+                value={defaultChannelTopic}
+                onChange={(e) => setDefaultChannelTopic(e.target.value)}
+                placeholder="Welcome to your new server"
+              />
+              <div className="rounded border border-border bg-background-secondary px-3 py-2 text-xs text-text-muted">
+                Basic permissions preset: <span className="text-text-primary">Default member access</span>
+              </div>
+              {error && (
+                <p className="text-xs text-status-dnd">{error}</p>
+              )}
+            </div>
+            <div className="mt-4 flex justify-end gap-2">
+              <Button type="button" variant="ghost" onClick={() => setStep("name")}>
+                Back
+              </Button>
+              <Button type="submit" loading={loading} disabled={!name.trim()}>
+                Create Server
+              </Button>
+            </div>
+          </>
+        )}
       </form>
     </Modal>
   );

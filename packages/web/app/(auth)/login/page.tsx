@@ -1,25 +1,17 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useState } from "react";
 import { signIn } from "next-auth/react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 
 function LoginForm() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const redirectTo = searchParams.get("redirect") || "/";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-
-  // Persist redirect target across auth flow (survives page reloads)
-  useEffect(() => {
-    if (redirectTo !== "/") {
-      sessionStorage.setItem("authRedirect", redirectTo);
-    }
-  }, [redirectTo]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -31,17 +23,22 @@ function LoginForm() {
         email,
         password,
         redirect: false,
+        callbackUrl: redirectTo,
       });
 
-      if (result?.error) {
+      if (!result || result.error || !result.ok) {
         setError("Invalid email or password");
       } else {
-        const finalRedirect =
-          redirectTo !== "/"
-            ? redirectTo
-            : sessionStorage.getItem("authRedirect") || "/";
-        sessionStorage.removeItem("authRedirect");
-        router.push(finalRedirect);
+        // Force a full-page navigation after credentials login to avoid client-router/session race conditions.
+        const destination = result.url || redirectTo || "/";
+        const nextUrl = new URL(destination, window.location.origin);
+
+        if (nextUrl.pathname === "/login") {
+          setError("Invalid email or password");
+          return;
+        }
+
+        window.location.assign(nextUrl.toString());
       }
     } catch {
       setError("Something went wrong. Please try again.");

@@ -22,7 +22,8 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-hivechat}
       POSTGRES_DB: ${POSTGRES_DB:-hivechat}
     ports:
-      - "5432:5432"
+      # Use a dedicated host port to avoid conflicts with local PostgreSQL installs.
+      - "${POSTGRES_HOST_PORT:-55432}:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
@@ -97,7 +98,7 @@ services:
       GATEWAY_PORT: "4001"
       GATEWAY_JWT_SECRET: ${JWT_SECRET:-dev-jwt-secret-change-in-production}
       GATEWAY_REDIS_URL: redis://redis:6379
-      GATEWAY_WEB_URL: http://web:3000
+      GATEWAY_WEB_URL: ${GATEWAY_WEB_URL:-http://web:3000}
       INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:-dev-internal-api-secret}
       SECRET_KEY_BASE: ${SECRET_KEY_BASE:-dev-secret-key-base-that-is-at-least-64-bytes-long-for-development-only}
       PHX_SERVER: "true"
@@ -125,7 +126,7 @@ services:
     environment:
       STREAMING_PORT: "4002"
       STREAMING_REDIS_URL: redis://redis:6379
-      STREAMING_WEB_URL: http://web:3000
+      STREAMING_WEB_URL: ${STREAMING_WEB_URL:-http://web:3000}
       INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:-dev-internal-api-secret}
     depends_on:
       redis:

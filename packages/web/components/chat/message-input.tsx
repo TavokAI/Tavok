@@ -250,7 +250,7 @@ export function MessageInput({
           ))}
         </div>
       )}
-      <div className="relative flex items-end gap-2 rounded-lg bg-background-secondary px-4 py-2">
+      <div className="relative flex items-end gap-2 bg-background-secondary border border-border px-3 py-2 mt-1">
         <MentionAutocomplete
           query={mentionQuery}
           options={mentionOptions}
@@ -269,51 +269,42 @@ export function MessageInput({
         <button
           onClick={() => fileInputRef.current?.click()}
           disabled={disabled || uploading}
-          className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded text-text-muted transition hover:text-text-primary disabled:opacity-30"
+          className="flex h-6 w-6 flex-shrink-0 items-center justify-center text-text-dim transition hover:text-text-primary disabled:opacity-30"
           title="Upload file"
           aria-label="Upload file"
         >
           {uploading ? (
-            <div className="h-4 w-4 animate-spin rounded-full border-2 border-text-muted border-t-transparent" />
+            <div className="h-3 w-3 animate-spin rounded-full border border-text-muted border-t-transparent" />
           ) : (
-            <svg
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-            >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
             </svg>
           )}
         </button>
-        <textarea
-          ref={textareaRef}
-          value={value}
-          onChange={handleChange}
-          onKeyDown={handleKeyDown}
-          onSelect={handleSelect}
-          disabled={disabled}
-          placeholder={
-            channelName
-              ? `Message #${channelName}`
-              : "Send a message..."
-          }
-          rows={1}
-          className="max-h-[200px] flex-1 resize-none bg-transparent text-sm text-text-primary placeholder-text-muted outline-none"
-        />
+        <div className="flex-1 flex items-end min-h-[24px]">
+          <span className="text-brand mr-2 mb-[3px] select-none text-sm leading-none opacity-80">▸</span>
+          <textarea
+            ref={textareaRef}
+            value={value}
+            onChange={handleChange}
+            onKeyDown={handleKeyDown}
+            onSelect={handleSelect}
+            disabled={disabled}
+            placeholder={
+              channelName
+                ? `Message #${channelName}`
+                : "Type here..."
+            }
+            rows={1}
+            className="max-h-[200px] flex-1 resize-none bg-transparent text-sm font-mono text-text-primary placeholder-text-dim outline-none leading-relaxed py-0.5"
+          />
+        </div>
         <button
           onClick={handleSend}
           disabled={disabled || (!value.trim() && pendingFiles.length === 0)}
-          className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded text-text-muted transition hover:text-text-primary disabled:opacity-30"
+          className="flex h-6 w-6 flex-shrink-0 items-center justify-center text-text-dim transition hover:text-brand disabled:opacity-30"
         >
-          <svg
-            width="20"
-            height="20"
-            viewBox="0 0 24 24"
-            fill="currentColor"
-          >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
             <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
           </svg>
         </button>
