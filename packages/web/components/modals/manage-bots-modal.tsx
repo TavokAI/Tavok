@@ -39,6 +39,7 @@ export function ManageBotsModal({ isOpen, onClose }: ManageBotsModalProps) {
   const [showForm, setShowForm] = useState(false);
   const [editingBot, setEditingBot] = useState<Bot | null>(null);
   const [error, setError] = useState("");
+  const [deletingBotId, setDeletingBotId] = useState<string | null>(null);
 
   // Form state
   const [name, setName] = useState("");
@@ -163,6 +164,12 @@ export function ManageBotsModal({ isOpen, onClose }: ManageBotsModalProps) {
   async function handleDelete(botId: string) {
     if (!currentServerId) return;
 
+    // First click sets confirmation state, second click executes (ISSUE-027)
+    if (deletingBotId !== botId) {
+      setDeletingBotId(botId);
+      return;
+    }
+
     try {
       const res = await fetch(
         `/api/servers/${currentServerId}/bots/${botId}`,
@@ -173,17 +180,19 @@ export function ManageBotsModal({ isOpen, onClose }: ManageBotsModalProps) {
       }
     } catch {
       console.error("Failed to delete bot");
+    } finally {
+      setDeletingBotId(null);
     }
   }
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Manage Bots">
+    <Modal isOpen={isOpen} onClose={onClose} title="Manage Agents">
       {!showForm ? (
         <div>
           {/* Bot list */}
           {bots.length === 0 ? (
             <p className="text-sm text-text-muted py-4">
-              No bots yet. Create one to add AI to your channels.
+              No agents yet. Create one to add AI to your channels.
             </p>
           ) : (
             <div className="space-y-2 max-h-60 overflow-y-auto">
@@ -214,9 +223,14 @@ export function ManageBotsModal({ isOpen, onClose }: ManageBotsModalProps) {
                     </button>
                     <button
                       onClick={() => handleDelete(bot.id)}
-                      className="rounded px-2 py-1 text-xs text-status-danger hover:bg-status-danger/10"
+                      onBlur={() => setDeletingBotId(null)}
+                      className={`rounded px-2 py-1 text-xs ${
+                        deletingBotId === bot.id
+                          ? "bg-status-danger text-white font-semibold"
+                          : "text-status-danger hover:bg-status-danger/10"
+                      }`}
                     >
-                      Delete
+                      {deletingBotId === bot.id ? "Confirm?" : "Delete"}
                     </button>
                   </div>
                 </div>
@@ -231,14 +245,14 @@ export function ManageBotsModal({ isOpen, onClose }: ManageBotsModalProps) {
                 setShowForm(true);
               }}
             >
-              Add Bot
+              Add Agent
             </Button>
           </div>
         </div>
       ) : (
         <form onSubmit={handleSubmit} className="space-y-3">
           <Input
-            label="Bot Name"
+            label="Agent Name"
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Claude Assistant"
@@ -344,7 +358,7 @@ export function ManageBotsModal({ isOpen, onClose }: ManageBotsModalProps) {
               Back
             </Button>
             <Button type="submit" loading={loading} disabled={!name.trim()}>
-              {editingBot ? "Save" : "Create Bot"}
+              {editingBot ? "Save" : "Create Agent"}
             </Button>
           </div>
         </form>

@@ -63,7 +63,7 @@ export function ChatArea({
       id: bot.id,
       name: bot.name,
       type: "bot",
-      secondary: "Bot",
+      secondary: "Agent",
     }));
     return [...memberOptions, ...botOptions];
   }, [members, bots]);

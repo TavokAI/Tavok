@@ -1,39 +1,30 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { Workspace } from "@/components/workspace/workspace";
+import { useEffect } from "react";
 import { useParams } from "next/navigation";
+import { useWorkspaceContext } from "@/components/providers/workspace-provider";
 import { useChatContext } from "@/components/providers/chat-provider";
-import { ChatArea } from "@/components/chat/chat-area";
-import { MemberList } from "@/components/layout/member-list";
-import type { PresenceUser } from "@/lib/hooks/use-channel";
 
 export default function ChannelPage() {
   const params = useParams<{ serverId: string; channelId: string }>();
-  const { channels } = useChatContext();
-  const [presenceMap, setPresenceMap] = useState<Map<string, PresenceUser>>(
-    new Map()
-  );
+  const { openPanel } = useWorkspaceContext();
+  const { channels, servers } = useChatContext();
 
-  const channel = channels.find((c) => c.id === params.channelId);
-  const channelName = channel?.name || "loading";
-  const channelTopic = channel?.topic || null;
+  useEffect(() => {
+    if (params.channelId && channels.length > 0 && servers.length > 0) {
+      const channel = channels.find(c => c.id === params.channelId);
+      const server = servers.find(s => s.id === params.serverId);
+      if (channel && server) {
+        openPanel({
+          channelId: channel.id,
+          channelName: channel.name,
+          serverId: server.id,
+          serverName: server.name,
+        });
+      }
+    }
+  }, [params.channelId, params.serverId, channels, servers, openPanel]);
 
-  const handlePresenceChange = useCallback(
-    (newPresence: Map<string, PresenceUser>) => {
-      setPresenceMap(newPresence);
-    },
-    []
-  );
-
-  return (
-    <div className="flex flex-1 overflow-hidden">
-      <ChatArea
-        channelId={params.channelId}
-        channelName={channelName}
-        channelTopic={channelTopic}
-        onPresenceChange={handlePresenceChange}
-      />
-      <MemberList presenceMap={presenceMap} />
-    </div>
-  );
+  return <Workspace />;
 }

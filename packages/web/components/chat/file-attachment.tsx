@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
+import { passthroughImageLoader } from "@/lib/image-loader";
 
 interface FileAttachmentProps {
   fileId: string;
@@ -17,9 +19,13 @@ export function FileAttachment({ fileId, filename, mimeType }: FileAttachmentPro
     return (
       <div className="mt-2 max-w-md">
         <a href={url} target="_blank" rel="noopener noreferrer">
-          <img
+          <Image
             src={url}
             alt={filename}
+            loader={passthroughImageLoader}
+            unoptimized
+            width={640}
+            height={480}
             onError={() => setImageError(true)}
             className="max-h-80 rounded-lg border border-background-tertiary object-contain cursor-pointer transition hover:opacity-90"
           />

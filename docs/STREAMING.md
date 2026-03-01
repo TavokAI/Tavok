@@ -93,3 +93,56 @@ When modifying streaming code, verify:
 - [ ] Reconnect mid-stream: client sees final state (COMPLETE or ERROR), not a stuck ACTIVE
 - [ ] Concurrent streams: multiple channels streaming simultaneously, no cross-talk
 - [ ] Token ordering: tokens render in order even if they arrive out of order
+
+---
+
+## V1 Enhancements (Planned)
+
+### Multi-Stream Support
+
+V1 enables multiple agents streaming simultaneously in the same channel. Each stream is independent:
+- Multiple `stream_start` events can be active concurrently per channel
+- Each stream has its own `messageId`, token buffer, and index sequence
+- `requestAnimationFrame` batching handles multiple concurrent token flows (tokens accumulated per-messageId in a `Map<messageId, string>` ref)
+- Completion or error of one stream does not affect others
+- Client must track multiple active stream states per channel
+
+### Agent Thinking Timeline
+
+Agents emit thinking state changes during execution. New protocol events (to be defined in PROTOCOL.md):
+
+```json
+{
+  "messageId": "01HXY...",
+  "state": "planning",        // e.g., "planning", "searching", "coding", "reviewing"
+  "label": "Planning approach" // human-readable description
+}
+```
+
+Thinking states flow through the same pipeline as tokens: Go → Redis → Gateway → WebSocket → Client. States are persisted with the message for replay.
+
+### Provider Transport Strategies (DEC-0024)
+
+V1 abstracts both API format AND transport per provider. The Go proxy's provider interface:
+
+```
+Stream(config ProviderConfig, messages []Message) → chan TokenEvent
+```
+
+Transport strategies:
+- **HTTP SSE**: OpenAI, Anthropic, OpenAI-compatible (Ollama, OpenRouter)
+- **WebSocket**: OpenAI Realtime/Responses API
+- **gRPC**: Future local model transports
+
+The rest of the system sees only `TokenEvent` — it never knows which provider or transport delivered it. Adding a new provider means implementing a format adapter and a transport adapter.
+
+### Tool Execution Mid-Stream
+
+V1 agents can invoke tools during generation (MCP-compatible interface, DEC-0022):
+
+```
+Agent generates → Tool call detected → Go pauses stream → Executes tool → 
+Feeds result back → Agent continues generating → Tokens resume
+```
+
+Tool results are included in the thinking timeline. The client shows tool execution as a visible step.

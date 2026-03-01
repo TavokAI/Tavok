@@ -45,7 +45,12 @@ export async function GET() {
 
 /**
  * POST /api/servers — Create a new server
- * Body: { name: string }
+ * Body: {
+ *   name: string;
+ *   iconUrl?: string | null;
+ *   defaultChannelName?: string;
+ *   defaultChannelTopic?: string | null;
+ * }
  * Creates server + default #general channel + owner membership in a transaction
  */
 export async function POST(request: NextRequest) {
@@ -57,6 +62,25 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const name = body.name?.trim();
+    const iconUrl =
+      typeof body.iconUrl === "string" && body.iconUrl.trim().length > 0
+        ? body.iconUrl.trim()
+        : null;
+    const defaultChannelNameRaw =
+      typeof body.defaultChannelName === "string"
+        ? body.defaultChannelName
+        : "general";
+    const defaultChannelName = defaultChannelNameRaw
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, "-")
+      .replace(/[^a-z0-9-_]/g, "")
+      .slice(0, 100) || "general";
+    const defaultChannelTopic =
+      typeof body.defaultChannelTopic === "string" &&
+      body.defaultChannelTopic.trim().length > 0
+        ? body.defaultChannelTopic.trim().slice(0, 300)
+        : null;
 
     if (!name || name.length < 1 || name.length > 100) {
       return NextResponse.json(
@@ -75,6 +99,7 @@ export async function POST(request: NextRequest) {
         data: {
           id: serverId,
           name,
+          iconUrl,
           ownerId: session.user.id,
         },
       }),
@@ -82,7 +107,8 @@ export async function POST(request: NextRequest) {
         data: {
           id: channelId,
           serverId,
-          name: "general",
+          name: defaultChannelName,
+          topic: defaultChannelTopic,
           type: "TEXT",
           position: 0,
         },

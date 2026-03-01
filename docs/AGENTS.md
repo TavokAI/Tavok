@@ -4,7 +4,7 @@
 This file is the entry point for all AI coding agents and human collaborators working on HiveChat.
 
 HiveChat is an open-source, self-hostable chat platform that feels like Discord but is built for AI-native collaboration.
-The killer feature is smooth token streaming for AI responses (like Claude/ChatGPT), implemented as a first-class message lifecycle. (See streaming design below.)
+The killer feature is smooth token streaming for AI responses (like Claude/ChatGPT), implemented as a first-class message lifecycle.
 
 This file is intentionally short:
 - It is a MAP of where truth lives
@@ -21,18 +21,21 @@ All docs live in `docs/`. Read in this order:
 
 1) `docs/HiveChat.md` (starter spec / vision / architecture)
 2) `docs/PROTOCOL.md` (cross-service message contracts — THE critical doc)
-3) `docs/TASKS.md` (active work, acceptance criteria, priorities)
-4) `docs/OPERATIONS.md` (workflow rules, validation, branch/commit conventions)
-5) `docs/ARCHITECTURE-CURRENT.md` (as-built reality)
-6) `docs/ARCHITECTURE-TARGET.md` (where we want to end up)
-7) `docs/STREAMING.md` (streaming lifecycle rules and event contracts)
-8) `docs/DECISIONS.md` (architectural decision log — append-only)
-9) `docs/KNOWN-ISSUES.md` (confirmed failures + repro steps)
-10) `docs/PERFORMANCE.md` (speed benchmarks and targets)  
+3) `docs/ROADMAP.md` (master roadmap — two-track strategy, all sources synthesized)
+4) `docs/TASKS.md` (active work, acceptance criteria, priorities — unified numbering)
+5) `docs/V1-IMPLEMENTATION.md` (detailed chat task specs — data models, APIs, file lists)
+6) `docs/OPERATIONS.md` (workflow rules, validation, branch/commit conventions)
+7) `docs/ARCHITECTURE-CURRENT.md` (as-built reality — V0 complete)
+8) `docs/ARCHITECTURE-TARGET.md` (V1 target architecture)
+9) `docs/STREAMING.md` (streaming lifecycle rules and event contracts)
+10) `docs/DECISIONS.md` (architectural decision log — append-only, DEC-0001 through DEC-0026)
+11) `docs/KNOWN-ISSUES.md` (confirmed failures + repro steps)
+12) `docs/PERFORMANCE.md` (speed benchmarks and targets)
 
 If something conflicts:
 - **As-built behavior** wins unless we are explicitly changing it via a task.
 - **HiveChat.md** defines the intended direction and non-negotiable goals.
+- **ROADMAP.md** defines V1 priorities and build order.
 
 ---
 
@@ -48,32 +51,67 @@ HiveChat must be:
 - instantly familiar to Discord users
 - magical when an agent streams in-channel
 - reliable under reconnects and room activity
+- provider-agnostic (BYOK for any LLM provider)
+- self-hostable with `docker-compose up`
 
 Everything else is secondary.
 
 ---
 
-## MVP Build Order (Strict)
-Build in this order unless a dependency forces a small deviation:
-1) Foundation: repo structure, docker-compose, DB schema, auth, basic UI shell
-2) Core Chat: servers/channels, WebSocket gateway, message persistence, history, presence
-3) Token Streaming (differentiator): bots, Go streaming proxy, streaming message type, smooth client rendering
-4) Polish: roles/mentions/reactions/markdown/member list/dark-only
-5) Self-hosting story: one-command deploy, .env.example, docs, optional Caddy HTTPS
+## Current Status
 
-See HiveChat.md for the full list and “What NOT to build yet.” (Voice/video/threads/etc. are out of scope for MVP.)
+**V0: COMPLETE.** Core chat, streaming, markdown, invite links, roles & permissions all working. Break-tested and hardened (11 issues found and resolved). See `docs/ARCHITECTURE-CURRENT.md` for full inventory.
+
+**V1: IN PROGRESS (two parallel tracks).** Track A (Agent): Thinking Timeline, Multi-stream, Provider Abstraction. Track B (Chat): Edit/Delete, Mentions, Unreads. See `docs/ROADMAP.md` for strategy and `docs/TASKS.md` for work items. For chat implementation specs see `docs/V1-IMPLEMENTATION.md`.
+
+---
+
+## Key Architectural Boundary (DEC-0019)
+
+**Go owns orchestration. Elixir owns transport.**
+
+- Go Proxy = THE BRAIN. Decides which agent runs, evaluates charters, sequences steps, executes tools, manages retries.
+- Elixir Gateway = TRANSPORT. Moves bytes, tracks presence, relays streams. Never makes an orchestration decision.
+
+This is a locked decision. See `docs/DECISIONS.md` DEC-0019 for rationale.
+
+---
+
+## Build Order (V1)
+See `docs/ROADMAP.md` for the full prioritized roadmap. V1 runs two parallel tracks (DEC-0025):
+
+**Track A — Agent Wedge (Launch):**
+1. Agent Thinking Timeline (TASK-0011) ⭐
+2. Multi-stream in one channel (TASK-0012) ⭐
+3. Provider abstraction with transport strategies (TASK-0013)
+
+**Track B — Chat Completeness (Launch):**
+4. Message edit/delete (TASK-0014)
+5. @Mentions with autocomplete (TASK-0015)
+6. Unread indicators (TASK-0016)
+
+**Launch Gate:**
+7. README + demo (TASK-0017)
+
+**Wave 1 (Post-Launch):**
+- MCP-compatible tool interface (TASK-0018)
+- Stream rewind + checkpoints + resume (TASK-0021)
+- Direct Messages (TASK-0019)
+
+**Wave 2 (Post-Launch):**
+- Channel Charter / Swarm Modes (TASK-0020)
 
 ---
 
 ## Architecture (High-Level)
 Three languages, three jobs, zero overlap:
 - **TypeScript / Next.js**: product UI + auth + REST API + DB via Prisma
-- **Elixir/Phoenix Gateway**: all WebSocket connections, presence, typing, fan-out, session tracking
-- **Go Streaming Proxy**: SSE to providers, token parsing, token push into gateway, bot config, routing
+- **Elixir/Phoenix Gateway**: WebSocket connections, presence, typing, fan-out (TRANSPORT ONLY)
+- **Go Streaming Proxy**: LLM streaming, provider routing, orchestration, tool execution (THE BRAIN)
 
 Supporting services:
-- PostgreSQL (persistence)
-- Redis (pub/sub + caching)
+- PostgreSQL (persistence, future pgvector for memory)
+- Redis (pub/sub + caching + sequence counters)
 - Docker Compose (self-hosting)
 
 ---
@@ -91,7 +129,10 @@ Supporting services:
 - Docker-first: `docker-compose up` must remain viable after major changes.
 - Prefer small PRs / small changes.
 - No large refactors unless a task explicitly calls for it.
-- If you change a contract (event payload, DB schema, streaming lifecycle), update docs.
+- If you change a contract, update `docs/PROTOCOL.md` first.
+- Log tradeoffs in `docs/DECISIONS.md`.
+- Keep `docker-compose up` working after every change.
+- **Go owns orchestration, Elixir owns transport** (DEC-0019). Do not put agent logic in Gateway.
 
 ---
 
@@ -121,7 +162,7 @@ All streaming work must reference `docs/STREAMING.md`.
 
 ---
 
-## Room / Agent Collaboration Model (v1+ direction)
+## Room / Agent Collaboration Model (V1 direction)
 HiveChat rooms can enforce collaboration rules:
 - allowed agents per room
 - tool permissions per role (read vs write vs test)
@@ -129,26 +170,27 @@ HiveChat rooms can enforce collaboration rules:
 - human approval gates (optional)
 - completion gate (e.g., verifier pass required)
 
-Do not overbuild policy engine in v0; implement minimal viable policy controls in v1 after core stability.
+Implement minimal viable policy controls in V1 after core streaming stability. See `docs/ROADMAP.md` for timing.
 
 ---
 
-## Guardrails: What NOT To Build Yet
+## Guardrails: What NOT To Build
 Do not build these until the platform is stable:
 - voice/video, screen sharing
 - end-to-end encryption
 - federation
-- native mobile apps (responsive web only for MVP)
+- native mobile apps (responsive web only)
 - threads
 - public server discovery
 - HiveDeck marketplace integration
-
-If asked, write a plan entry in `docs/ROADMAP.md` instead.
+- LangChain/CrewAI as dependencies (we ARE the runtime)
+- Python anywhere in the stack
+- LiteLLM proxy (our Go proxy IS the provider-agnostic layer)
 
 ---
 
 ## How to Work in This Repo (Agent Workflow)
-We use role-separated “agents” (separate Cursor chats) to avoid context drift:
+We use role-separated "agents" (separate Cursor chats) to avoid context drift:
 
 1) **Builder**
 - Reads `AGENTS.md` + `docs/TASKS.md`
@@ -177,18 +219,11 @@ The product owner is not a programmer. Write plainly:
 
 ---
 
-## Current Tasks
-
-See `docs/TASKS.md` for the active task list. Current priorities:
-- TASK-0001: Scaffold Project (IN PROGRESS)
-- TASK-0002: Implement Foundation (auth + UI shell)
-- TASK-0003: Implement Core Chat
-- TASK-0004: Implement Token Streaming
-
----
-
 ## Notes
 - `docs/HiveChat.md` is the current starter spec and north star.
 - `docs/PROTOCOL.md` is the contract bible — all services implement against it.
-- `docs/DECISIONS.md` is append-only — never edit existing entries.
-- The stack is TypeScript/Next.js + Elixir/Phoenix + Go (see DEC-0001, DEC-0002).
+- `docs/DECISIONS.md` is append-only — never edit existing entries (DEC-0001 through DEC-0026).
+- `docs/ROADMAP.md` is the master build plan — synthesizes all source analyses, check priorities before starting work.
+- `docs/V1-IMPLEMENTATION.md` has detailed chat task specs (data models, API endpoints, file lists).
+- The stack is TypeScript/Next.js + Elixir/Phoenix + Go (see DEC-0001, DEC-0002, DEC-0023).
+- V1 runs two parallel tracks: Agent wedge + Chat completeness (DEC-0025).

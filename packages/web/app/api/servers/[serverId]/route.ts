@@ -67,3 +67,45 @@ export async function GET(
     return NextResponse.json({ error: "Internal error" }, { status: 500 });
   }
 }
+
+/**
+ * DELETE /api/servers/[serverId] — Delete a server (owner only)
+ */
+export async function DELETE(
+  _request: NextRequest,
+  { params }: { params: Promise<{ serverId: string }> }
+) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { serverId } = await params;
+
+  try {
+    const server = await prisma.server.findUnique({
+      where: { id: serverId },
+      select: { id: true, ownerId: true },
+    });
+
+    if (!server) {
+      return NextResponse.json({ error: "Server not found" }, { status: 404 });
+    }
+
+    if (server.ownerId !== session.user.id) {
+      return NextResponse.json(
+        { error: "Only the server owner can delete this server" },
+        { status: 403 }
+      );
+    }
+
+    await prisma.server.delete({
+      where: { id: serverId },
+    });
+
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    console.error("Failed to delete server:", error);
+    return NextResponse.json({ error: "Internal error" }, { status: 500 });
+  }
+}

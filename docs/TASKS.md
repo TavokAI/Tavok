@@ -2,8 +2,11 @@
 
 > Each task has: ID, title, status, acceptance criteria, and assignee role.
 > Status: `TODO` | `IN PROGRESS` | `DONE` | `BLOCKED`
+> Task numbering unified across ROADMAP.md. V0 uses TASK-0001 through TASK-0010 (all complete), and V1 starts at TASK-0011 to avoid historical collisions. For detailed implementation specs (data models, API endpoints, file lists) on chat tasks, see `docs/V1-IMPLEMENTATION.md`.
 
 ---
+
+# V0 — COMPLETE
 
 ## TASK-0001: Scaffold Project
 
@@ -78,56 +81,76 @@ Server CRUD, channel CRUD, real-time messaging through Elixir gateway, message p
 **Assignee**: Builder
 
 ### Description
-Bot creation with LLM config, Go proxy streaming, smooth token rendering in the UI.
+Bot creation, Go proxy LLM streaming, token relay through Gateway, smooth frontend rendering.
 
 ### Acceptance Criteria
-- [x] Server admin can create a bot with LLM provider/model/key/prompt config
-- [x] Channel can have a default bot assigned
-- [x] Bot triggers on configured mode (always, mention, keyword)
-- [x] Go proxy opens SSE stream to LLM API
-- [x] Tokens flow through Redis → Gateway → WebSocket → browser
-- [x] Client renders tokens smoothly as they arrive
-- [x] Visual indicator for active vs complete streams
-- [x] Error state rendered when stream fails
-- [x] Support for any OpenAI-compatible API endpoint
-- [x] Streaming lifecycle follows PROTOCOL.md invariants exactly
+- [x] Bot creation UI with provider/model/key/prompt configuration
+- [x] Default bot assignment per channel
+- [x] Full streaming lifecycle: IDLE → ACTIVE → COMPLETE/ERROR
+- [x] SSE parsing for OpenAI, Anthropic, and compatible providers
+- [x] Token relay: LLM → Go → Redis → Elixir → WebSocket → Browser
+- [x] requestAnimationFrame batching for smooth 60fps rendering
+- [x] Placeholder-before-first-token invariant
+- [x] Monotonic token indexing
+- [x] AES-256-GCM bot API key encryption
 
 ---
 
-## TASK-0005: Add Markdown Rendering to Chat Messages
+## TASK-0005: Markdown Rendering
 
 **Status**: DONE
 **Priority**: P1 — Polish
 **Assignee**: Builder
 
 ### Description
-Render markdown in chat messages (including streaming bot messages) so code blocks, emphasis, lists, and other common formatting display correctly.
+Rich markdown rendering for chat messages with syntax-highlighted code blocks.
 
 ### Acceptance Criteria
-- [x] Markdown renderer added for chat message content
-- [x] GFM support enabled (lists, tables, task list syntax)
-- [x] Syntax highlighting applied for fenced code blocks
-- [x] Copy button available on code blocks
-- [x] Streaming messages render markdown progressively and retain active cursor
-- [x] Markdown image nodes do not render `<img>` (show placeholder text instead)
+- [x] GFM markdown rendering (bold, italic, lists, links, tables)
+- [x] Syntax-highlighted code blocks with language detection
+- [x] Progressive rendering (renders during streaming, not just on complete)
+- [x] Image suppression (no external image loading from untrusted content)
+- [x] Code copy button on code blocks
 
 ---
 
 ## TASK-0006: Invite Links
 
-**Status**: TODO
-**Priority**: P1 — Core Collaboration
+**Status**: DONE
+**Priority**: P0 — Collaboration
 **Assignee**: Builder
 
 ### Description
-Implement server invite links so users can join servers via shareable invite URLs.
+Server invite link system with expiration, usage limits, and validation.
 
 ### Acceptance Criteria
-- [ ] Server members with permission can create invite links
-- [ ] Invite links include token, optional expiration, and optional usage limit
-- [ ] Invite resolution endpoint validates invite and returns join target metadata
-- [ ] Authenticated users can join a server via valid invite
-- [ ] Invalid, expired, or exhausted invites show clear error states
+- [x] Server members with permission can create invite links
+- [x] Invite links use format: `{NEXTAUTH_URL}/invite/{code}`
+- [x] Invite resolution validates code, expiration, usage limit
+- [x] Authenticated users join server via valid invite link
+- [x] Joining creates a Member record
+- [x] Invalid/expired/exhausted invites show clear errors
+- [x] Gateway `authorize_join` checks Member record
+
+---
+
+## TASK-0007: Break-Testing V0
+
+**Status**: DONE
+**Priority**: P0 — Quality
+**Assignee**: Verifier
+
+### Description
+Systematic break-testing of all V0 features. Infrastructure failure scenarios. Streaming reliability validation.
+
+### Acceptance Criteria
+- [x] Break-test checklist executed (auth, chat, streaming, reconnect, presence)
+- [x] Infrastructure failure scenarios tested (Redis kill, Web kill, Gateway restart)
+- [x] All CRITICAL and HIGH issues resolved (BREAK-0001 through BREAK-0011)
+- [x] Stream watchdog implemented with two-layer terminal convergence (DEC-0017, DEC-0018)
+- [x] Go proxy retry with exponential backoff on finalize failure
+- [x] Logger formatter crash resolved
+- [x] Results documented in KNOWN-ISSUES.md
 
 ---
 
@@ -138,44 +161,577 @@ Implement server invite links so users can join servers via shareable invite URL
 **Assignee**: Builder
 
 ### Description
-Add role-based permissions so server owners can define roles, assign permissions, assign roles to members, and have API/UI behavior enforce permissions instead of owner-only gates.
+Implement server roles with bitfield-based permissions and API-level enforcement.
 
 ### Acceptance Criteria
-- [x] Permission bitfield utility added and shared across server/client
-- [x] Reusable server-side permission check helper implemented
-- [x] `@everyone` role auto-created on new servers and assigned on member join
-- [x] Role CRUD + member-role assignment API routes implemented
-- [x] Existing owner-only routes migrated to permission checks
-- [x] Frontend provider/sidebar updated to use effective permissions
-- [x] Role management modal added
-- [x] Backfill script added and run for existing servers
+- [x] 8 permission types defined with bitfield encoding
+- [x] Automatic @everyone role created on server creation
+- [x] Role CRUD for server admins
+- [x] Permission checks on all protected API endpoints
+- [x] Role hierarchy with position-based ordering
+- [x] Member role assignment
 
 ---
 
-## TASK-0009: Reactions
-
-**Status**: TODO
-**Priority**: P1 — Polish
-**Assignee**: Builder
-
-### Description
-Add message reactions so members can add/remove emoji reactions and see reaction counts update in real time.
-
----
-
-## TASK-0010: File Uploads
+## TASK-0009: Emoji Reactions (V0 scope)
 
 **Status**: DONE
 **Priority**: P1 — Core Collaboration
 **Assignee**: Builder
 
 ### Description
-Add file upload support for chat messages. Users can upload allowed files through a web API route, store files on local disk in a Docker volume, and render image attachments inline while non-image files render as downloadable links.
+Shipped baseline emoji reactions in V0: Reaction model, API endpoints, emoji picker, and optimistic toggle UX.
 
 ### Acceptance Criteria
-- [x] Attachment model added to Prisma schema with User and Message relations
-- [x] Upload storage persisted on local disk via Docker volume mount
-- [x] `POST /api/uploads` implemented with auth, validation, and disk persistence
-- [x] `GET /api/uploads/[fileId]` implemented for authenticated file serving
-- [x] Message renderer parses `[file:FILE_ID:FILENAME:MIMETYPE]` references and displays attachments
-- [x] Message input supports upload button, pending attachments, and file-reference message composition
+- [x] Reaction data model and persistence are implemented
+- [x] Add/remove reaction API is implemented
+- [x] Emoji picker and reaction toggle UI are implemented
+- [x] Baseline reaction pills render with counts
+
+---
+
+## TASK-0010: File & Image Uploads (V0 scope)
+
+**Status**: DONE
+**Priority**: P1 — Core Collaboration
+**Assignee**: Builder
+
+### Description
+Shipped baseline attachments in V0: Attachment model, upload/download API, paperclip button, and inline image/file rendering.
+
+### Acceptance Criteria
+- [x] Attachment model and persistence are implemented
+- [x] Upload and download API endpoints are implemented
+- [x] Paperclip-based file upload is implemented
+- [x] Inline image rendering and file cards are implemented
+
+---
+
+# V1 — LAUNCH (Track A: Agent Wedge + Track B: Chat Completeness)
+
+## TASK-0011: Agent Thinking Timeline ⭐
+
+**Status**: TODO
+**Priority**: P0 — THE Differentiator
+**Track**: A (Agent)
+**Assignee**: Builder
+**Sources**: GPT, Grok, Google
+
+### Description
+Visible reasoning states for AI agents. When an agent is working, users see its current phase: Planning → Searching → Coding → Reviewing. This is the "viral screenshot" feature — it makes agents feel alive, not stuck. Solves the "is it stuck?" anxiety that kills developer trust.
+
+Show a compact event rail under a streaming message with safe, high-level stages — even if the agent doesn't reveal chain-of-thought internally.
+
+### Acceptance Criteria
+- [ ] Define `thinking_state` protocol events in PROTOCOL.md (`{messageId, state, label}`)
+- [ ] Go proxy emits thinking state changes during multi-step agent execution
+- [ ] States flow through same pipeline as tokens: Go → Redis → Gateway → WebSocket → Client
+- [ ] Client renders thinking state as status indicator on streaming message
+- [ ] States are customizable per bot (configurable `thinkingSteps` array in bot config)
+- [ ] Thinking timeline persists with message for replay
+- [ ] At minimum: "Planning", "Searching", "Drafting", "Finalizing" states
+
+### Notes
+Simplest V1: bot config includes a `thinkingSteps` array, and the proxy emits state transitions at defined points in the execution flow. More sophisticated agent-driven states come with MCP tools.
+
+---
+
+## TASK-0012: Multi-Stream in One Channel ⭐
+
+**Status**: TODO
+**Priority**: P0 — THE Differentiator
+**Track**: A (Agent)
+**Assignee**: Builder
+**Sources**: Perplexity, Grok
+
+### Description
+Multiple agents streaming simultaneously in the same channel. The visual proof that this isn't just another chat app. "Air traffic control for agents."
+
+### Acceptance Criteria
+- [ ] Multiple bots can be assigned to a channel (not just one default)
+- [ ] A single user message can trigger multiple bots simultaneously
+- [ ] Multiple `stream_start` → `stream_token` → `stream_complete` flows run in parallel
+- [ ] Client renders multiple active streams without cross-talk
+- [ ] `requestAnimationFrame` batching handles multiple concurrent token flows (`Map<messageId, string>`)
+- [ ] Each stream maintains its own token buffer and index sequence
+- [ ] Completion/error of one stream does not affect others
+
+---
+
+## TASK-0013: Provider Abstraction with Transport Strategies
+
+**Status**: TODO
+**Priority**: P0 — Core Infrastructure
+**Track**: A (Agent)
+**Assignee**: Builder
+**Source**: Architecture review (DEC-0024)
+
+### Description
+Refactor Go proxy to abstract both API format and transport per provider. Each provider gets a transport strategy interface.
+
+### Acceptance Criteria
+- [ ] Provider interface: `Stream(config, messages) → chan TokenEvent`
+- [ ] Transport strategies: HTTP SSE (OpenAI, Anthropic), OpenAI-compatible (Ollama, OpenRouter)
+- [ ] Adding a new provider = implement format adapter + transport adapter
+- [ ] Existing streaming tests pass with new abstraction
+- [ ] BYOK validated for: OpenAI, Anthropic, Ollama, OpenRouter
+- [ ] Provider registry documented in STREAMING.md
+
+---
+
+## TASK-0014: Message Edit & Delete
+
+**Status**: TODO
+**Priority**: P0 — Launch
+**Track**: B (Chat)
+**Assignee**: Builder
+**Spec**: V1-IMPLEMENTATION.md
+
+### Description
+Edit own messages, delete own or admin-delete. Real-time broadcast.
+
+### Acceptance Criteria
+- [ ] User can edit own messages (content update, `editedAt` timestamp)
+- [ ] User can delete own messages (soft delete)
+- [ ] Admins with MANAGE_MESSAGES can delete any message
+- [ ] Edit/delete events broadcast via WebSocket
+- [ ] Client updates in place
+- [ ] "(edited)" indicator on edited messages
+- [ ] Streaming messages (ACTIVE) cannot be edited
+- [ ] Protocol events added to PROTOCOL.md
+
+---
+
+## TASK-0015: @Mentions with Autocomplete
+
+**Status**: IN PROGRESS
+**Priority**: P1 — Launch
+**Track**: B (Chat)
+**Assignee**: Builder
+**Spec**: V1-IMPLEMENTATION.md
+
+### Description
+@mention users and bots with autocomplete dropdown. Mentions trigger bot responses when triggerMode=MENTION.
+
+### Current State
+Core mention UX is already shipped in V0 (autocomplete, rendering, bot trigger-on-mention). V1 scope is to complete mention persistence/querying via `MessageMention` and strengthen the "you were mentioned" read-state signal.
+
+### Acceptance Criteria
+- [x] Typing `@` opens autocomplete dropdown
+- [x] Dropdown shows matching users and bots in channel
+- [x] Selected mention inserts formatted mention text
+- [x] Mentions render as highlighted pills in messages
+- [x] Bot @mentions trigger bot response
+- [ ] Mentioned users stored in `MessageMention` join table
+
+---
+
+## TASK-0016: Unread Indicators
+
+**Status**: TODO
+**Priority**: P0 — Launch
+**Track**: B (Chat)
+**Assignee**: Builder
+**Spec**: V1-IMPLEMENTATION.md
+
+### Description
+Track what users have read. Bold unread channels, red mention badges, new-message divider.
+
+### Acceptance Criteria
+- [ ] `ChannelReadState` model tracking `lastReadSeq` and `mentionCount`
+- [ ] Channels with unread messages display bold in sidebar
+- [ ] Channels with mentions show red badge with count
+- [ ] Server icons show unread dot
+- [ ] Navigating to channel marks it as read
+- [ ] "New messages" divider in message history
+- [ ] State persists across refreshes
+- [ ] State syncs across tabs
+
+---
+
+## TASK-0017: README & Demo (Launch Prep)
+
+**Status**: TODO
+**Priority**: P0 — Launch Gate
+**Track**: Launch
+**Assignee**: Builder + Strategist
+
+### Description
+Create the killer README, demo GIF, and quickstart experience. The README IS the product page.
+
+### Acceptance Criteria
+- [ ] README with architecture diagram, feature list, clear value prop
+- [ ] Demo GIF/video showing agents streaming in a channel (with thinking timeline)
+- [ ] `docker-compose up` validated on clean machine (Linux, Mac)
+- [ ] Quickstart: "zero to agents in 60 seconds"
+- [ ] Contributing section
+- [ ] Launch posts drafted: r/selfhosted, HN "Show HN", X/Twitter
+
+---
+
+# V1 — WAVE 1 (Sprint Cycles 1-2 post-launch)
+
+## TASK-0018: MCP-Compatible Tool Interface
+
+**Status**: TODO
+**Priority**: P1 — Architecture
+**Track**: A (Agent)
+**Assignee**: Builder
+**Source**: DEC-0022, Google protocol analysis
+
+### Description
+Go proxy tool abstraction matching MCP `tools/list` and `tools/call` patterns. Makes MCP hosting a natural extension.
+
+### Acceptance Criteria
+- [ ] Tool interface in `streaming/internal/tools/` with `tools/list` + `tools/call` patterns
+- [ ] Each tool: name, description, JSON Schema input definition
+- [ ] At least one built-in tool (web search or current time)
+- [ ] Agent can invoke tools mid-stream
+- [ ] Tool results fed back into agent context for continued generation
+- [ ] Extension points documented for future MCP hosting
+
+---
+
+## TASK-0019: Direct Messages
+
+**Status**: TODO
+**Priority**: P1
+**Track**: B (Chat)
+**Assignee**: Builder
+**Spec**: V1-IMPLEMENTATION.md
+
+### Description
+Private conversations between users. DM sidebar, real-time via WebSocket.
+
+### Acceptance Criteria
+- [ ] User can start DM with any user they share a server with
+- [ ] DM messages persist and load history
+- [ ] Real-time via WebSocket (`DmChannel`)
+- [ ] Edit and delete work in DMs
+- [ ] Typing indicator works
+- [ ] DM list in sidebar with last message preview
+- [ ] Unread DM indicators
+
+---
+
+## TASK-0020: Channel Charter / Swarm Modes ⭐
+
+**Status**: TODO
+**Priority**: P1 — Core Innovation
+**Track**: A (Agent)
+**Assignee**: Builder
+**Sources**: Grok Phase 2, GPT
+
+### Description
+Human-defined rules for multi-agent collaboration, enforced by the Go orchestrator. The channel owner dictates how agents behave — swarm modes with structure, not chaos.
+
+**Scheduling**: moved to Wave 2 to keep early post-launch execution focused on MCP tools, DMs, and stream rewind foundation.
+
+### Acceptance Criteria
+- [ ] Swarm Settings tab in Edit Channel (2-click setup)
+- [ ] Mode presets: Human-in-the-Loop (default), Lead Agent, Round-Robin, Structured Debate, Code Review Sprint, Freeform, Custom
+- [ ] Charter textarea with goal, rules, agent order, max turns
+- [ ] Go orchestrator enforces charter: turn tracking, loop detection, auto-pause
+- [ ] Human override: `/end`, `/pause`, ❌ reaction stops agents immediately
+- [ ] Live channel header: `Mode: Code Review • Turns: 4/8`
+- [ ] Agent messages show role badges
+
+### Design Notes
+Study Google A2A "Agent Card" spec for bot capability registration pattern. Each bot could register capabilities on channel join for intelligent task routing. Don't implement full A2A — borrow the discovery pattern.
+
+---
+
+## TASK-0021: Stream Rewind + Checkpoints + Resume
+
+**Status**: TODO
+**Priority**: P1 — Category-Defining
+**Track**: A (Agent)
+**Assignee**: Builder
+**Source**: GPT ("maximum wow, minimum scope creep")
+
+### Description
+Replay a thought process. Scrub slider on streaming messages replays tokens 0→N. Agent checkpoints allow resume from a different provider/model after errors.
+
+### Acceptance Criteria
+- [ ] Completed streaming messages show a rewind scrub slider
+- [ ] Slider replays tokens from index 0 → N at 1x/2x speed
+- [ ] Agent can emit checkpoint events ("Plan locked", "Context summarized")
+- [ ] On stream error or rate limit, user can "Resume from checkpoint" with different model
+- [ ] Checkpoint data persists with message
+- [ ] UI shows checkpoint markers on the timeline
+
+---
+
+# V1 — WAVE 2 (Sprint Cycles 3-4 post-launch)
+
+## TASK-0022: Message Search
+
+**Status**: TODO
+**Priority**: P1
+**Track**: B (Chat)
+**Spec**: V1-IMPLEMENTATION.md
+
+### Acceptance Criteria
+- [ ] PostgreSQL full-text search across all messages
+- [ ] Search panel with filters (channel, user, date, has: file/link/mention)
+- [ ] Results highlight matches, click jumps to message
+- [ ] < 500ms for typical queries
+- [ ] DM search
+
+---
+
+## TASK-0023: Server Settings UI
+
+**Status**: TODO
+**Priority**: P1
+**Track**: B (Chat)
+**Spec**: V1-IMPLEMENTATION.md
+
+### Acceptance Criteria
+- [ ] `/servers/{serverId}/settings` with sidebar sections
+- [ ] Overview, Channels, Roles, Members, Bots, Invites, Danger Zone
+- [ ] Permission-gated per section
+- [ ] Inline editing
+
+---
+
+## TASK-0024: User Profile & Settings
+
+**Status**: TODO
+**Priority**: P1
+**Track**: B (Chat)
+**Spec**: V1-IMPLEMENTATION.md
+
+### Acceptance Criteria
+- [ ] User settings: profile, account, appearance
+- [ ] Profile card popup on username click
+- [ ] Avatar upload and display
+- [ ] Password change (requires current)
+
+---
+
+## TASK-0025: File & Image Uploads
+
+**Status**: IN PROGRESS
+**Priority**: P1
+**Track**: B (Chat)
+**Spec**: V1-IMPLEMENTATION.md
+
+### Current State
+Baseline uploads shipped in V0 (attachment model, upload/download API, paperclip upload, inline image/file rendering). Remaining V1 work: drag-and-drop, clipboard paste, progress UX, and richer metadata/dimensions handling.
+
+### Acceptance Criteria
+- [ ] Upload via button, drag-and-drop, clipboard paste
+- [x] Images render inline, files render as download cards
+- [ ] 10MB limit (configurable), progress indicator
+- [ ] Persist via Docker volume
+
+---
+
+## TASK-0026: JSON Schema Cross-Service Contracts
+
+**Status**: TODO
+**Priority**: P2 — Infrastructure
+**Track**: Infra
+**Source**: DEC-0021
+
+### Acceptance Criteria
+- [ ] JSON Schema files in `packages/shared/schemas/` for all PROTOCOL.md payloads
+- [ ] Validation: TS (ajv), Go (gojsonschema), Elixir (ex_json_schema)
+- [ ] CI check on contract changes
+- [ ] PROTOCOL.md references schemas
+
+---
+
+## TASK-0027: gRPC/Protobuf Internal Comms
+
+**Status**: TODO
+**Priority**: P2 — Infrastructure
+**Track**: Infra
+**Source**: Architecture review
+
+### Acceptance Criteria
+- [ ] Protobuf definitions for Go ↔ Elixir hot-path messages
+- [ ] gRPC service replacing HTTP internal calls on stream events
+- [ ] Measure token-to-screen latency before/after
+- [ ] HTTP remains as fallback for non-hot-path calls
+
+---
+
+# V1 — WAVE 3 (Sprint Cycles 5-6 post-launch)
+
+## TASK-0028: Agent Memory Layer (pgvector)
+
+**Status**: TODO
+**Priority**: P1
+**Track**: A (Agent)
+**Sources**: Grok Phase 3, DEC-0020
+
+### Acceptance Criteria
+- [ ] `CREATE EXTENSION vector` in Postgres init
+- [ ] Memory table with embedding column
+- [ ] Abstract memory interface (pgvector default, Qdrant/Pinecone optional)
+- [ ] Per-user, per-agent, per-channel memory scopes
+- [ ] Auto-summarization for long-term recall
+
+---
+
+## TASK-0029: Notification System
+
+**Status**: TODO
+**Priority**: P1
+**Track**: B (Chat)
+**Spec**: V1-IMPLEMENTATION.md
+
+### Acceptance Criteria
+- [ ] Notifications for: @mentions, DMs, invites, role changes
+- [ ] Bell icon + badge count + dropdown panel
+- [ ] Click navigates to source
+- [ ] Real-time via WebSocket
+- [ ] Browser notifications when tab unfocused
+
+---
+
+## TASK-0030: Emoji Reactions
+
+**Status**: IN PROGRESS
+**Priority**: P2
+**Track**: B (Chat)
+**Spec**: V1-IMPLEMENTATION.md
+
+### Current State
+Baseline reactions shipped in V0 (Reaction model, API, emoji picker, optimistic toggles). Remaining V1 work is real-time reaction broadcast and broader emoji set/UX polish.
+
+### Acceptance Criteria
+- [x] Add/remove reactions (emoji picker, baseline set)
+- [x] Reaction pills below messages with counts
+- [x] Toggle on click, hover shows reactors
+- [ ] Real-time broadcast
+
+---
+
+## TASK-0031: X-Ray Observability Toggle
+
+**Status**: TODO
+**Priority**: P1
+**Track**: A (Agent)
+**Source**: Google market analysis
+
+### Description
+Expandable "X-Ray" panel on any agent message showing execution details. Lite version (model + tokens + latency) free. Full version (prompts, payloads, traces) becomes paid-tier dashboard.
+
+### Acceptance Criteria
+- [ ] Toggle button on agent messages opens observability panel
+- [ ] Lite view (free): model name, token count (in/out), TTFT, total latency
+- [ ] Data captured during stream execution and persisted with message
+- [ ] Foundation laid for full observability dashboard (paid tier: raw prompts, API payloads, cost)
+
+---
+
+## TASK-0032: Branching Conversations
+
+**Status**: TODO
+**Priority**: P2
+**Track**: A (Agent)
+**Source**: GPT feature ideation
+
+### Description
+"Fork from here" creates a new channel with last N context messages + agent state + new goal prompt.
+
+### Acceptance Criteria
+- [ ] "Fork" action on any message
+- [ ] Creates new channel with context messages copied
+- [ ] Agent state snapshot included (if available from checkpoints)
+- [ ] New goal prompt input on fork
+- [ ] Link back to source message
+
+---
+
+# SELF-HOSTING & DEPLOY (parallel — ship when ready)
+
+## TASK-0033: Caddy HTTPS
+
+**Status**: DONE
+**Priority**: P1
+**Track**: Deploy
+**Spec**: V1-IMPLEMENTATION.md
+
+### Acceptance Criteria
+- [x] `docker-compose.prod.yml` with Caddy, auto HTTPS
+- [x] WebSocket upgrade through Caddy
+- [x] HTTP → HTTPS redirect
+
+---
+
+## TASK-0034: Admin Dashboard
+
+**Status**: TODO
+**Priority**: P2
+**Track**: Deploy
+**Spec**: V1-IMPLEMENTATION.md
+
+### Acceptance Criteria
+- [ ] `/admin` with stats, user/server management, system health
+- [ ] Non-admin blocked
+
+---
+
+## TASK-0035: Data Export
+
+**Status**: TODO
+**Priority**: P2
+**Track**: Deploy
+**Spec**: V1-IMPLEMENTATION.md
+
+### Acceptance Criteria
+- [ ] Server, user, and admin exports as JSON
+- [ ] No secrets in exports
+- [ ] GDPR compliance
+
+---
+
+## TASK-0036: Mobile Responsive Polish
+
+**Status**: TODO
+**Priority**: P1
+**Track**: Deploy
+**Spec**: V1-IMPLEMENTATION.md
+
+### Acceptance Criteria
+- [ ] Single-column mobile layout with slide-out sidebars
+- [ ] All features work on mobile
+- [ ] 44px+ touch targets, no horizontal scroll
+
+---
+
+# Summary — Full Task List
+
+| Task | Wave | Track | Priority | Description | Status |
+|------|------|-------|----------|-------------|--------|
+| 0001-0010 | V0 | — | — | Foundation through Reactions + Uploads | ✅ DONE |
+| **0011** | **Launch** | **Agent** | **P0** | **Agent Thinking Timeline** ⭐ | TODO |
+| **0012** | **Launch** | **Agent** | **P0** | **Multi-Stream in One Channel** ⭐ | TODO |
+| **0013** | **Launch** | **Agent** | **P0** | **Provider Abstraction + Transport** | TODO |
+| **0014** | **Launch** | **Chat** | **P0** | **Message Edit & Delete** | TODO |
+| **0015** | **Launch** | **Chat** | **P1** | **@Mentions with Autocomplete** | IN PROGRESS |
+| **0016** | **Launch** | **Chat** | **P0** | **Unread Indicators** | TODO |
+| **0017** | **Launch** | **Launch** | **P0** | **README + Demo GIF** | TODO |
+| 0018 | Wave 1 | Agent | P1 | MCP Tool Interface | TODO |
+| 0019 | Wave 1 | Chat | P1 | Direct Messages | TODO |
+| 0020 | Wave 2 | Agent | P1 | Channel Charter / Swarm Modes ⭐ | TODO |
+| 0021 | Wave 1 | Agent | P1 | Stream Rewind + Checkpoints + Resume | TODO |
+| 0022 | Wave 2 | Chat | P1 | Message Search | TODO |
+| 0023 | Wave 2 | Chat | P1 | Server Settings UI | TODO |
+| 0024 | Wave 2 | Chat | P1 | User Profile & Settings | TODO |
+| 0025 | Wave 2 | Chat | P1 | File & Image Uploads | IN PROGRESS |
+| 0026 | Wave 2 | Infra | P2 | JSON Schema Contracts | TODO |
+| 0027 | Wave 2 | Infra | P2 | gRPC/Protobuf Internal Comms | TODO |
+| 0028 | Wave 3 | Agent | P1 | Agent Memory (pgvector) | TODO |
+| 0029 | Wave 3 | Chat | P1 | Notification System | TODO |
+| 0030 | Wave 3 | Chat | P2 | Emoji Reactions | IN PROGRESS |
+| 0031 | Wave 3 | Agent | P1 | X-Ray Observability | TODO |
+| 0032 | Wave 3 | Agent | P2 | Branching Conversations | TODO |
+| 0033 | Deploy | Deploy | P1 | Caddy HTTPS | ✅ DONE |
+| 0034 | Deploy | Deploy | P2 | Admin Dashboard | TODO |
+| 0035 | Deploy | Deploy | P2 | Data Export | TODO |
+| 0036 | Deploy | Deploy | P1 | Mobile Responsive | TODO |

@@ -74,3 +74,26 @@
 - **Description**: During F-06 (Gateway restart mid-stream), transient web/gateway instability could cause finalize persistence failure after terminal publish, leaving DB `ACTIVE`.
 - **Status**: `RESOLVED` (2026-02-26)
 - **Fix summary**: Same two-layer convergence fix as BREAK-0010 plus watchdog force-termination safety net to guarantee eventual non-ACTIVE terminal state.
+
+## BREAK-0012
+
+- **Severity**: `MEDIUM`
+- **Description**: Gateway enforces channel membership on `join/3` but does not enforce `SEND_MESSAGES` permission on `handle_in("new_message")`.
+- **Status**: `KNOWN` (v0 deferred)
+- **Repro steps**:
+  1. Join a channel as a member.
+  2. Revoke `SEND_MESSAGES` from the member's effective role permissions.
+  3. Send `new_message` directly over the WebSocket topic.
+  4. Message is accepted despite UI hiding the input.
+- **Notes**: v0 accepts this as an architectural limitation; proper fix requires gateway-side permission context (e.g., permission claims in JWT or a permission check path at join/send time).
+
+## BREAK-0013
+
+- **Severity**: `LOW`
+- **Description**: Direct server join endpoint remains open; authenticated users can `POST /api/servers/[serverId]/members` without an invite.
+- **Status**: `KNOWN` (v0 deferred)
+- **Repro steps**:
+  1. Authenticate as any user.
+  2. Call `POST /api/servers/{serverId}/members`.
+  3. Membership is created without invite validation.
+- **Notes**: This is legacy MVP behavior used by discover/join flow and is intentionally left in place for v0.

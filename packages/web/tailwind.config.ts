@@ -9,29 +9,49 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // Discord-inspired dark palette
         background: {
-          primary: "#313338",    // main content area
-          secondary: "#2b2d31",  // sidebars
-          tertiary: "#1e1f22",   // server list / deepest background
-          floating: "#111214",   // modals / popups
+          primary: "#0c0c0c",    // panels, sidebars
+          secondary: "#141414",   // panel headers, inputs, hover states
+          tertiary: "#050505",    // workspace grid background (deepest)
+          floating: "#1c1c1c",    // elevated elements, tooltips
+        },
+        border: {
+          DEFAULT: "#222222",
+          bright: "#333333",
         },
         text: {
-          primary: "#f2f3f5",    // white-ish
-          secondary: "#b5bac1",  // muted
-          muted: "#949ba4",      // most muted
-          link: "#00a8fc",       // links
+          primary: "#f5f5f5",
+          secondary: "#a3a3a3",
+          muted: "#666666",
+          dim: "#444444",
+          link: "#22d3ee",        // cyan for links
         },
         brand: {
-          DEFAULT: "#f59e0b",    // amber — HiveChat brand (bee/hive theme)
-          hover: "#d97706",
+          DEFAULT: "#e8a830",     // gold — primary accent
+          hover: "#b8862a",       // gold dimmed
+          glow: "rgba(232, 168, 48, 0.08)",
+        },
+        accent: {
+          cyan: "#22d3ee",
+          "cyan-dim": "#0e7490",
+          "cyan-glow": "rgba(34, 211, 238, 0.06)",
+          green: "#22c55e",
+          "green-dim": "#166534",
+          red: "#ef4444",
+          orange: "#f97316",
+          purple: "#a78bfa",
         },
         status: {
-          online: "#23a559",
+          online: "#22c55e",
           idle: "#f0b232",
-          dnd: "#f23f43",
-          offline: "#80848e",
+          dnd: "#ef4444",
+          offline: "#666666",
+          streaming: "#22d3ee",
         },
+      },
+      fontFamily: {
+        sans: ['var(--font-space-grotesk)', 'sans-serif'],
+        mono: ['var(--font-jetbrains-mono)', 'monospace'],
       },
     },
   },

@@ -18,7 +18,25 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  const token = await getToken({ req: request });
+  let token = await getToken({
+    req: request,
+    secret: process.env.NEXTAUTH_SECRET,
+  });
+
+  // Be explicit about cookie names so auth works consistently across mixed local environments.
+  if (!token) {
+    token =
+      (await getToken({
+        req: request,
+        secret: process.env.NEXTAUTH_SECRET,
+        cookieName: "__Secure-next-auth.session-token",
+      })) ||
+      (await getToken({
+        req: request,
+        secret: process.env.NEXTAUTH_SECRET,
+        cookieName: "next-auth.session-token",
+      }));
+  }
 
   // Authenticated user accessing auth pages → redirect to app
   if (token && (pathname === "/login" || pathname === "/register")) {

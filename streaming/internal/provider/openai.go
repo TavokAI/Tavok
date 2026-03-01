@@ -25,10 +25,24 @@ import (
 )
 
 // OpenAI implements the Provider interface for OpenAI-compatible APIs.
-type OpenAI struct{}
+type OpenAI struct {
+	client *http.Client // reused across all Stream() calls (ISSUE-005)
+}
 
 func NewOpenAI() *OpenAI {
-	return &OpenAI{}
+	return &OpenAI{
+		client: &http.Client{
+			Timeout: 5 * time.Minute,
+			// Tuned transport for high-concurrency streaming (DEC-0034).
+			// Go's default MaxIdleConnsPerHost=2 causes TCP churn at scale.
+			Transport: &http.Transport{
+				MaxConnsPerHost:     200,
+				MaxIdleConns:        200,
+				MaxIdleConnsPerHost: 20,
+				IdleConnTimeout:     120 * time.Second,
+			},
+		},
+	}
 }
 
 func (o *OpenAI) Name() string {
@@ -105,9 +119,8 @@ func (o *OpenAI) Stream(ctx context.Context, req StreamRequest, tokens chan<- To
 		httpReq.Header.Set("Authorization", "Bearer "+req.APIKey)
 	}
 
-	// Send request
-	client := &http.Client{Timeout: 5 * time.Minute}
-	resp, err := client.Do(httpReq)
+	// Send request (reuse shared HTTP client — ISSUE-005)
+	resp, err := o.client.Do(httpReq)
 	if err != nil {
 		return nil, fmt.Errorf("http request: %w", err)
 	}
@@ -140,11 +153,17 @@ func (o *OpenAI) Stream(ctx context.Context, req StreamRequest, tokens chan<- To
 			content := chunk.Choices[0].Delta.Content
 			if content != "" {
 				finalContent.WriteString(content)
-				tokens <- Token{
+				// Context-aware channel send — prevents goroutine leak if manager
+				// stops reading (timeout, cancel). (ISSUE-005)
+				select {
+				case tokens <- Token{
 					Text:  content,
 					Index: tokenIndex,
+				}:
+					tokenIndex++
+				case <-ctx.Done():
+					return
 				}
-				tokenIndex++
 			}
 		}
 	})

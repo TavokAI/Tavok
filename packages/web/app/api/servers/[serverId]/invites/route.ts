@@ -9,7 +9,7 @@ import { Permissions } from "@/lib/permissions";
 
 /**
  * GET /api/servers/[serverId]/invites — List active invites for a server
- * Auth: MANAGE_SERVER permission
+ * Auth: CREATE_INVITE permission
  */
 export async function GET(
   _request: NextRequest,
@@ -24,11 +24,11 @@ export async function GET(
   const check = await checkMemberPermission(
     session.user.id,
     serverId,
-    Permissions.MANAGE_SERVER
+    Permissions.CREATE_INVITE
   );
   if (!check.allowed) {
     return NextResponse.json(
-      { error: "Missing permission: Manage Server" },
+      { error: "Missing permission: Create Invites" },
       { status: 403 }
     );
   }

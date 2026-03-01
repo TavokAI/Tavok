@@ -1,0 +1,213 @@
+﻿docker :  Image hive-chat-web Building 
+At line:1 char:1
++ docker compose build web --no-cache 2>&1 | Out-File build-log.txt -En ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ( Image hive-chat-web Building :St 
+   ring) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+#1 [internal] load local bake definitions
+#1 reading from stdin 538B done
+#1 DONE 0.0s
+
+#2 [internal] load build definition from Dockerfile
+#2 transferring dockerfile: 2.19kB done
+#2 DONE 0.1s
+
+#3 [internal] load metadata for docker.io/library/node:20-alpine
+#3 DONE 0.2s
+
+#4 [builder  1/14] FROM docker.io/library/node:20-alpine@sha256:09e2b3d9726018aecf269bd35325f46bf75046a643a66d28360ec71132750ec8
+#4 resolve docker.io/library/node:20-alpine@sha256:09e2b3d9726018aecf269bd35325f46bf75046a643a66d28360ec71132750ec8 0.0s done
+#4 CACHED
+
+#5 [runner 2/9] WORKDIR /app
+#5 CACHED
+
+#6 [runner 3/9] RUN addgroup --system --gid 1001 nodejs &&     adduser --system --uid 1001 nextjs
+#6 DONE 0.3s
+
+#7 [builder  2/14] RUN corepack enable && corepack prepare pnpm@latest --activate
+#7 0.639 Preparing pnpm@latest for immediate activation...
+#7 DONE 2.1s
+
+#8 [builder  3/14] WORKDIR /app
+#8 DONE 0.1s
+
+#9 [internal] load .dockerignore
+#9 transferring context: 161B done
+#9 DONE 0.0s
+
+#10 [internal] load build context
+#10 transferring context: 89.72MB 5.0s
+#10 transferring context: 174.60MB 10.1s
+#10 transferring context: 183.93MB 10.6s done
+#10 DONE 10.6s
+
+#11 [builder  4/14] COPY package.json pnpm-workspace.yaml pnpm-lock.yaml* ./
+#11 DONE 0.1s
+
+#12 [builder  5/14] COPY packages/web/package.json ./packages/web/
+#12 DONE 0.1s
+
+#13 [builder  6/14] COPY packages/shared/package.json ./packages/shared/
+#13 DONE 0.1s
+
+#14 [builder  7/14] COPY prisma/ ./prisma/
+#14 DONE 0.1s
+
+#15 [builder  8/14] RUN pnpm install --frozen-lockfile || pnpm install
+#15 0.487 Scope: all 3 workspace projects
+#15 0.574 Lockfile is up to date, resolution step is skipped
+#15 0.625 Progress: resolved 1, reused 0, downloaded 0, added 0
+#15 0.751 Packages: +506
+#15 0.751 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+#15 1.625 Progress: resolved 506, reused 0, downloaded 188, added 188
+#15 2.625 Progress: resolved 506, reused 0, downloaded 502, added 502
+#15 3.625 Progress: resolved 506, reused 0, downloaded 503, added 503
+#15 4.626 Progress: resolved 506, reused 0, downloaded 506, added 505
+#15 4.712 Progress: resolved 506, reused 0, downloaded 506, added 506, done
+#15 4.985 
+#15 4.985 dependencies:
+#15 4.985 + @prisma/client 6.19.2
+#15 4.985 
+#15 4.985 devDependencies:
+#15 4.985 + prisma 6.19.2
+#15 4.985 
+#15 5.082 Done in 4.7s using pnpm v10.30.3
+#15 DONE 5.3s
+
+#16 [builder  9/14] RUN pnpm rebuild 2>/dev/null || true
+#16 DONE 0.9s
+
+#17 [builder  9/14] RUN pnpm rebuild 2>/dev/null || true
+#17 CACHED
+
+#18 [builder  4/14] COPY package.json pnpm-workspace.yaml pnpm-lock.yaml* ./
+#18 CACHED
+
+#19 [builder  5/14] COPY packages/web/package.json ./packages/web/
+#19 CACHED
+
+#20 [builder  6/14] COPY packages/shared/package.json ./packages/shared/
+#20 CACHED
+
+#21 [builder  8/14] RUN pnpm install --frozen-lockfile || pnpm install
+#21 CACHED
+
+#22 [builder  7/14] COPY prisma/ ./prisma/
+#22 CACHED
+
+#23 [builder 10/14] COPY packages/web/ ./packages/web/
+#23 DONE 0.3s
+
+#24 [builder 11/14] COPY packages/shared/ ./packages/shared/
+#24 DONE 0.1s
+
+#25 [builder 12/14] RUN npx prisma generate --schema=prisma/schema.prisma
+#25 1.887 Prisma schema loaded from prisma/schema.prisma
+#25 2.136 
+#25 2.136 Γ£ö Generated Prisma Client (v6.19.2) to ./node_modules/.pnpm/@prisma+client@6.19.2_prisma@6.19.2_typescript@5.9.3__typescript@5.9.3/node_modules/@prisma/client in 110ms
+#25 2.136 
+#25 2.136 Start by importing your Prisma Client (See: https://pris.ly/d/importing-client)
+#25 2.136 
+#25 2.136 Tip: Want to turn off tips and other hints? https://pris.ly/tip-4-nohints
+#25 2.136 
+#25 2.147 npm notice
+#25 2.147 npm notice New major version of npm available! 10.8.2 -> 11.11.0
+#25 2.147 npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.11.0
+#25 2.147 npm notice To update run: npm install -g npm@11.11.0
+#25 2.147 npm notice
+#25 DONE 2.2s
+
+#26 [builder 13/14] RUN pnpm install --frozen-lockfile || pnpm install
+#26 0.508 Scope: all 3 workspace projects
+#26 0.566 Lockfile is up to date, resolution step is skipped
+#26 0.655 Already up to date
+#26 0.970 
+#26 0.998 Done in 642ms using pnpm v10.30.3
+#26 DONE 1.0s
+
+#27 [builder 14/14] RUN cd packages/web && pnpm exec next build
+#27 0.803 Attention: Next.js now collects completely anonymous telemetry regarding usage.
+#27 0.803 This information is used to shape Next.js' roadmap and prioritize features.
+#27 0.803 You can learn more, including how to opt-out if you'd not like to participate in this anonymous program, by visiting the following URL:
+#27 0.803 https://nextjs.org/telemetry
+#27 0.803 
+#27 0.853    Γû▓ Next.js 15.5.12
+#27 0.853 
+#27 0.959    Creating an optimized production build ...
+#27 11.05 
+#27 11.05 
+#27 11.05 Retrying 1/3...
+#27 11.05 
+#27 11.05 
+#27 11.05 Retrying 1/3...
+#27 14.03  Γ£ô Compiled successfully in 11.5s
+#27 14.03    Linting and checking validity of types ...
+#27 15.74 
+#27 15.74 Failed to compile.
+#27 15.74 
+#27 15.74 ./app/(app)/servers/[serverId]/channels/[channelId]/page.tsx
+#27 15.74 27:6  Warning: React Hook useEffect has a missing dependency: 'params.serverId'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+#27 15.74 
+#27 15.74 ./app/invite/[code]/page.tsx
+#27 15.74 105:17  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+#27 15.74 
+#27 15.74 ./components/chat/file-attachment.tsx
+#27 15.74 20:11  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+#27 15.74 
+#27 15.74 ./components/chat/message-item.tsx
+#27 15.74 90:11  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+#27 15.74 
+#27 15.74 ./components/chat/streaming-message.tsx
+#27 15.74 108:13  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+#27 15.74 
+#27 15.74 ./components/layout/left-panel.tsx
+#27 15.74 70:25  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+#27 15.74 
+#27 15.74 ./components/layout/server-sidebar.tsx
+#27 15.74 55:17  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+#27 15.74 
+#27 15.74 ./components/workspace/chat-panel.tsx
+#27 15.74 139:3  Error: React Hook "useEffect" is called conditionally. React Hooks must be called in the exact same order in every component render.  react-hooks/rules-of-hooks
+#27 15.74 
+#27 15.74 ./lib/hooks/use-channel.ts
+#27 15.74 368:23  Warning: The ref value 'typingTimersRef.current' will likely have changed by the time this effect cleanup function runs. If this ref points to a node rendered by React, copy 'typingTimersRef.current' to a variable inside the effect, and use that variable in the cleanup function.  react-hooks/exhaustive-deps
+#27 15.74 370:23  Warning: The ref value 'streamBufferRef.current' will likely have changed by the time this effect cleanup function runs. If this ref points to a node rendered by React, copy 'streamBufferRef.current' to a variable inside the effect, and use that variable in the cleanup function.  react-hooks/exhaustive-deps
+#27 15.74 
+#27 15.74 info  - Need to disable some ESLint rules? Learn more here: https://nextjs.org/docs/app/api-reference/config/eslint#disabling-rules
+#27 ERROR: process "/bin/sh -c cd packages/web && pnpm exec next build" did not complete successfully: exit code: 1
+------
+ > [builder 14/14] RUN cd packages/web && pnpm exec next build:
+15.74 55:17  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+15.74 
+15.74 ./components/workspace/chat-panel.tsx
+15.74 139:3  Error: React Hook "useEffect" is called conditionally. React Hooks must be called in the exact same order in every component render.  react-hooks/rules-of-hooks
+15.74 
+15.74 ./lib/hooks/use-channel.ts
+15.74 368:23  Warning: The ref value 'typingTimersRef.current' will likely have changed by the time this effect cleanup function runs. If this ref points to a node rendered by React, copy 'typingTimersRef.current' to a variable inside the effect, and use that variable in the cleanup function.  react-hooks/exhaustive-deps
+15.74 370:23  Warning: The ref value 'streamBufferRef.current' will likely have changed by the time this effect cleanup function runs. If this ref points to a node rendered by React, copy 'streamBufferRef.current' to a variable inside the effect, and use that variable in the cleanup function.  react-hooks/exhaustive-deps
+15.74 
+15.74 info  - Need to disable some ESLint rules? Learn more here: https://nextjs.org/docs/app/api-reference/config/eslint#disabling-rules
+------
+Dockerfile:33
+
+--------------------
+
+  31 |     
+
+  32 |     # Build Next.js (pnpm exec resolves through pnpm's module store 
+correctly)
+
+  33 | >>> RUN cd packages/web && pnpm exec next build
+
+  34 |     
+
+  35 |     # --- Stage 2: Runtime ---
+
+--------------------
+
+failed to solve: process "/bin/sh -c cd packages/web && pnpm exec next build" 
+did not complete successfully: exit code: 1
+

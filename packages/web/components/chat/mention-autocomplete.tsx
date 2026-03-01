@@ -106,7 +106,7 @@ export function MentionAutocomplete({
           </div>
           {option.type === "bot" && (
             <span className="flex-shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase bg-emerald-600/20 text-emerald-400">
-              BOT
+              AGENT
             </span>
           )}
         </button>

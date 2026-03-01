@@ -29,21 +29,24 @@ Three languages, three jobs, zero overlap.
 - Zod for input validation
 - pnpm as package manager with workspace support for the monorepo
 
-### Erlang/OTP — The Real-Time Gateway
-- Manages every WebSocket connection
-- Presence tracking (online/offline/away/DND)
+### Elixir/Phoenix — The Real-Time Gateway
+- Manages every WebSocket connection via Phoenix Channels
+- Presence tracking with CRDTs (online/offline/away/DND)
 - Typing indicators
 - Message routing and fan-out to connected clients
 - OTP supervision trees — if one connection crashes, only that process restarts, gateway never goes down
-- This is the same technology Discord and WhatsApp use for exactly this purpose
+- Runs on the BEAM VM — the same technology Discord and WhatsApp use for exactly this purpose
+- **Transport only** — relays data, tracks presence, never makes orchestration decisions (DEC-0019)
 
-### Go — The LLM Streaming Proxy
-- Sits between AI agents and the Erlang gateway
+### Go — The LLM Streaming Proxy & Orchestrator
+- Sits between AI agents and the Elixir gateway
 - Opens SSE connections to LLM APIs (Claude, OpenAI, Ollama, OpenRouter, any OpenAI-compatible endpoint)
 - Receives tokens from LLM providers
-- Pushes tokens through to the Erlang gateway which fans them out to clients
+- Pushes tokens through to the Elixir gateway which fans them out to clients
 - One goroutine per active stream, thousands running simultaneously, minimal memory
 - Handles bot/agent configuration, system prompts, model selection
+- **The orchestration brain** — owns all agent decision-making: which agent runs, charter evaluation, tool execution, checkpoint/resume (DEC-0019)
+- Provider abstraction with transport strategies: each provider can use different transports (HTTP SSE, WebSocket, gRPC) behind a common interface (DEC-0024)
 
 ### Infrastructure
 - PostgreSQL for persistent data
@@ -61,11 +64,11 @@ Three languages, three jobs, zero overlap.
            │ HTTPS                │ WebSocket
            ▼                     ▼
 ┌──────────────────┐   ┌─────────────────────┐
-│   Next.js App    │   │   Erlang Gateway    │
-│   (TypeScript)   │   │      (OTP)          │
+│   Next.js App    │   │   Elixir Gateway    │
+│   (TypeScript)   │   │   (Phoenix/BEAM)    │
 │                  │   │                     │
 │ • Auth           │   │ • WebSocket mgmt    │
-│ • REST API       │   │ • Presence          │
+│ • REST API       │   │ • Presence (CRDTs)  │
 │ • Server render  │   │ • Typing indicators │
 │ • DB via Prisma  │   │ • Message fan-out   │
 │                  │   │ • Session tracking  │
@@ -76,20 +79,23 @@ Three languages, three jobs, zero overlap.
          ▼    ▼                ▼
 ┌──────────────────┐   ┌─────────────────────┐
 │   PostgreSQL     │   │    Go Proxy         │
-│                  │   │                     │
-│ • Users          │   │ • LLM API calls     │
-│ • Servers        │   │ • SSE streaming     │
-│ • Channels       │   │ • Token fan-out     │
-│ • Messages       │   │ • Bot config        │
-│ • Bots           │   │ • Rate limiting     │
-│ • Roles          │   │ • Provider routing  │
-└──────────────────┘   └─────────────────────┘
+│                  │   │   (Orchestrator)    │
+│ • Users          │   │                     │
+│ • Servers        │   │ • LLM API calls     │
+│ • Channels       │   │ • SSE streaming     │
+│ • Messages       │   │ • Token fan-out     │
+│ • Bots           │   │ • Bot config        │
+│ • Roles          │   │ • Rate limiting     │
+└──────────────────┘   │ • Provider routing  │
+                       │ • Orchestration     │
+                       │ • Tool execution    │
+                       └─────────────────────┘
 ```
 
 ### Message Flow — Standard Message
 ```
 User types message in browser
-→ WebSocket sends to Erlang Gateway
+→ WebSocket sends to Elixir Gateway
 → Gateway calls Next.js API to persist to PostgreSQL
 → Gateway broadcasts to all connected clients in that channel
 → Clients render the message
@@ -98,14 +104,14 @@ User types message in browser
 ### Message Flow — AI Streaming Response
 ```
 User sends message in channel with AI agent
-→ WebSocket sends to Erlang Gateway
+→ WebSocket sends to Elixir Gateway
 → Gateway persists message via Next.js API
 → Gateway broadcasts user message to clients
 → Gateway notifies Go Proxy that an AI response is needed
 → Go Proxy reads bot config (model, system prompt, API key)
 → Go Proxy opens SSE stream to configured LLM API
 → Go Proxy receives tokens one by one
-→ Go Proxy pushes each token to Erlang Gateway
+→ Go Proxy pushes each token to Elixir Gateway
 → Gateway fans out each token to all connected clients
 → Clients render tokens as they arrive (smooth streaming)
 → On completion, Go Proxy sends final message to Next.js API for persistence
@@ -205,7 +211,7 @@ Bot {
 ### Phase 2: Core Chat
 - Create and join servers
 - Create text channels within servers
-- Erlang gateway accepts WebSocket connections
+- Elixir gateway accepts WebSocket connections
 - Real-time messaging through the gateway
 - Message persistence to PostgreSQL
 - Message history with scroll-back
@@ -289,15 +295,13 @@ hivechat/
 │       │   └── bot.ts
 │       └── package.json
 │
-├── gateway/                    # Erlang/OTP real-time gateway
-│   ├── src/
-│   │   ├── gateway_app.erl     # OTP application entry
-│   │   ├── gateway_sup.erl     # Top-level supervisor
-│   │   ├── ws_handler.erl      # WebSocket connection handler
-│   │   ├── presence.erl        # Presence tracking
-│   │   ├── channel_server.erl  # Per-channel message routing
-│   │   └── typing.erl          # Typing indicator management
-│   ├── rebar.config
+├── gateway/                    # Elixir/Phoenix real-time gateway
+│   ├── lib/
+│   │   ├── hive_gateway/       # Core modules (channels, presence, auth, watchdog)
+│   │   └── hive_gateway_web/   # Phoenix endpoint, socket, channels
+│   ├── config/                 # Environment configs
+│   ├── test/                   # ExUnit tests
+│   ├── mix.exs                 # Dependencies
 │   └── Dockerfile
 │
 ├── streaming/                  # Go LLM streaming proxy
@@ -313,7 +317,7 @@ hivechat/
 │   │   │   ├── manager.go      # Manages active streams
 │   │   │   └── handler.go      # SSE parsing and token extraction
 │   │   ├── gateway/
-│   │   │   └── client.go       # Communicates with Erlang gateway
+│   │   │   └── client.go       # Communicates with Elixir gateway
 │   │   └── config/
 │   │       └── bot.go          # Bot configuration loading
 │   ├── go.mod
@@ -333,9 +337,9 @@ hivechat/
 Services communicate over internal Docker network:
 
 - **Next.js ↔ PostgreSQL**: Prisma (TCP port 5432)
-- **Next.js ↔ Erlang Gateway**: HTTP API for message persistence callbacks (internal port 4000)
-- **Erlang Gateway ↔ Clients**: WebSocket (exposed port 4001)
-- **Erlang Gateway ↔ Go Proxy**: gRPC or HTTP (internal port 4002)
+- **Next.js ↔ Elixir Gateway**: HTTP internal API for message persistence callbacks (internal port 4000)
+- **Elixir Gateway ↔ Clients**: WebSocket via Phoenix Channels (exposed port 4001)
+- **Elixir Gateway ↔ Go Proxy**: gRPC or HTTP (internal port 4002)
 - **Go Proxy ↔ LLM APIs**: HTTPS outbound
 - **All services ↔ Redis**: pub/sub and caching (internal port 6379)
 
@@ -349,12 +353,12 @@ Services communicate over internal Docker network:
 - Consistent error handling with typed error responses
 - Use pnpm with workspace support for the monorepo
 
-### Erlang
-- Standard OTP patterns: gen_server, supervisor, application
+### Elixir
+- Phoenix Channels for WebSocket handling with presence tracking
+- Standard OTP patterns: GenServer, Supervisor, Application
 - One process per WebSocket connection
-- ETS tables for fast presence lookups
+- Phoenix.Presence with CRDTs for distributed presence
 - Comprehensive supervision trees — let it crash philosophy
-- Dialyzer type specs on public functions
 
 ### Go
 - Standard library where possible, minimal dependencies
@@ -387,7 +391,7 @@ I am not a programmer. I describe what I want in plain English. Please:
 
 The docker-compose.yml should define these services:
 - **web**: Next.js app (exposed on port 3000)
-- **gateway**: Erlang gateway (WebSocket exposed on port 4001)
+- **gateway**: Elixir gateway (WebSocket exposed on port 4001)
 - **streaming**: Go proxy (internal only)
 - **db**: PostgreSQL 16
 - **redis**: Redis 7
@@ -397,16 +401,22 @@ All services on a shared internal Docker network. Only web (3000) and gateway (4
 
 ## License
 
-MIT License — fully open source, permissive, community-friendly. Maximum adoption, no restrictions on self-hosting or commercial use.
+License: AGPL-3.0 — free to use, modify, and self-host. If you run a modified version as a service, you must publish your changes.
 
 ## Long-Term Vision
 
-Phase 1: Ship the MVP. A working self-hostable chat platform with native AI token streaming.
+Phase 1: Ship V0 — A working self-hostable chat platform with native AI token streaming. ✅ COMPLETE.
 
-Phase 2: Build the community. Open source launch, get contributors, iterate on feedback.
+Phase 2: Ship V1 — Agent Thinking Timeline, multi-stream, provider abstraction, MCP-compatible tools. The features that make this not-Discord.
 
-Phase 3: HiveDeck integration. Users browse and install AI agents from the HiveDeck marketplace directly into their HiveChat servers. Agents come pre-configured with system prompts, tools, and personalities.
+Phase 3: Build the community. Open source launch (HN, r/selfhosted), contributors, iterate on feedback. Dev-first audience.
 
-Phase 4: Monetization. Hosted instances (hivechat.dev), premium agents through HiveDeck, enterprise features (audit logs, SSO, compliance), analytics dashboards showing agent performance and token costs.
+Phase 4: Monetization. Open Core model:
+- **Free forever**: Chat platform, agent creation, streaming, basic swarms, self-hosting, BYOK
+- **Pro tier**: Observability dashboard, code interpreter, agent template gallery, advanced RAG, voice rooms
+- **Team/Enterprise**: Managed hosting, SSO, audit logs, priority support
+- **Marketplace**: Agent templates and tools sold by community creators (15-20% cut)
+
+Phase 5: HiveDeck integration. Users browse and install AI agents from the HiveDeck marketplace directly into their servers. Agents come pre-configured with system prompts, tools, and personalities.
 
 The open-source platform is free forever. The ecosystem around it is the business.
