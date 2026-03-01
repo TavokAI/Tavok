@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import {
   canMutateServerScopedResource,
+  serializeSequence,
 } from "@/lib/api-safety";
 import { checkMemberPermission } from "@/lib/check-member-permission";
 import { Permissions } from "@/lib/permissions";
@@ -165,6 +166,7 @@ export async function PATCH(
 
   return NextResponse.json({
     ...channel,
+    lastSequence: serializeSequence(channel.lastSequence),
     botIds: channel.channelBots.map((cb) => cb.botId),
   });
 }

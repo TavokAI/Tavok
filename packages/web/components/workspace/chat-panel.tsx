@@ -1,15 +1,18 @@
 "use client";
 
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { useWorkspaceContext } from "@/components/providers/workspace-provider";
 import { useChatContext } from "@/components/providers/chat-provider";
 import { useChannel } from "@/lib/hooks/use-channel";
+import type { MessagePayload } from "@/lib/hooks/use-channel";
 import { MessageList } from "@/components/chat/message-list";
 import { MessageInput } from "@/components/chat/message-input";
 import { TypingIndicator } from "@/components/chat/typing-indicator";
 import type { MentionOption } from "@/components/chat/mention-autocomplete";
 import { ChannelSettingsModal } from "@/components/modals/channel-settings-modal";
+import { DeleteMessageModal } from "@/components/modals/delete-message-modal";
 import { Permissions } from "@/lib/permissions";
 import { PanelState } from "@/lib/hooks/use-panel-state";
 
@@ -31,11 +34,17 @@ export function ChatPanel({ panel }: ChatPanelProps) {
     setStreamState,
   } = useWorkspaceContext();
 
+  const { data: session } = useSession();
+  const currentUserId = session?.user?.id;
   const { servers, serverDataById, ensureServerScopedData, hasPermission } = useChatContext();
+  const canManageMessages = hasPermission(Permissions.MANAGE_MESSAGES);
   const [showChannelSettings, setShowChannelSettings] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<MessagePayload | null>(null);
   const {
     messages,
     sendMessage,
+    editMessage,
+    deleteMessage,
     loadHistory,
     updateReactions,
     hasMoreHistory,
@@ -44,6 +53,19 @@ export function ChatPanel({ panel }: ChatPanelProps) {
     sendTyping,
     activeStreamCount,
   } = useChannel(panel.channelId);
+
+  const handleDeleteRequest = useCallback(
+    (messageId: string) => {
+      const message = messages.find((m) => m.id === messageId);
+      if (message) setDeleteTarget(message);
+    },
+    [messages]
+  );
+
+  const handleDeleteConfirm = useCallback(async (): Promise<boolean> => {
+    if (!deleteTarget) return false;
+    return deleteMessage(deleteTarget.id);
+  }, [deleteTarget, deleteMessage]);
 
   useEffect(() => {
     void ensureServerScopedData(panel.serverId);
@@ -371,6 +393,10 @@ export function ChatPanel({ panel }: ChatPanelProps) {
           hasMoreHistory={hasMoreHistory}
           onLoadHistory={loadHistory}
           onReactionsChange={updateReactions}
+          currentUserId={currentUserId}
+          canManageMessages={canManageMessages}
+          onEditMessage={editMessage}
+          onDeleteMessage={handleDeleteRequest}
           activeStreamCount={activeStreamCount}
         />
         <TypingIndicator typingUsers={typingUsers} />
@@ -407,6 +433,13 @@ export function ChatPanel({ panel }: ChatPanelProps) {
         channelName={panel.channelName}
         currentBotIds={channelData?.botIds}
         currentDefaultBotId={channelData?.defaultBotId ?? null}
+      />
+      <DeleteMessageModal
+        isOpen={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={handleDeleteConfirm}
+        messagePreview={deleteTarget?.content || ""}
+        authorName={deleteTarget?.authorName || ""}
       />
     </div>
   );
