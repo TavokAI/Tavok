@@ -31,7 +31,7 @@ export function Workspace() {
                 <path d="M16 15v6" />
               </svg>
             </div>
-            <p>HIVE // COMMAND CENTER</p>
+            <p>TAVOK // COMMAND CENTER</p>
             <p className="text-xs mt-2 opacity-50">OPEN A CHANNEL FROM THE SIDEBAR TO BEGIN</p>
           </div>
         </div>

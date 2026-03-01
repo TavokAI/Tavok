@@ -10,8 +10,7 @@ export function TopBar() {
     <div className="col-span-3 flex h-[38px] items-center justify-between border-b border-border bg-background-secondary px-4 text-sm">
       <div className="flex items-center gap-6">
         <div className="flex items-center gap-1 font-sans font-bold tracking-widest">
-          <span className="text-brand">HIVE</span>
-          <span className="text-text-dim">CHAT</span>
+          <span className="text-brand">TAVOK</span>
         </div>
         <div className="flex items-center gap-4">
           <div className="border-b-2 border-brand pb-[8px] pt-[10px] text-brand">Workspace</div>
