@@ -16,7 +16,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hivechat/streaming/internal/sse"
+	"github.com/TavokAI/Tavok/streaming/internal/sse"
 )
 
 // Anthropic implements the Provider interface for the Anthropic Claude API.

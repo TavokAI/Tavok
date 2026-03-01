@@ -1,4 +1,4 @@
-defmodule HiveGateway.RateLimiter do
+defmodule TavokGateway.RateLimiter do
   @moduledoc """
   Per-channel message rate limiter using ETS counters.
 

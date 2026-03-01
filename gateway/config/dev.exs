@@ -1,6 +1,6 @@
 import Config
 
-config :hive_gateway, HiveGatewayWeb.Endpoint,
+config :tavok_gateway, TavokGatewayWeb.Endpoint,
   http: [ip: {0, 0, 0, 0}, port: 4001],
   check_origin: false,
   debug_errors: true,

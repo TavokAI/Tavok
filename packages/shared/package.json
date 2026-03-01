@@ -1,5 +1,5 @@
 {
-  "name": "@hivechat/shared",
+  "name": "@tavok/shared",
   "version": "0.1.0",
   "private": true,
   "main": "./types/index.ts",

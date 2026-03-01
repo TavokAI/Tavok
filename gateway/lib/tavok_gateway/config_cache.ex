@@ -1,4 +1,4 @@
-defmodule HiveGateway.ConfigCache do
+defmodule TavokGateway.ConfigCache do
   @moduledoc """
   ETS-backed cache for channel bot config and membership checks.
 
@@ -23,7 +23,7 @@ defmodule HiveGateway.ConfigCache do
   """
   use GenServer
 
-  alias HiveGateway.WebClient
+  alias TavokGateway.WebClient
 
   require Logger
 

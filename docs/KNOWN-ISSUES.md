@@ -52,7 +52,7 @@
 - **Severity**: `CRITICAL`
 - **Description**: Gateway production logger used `Jason.encode!/1` as the Logger console formatter, which does not implement the required 4-argument formatter callback and caused repeated `FORMATTER CRASH` lines.
 - **Status**: `RESOLVED` (2026-02-26)
-- **Fix summary**: Replaced the console formatter with `HiveGateway.LogFormatter.format/4`, which safely normalizes Logger message iodata/chardata and emits JSON log lines with metadata.
+- **Fix summary**: Replaced the console formatter with `TavokGateway.LogFormatter.format/4`, which safely normalizes Logger message iodata/chardata and emits JSON log lines with metadata.
 
 ## BREAK-0009
 

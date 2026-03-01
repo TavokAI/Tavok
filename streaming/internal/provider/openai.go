@@ -21,7 +21,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hivechat/streaming/internal/sse"
+	"github.com/TavokAI/Tavok/streaming/internal/sse"
 )
 
 // OpenAI implements the Provider interface for OpenAI-compatible APIs.

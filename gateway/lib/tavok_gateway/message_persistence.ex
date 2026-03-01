@@ -1,4 +1,4 @@
-defmodule HiveGateway.MessagePersistence do
+defmodule TavokGateway.MessagePersistence do
   @moduledoc """
   Background message persistence with retry logic.
 
@@ -13,7 +13,7 @@ defmodule HiveGateway.MessagePersistence do
   See docs/DECISIONS.md DEC-0028.
   """
 
-  alias HiveGateway.WebClient
+  alias TavokGateway.WebClient
 
   require Logger
 
@@ -71,7 +71,7 @@ defmodule HiveGateway.MessagePersistence do
   Returns the Task reference (for testing), but callers don't need to await it.
   """
   def persist_async(body, message_id, channel_id) do
-    Task.Supervisor.async_nolink(HiveGateway.TaskSupervisor, fn ->
+    Task.Supervisor.async_nolink(TavokGateway.TaskSupervisor, fn ->
       persist_with_retry(body, message_id, channel_id)
     end)
   end

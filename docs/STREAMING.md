@@ -1,14 +1,14 @@
 # STREAMING.md — Token Streaming Lifecycle Rules
 
-> This is the detailed reference for HiveChat's streaming system.
+> This is the detailed reference for Tavok's streaming system.
 > For the wire-level contracts, see `docs/PROTOCOL.md` §4.
-> For the product vision, see `docs/HiveChat.md`.
+> For the product vision, see `docs/Tavok.md`.
 
 ---
 
 ## Overview
 
-Token streaming is HiveChat's differentiator. When an AI agent responds in a channel, tokens flow smoothly word-by-word — not hacked together with message edits.
+Token streaming is Tavok's differentiator. When an AI agent responds in a channel, tokens flow smoothly word-by-word — not hacked together with message edits.
 
 The streaming system involves all three services:
 1. **Gateway** (Elixir): Detects trigger, creates placeholder message, broadcasts stream events

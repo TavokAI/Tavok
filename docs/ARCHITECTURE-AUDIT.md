@@ -1,4 +1,4 @@
-# HiveChat Architecture Audit & Upgrade Roadmap
+# Tavok Architecture Audit & Upgrade Roadmap
 
 ## Assessment Summary
 
@@ -24,9 +24,9 @@ Below are the genuine upgrades worth pursuing for **"built to last, fastest data
 
 ### 2. MCP Hosting as a First-Class Capability
 
-**Why:** This is the "agnostic from everything" play. Instead of building custom integrations for every tool or agent, HiveChat becomes an MCP host. Any tool that speaks Model Context Protocol can connect — standardized mounting points like NATO rail instead of proprietary brackets.
+**Why:** This is the "agnostic from everything" play. Instead of building custom integrations for every tool or agent, Tavok becomes an MCP host. Any tool that speaks Model Context Protocol can connect — standardized mounting points like NATO rail instead of proprietary brackets.
 
-**For the target audience (AI builders):** Killer differentiator. They bring their agents, tools, and workflows. HiveChat orchestrates.
+**For the target audience (AI builders):** Killer differentiator. They bring their agents, tools, and workflows. Tavok orchestrates.
 
 **Timing:** Phase 4 or 5. Design for it now by keeping Go proxy interfaces clean enough that MCP server hosting can slot in alongside provider abstraction.
 

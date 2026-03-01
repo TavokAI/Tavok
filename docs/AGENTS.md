@@ -1,9 +1,9 @@
-# AGENTS.md — HiveChat Agent Operating Guide (Entry Point)
+# AGENTS.md — Tavok Agent Operating Guide (Entry Point)
 
 ## Purpose
-This file is the entry point for all AI coding agents and human collaborators working on HiveChat.
+This file is the entry point for all AI coding agents and human collaborators working on Tavok.
 
-HiveChat is an open-source, self-hostable chat platform that feels like Discord but is built for AI-native collaboration.
+Tavok is an open-source, self-hostable chat platform that feels like Discord but is built for AI-native collaboration.
 The killer feature is smooth token streaming for AI responses (like Claude/ChatGPT), implemented as a first-class message lifecycle.
 
 This file is intentionally short:
@@ -19,7 +19,7 @@ For detailed specs, use the documents listed below.
 
 All docs live in `docs/`. Read in this order:
 
-1) `docs/HiveChat.md` (starter spec / vision / architecture)
+1) `docs/Tavok.md` (starter spec / vision / architecture)
 2) `docs/PROTOCOL.md` (cross-service message contracts — THE critical doc)
 3) `docs/ROADMAP.md` (master roadmap — two-track strategy, all sources synthesized)
 4) `docs/TASKS.md` (active work, acceptance criteria, priorities — unified numbering)
@@ -34,12 +34,12 @@ All docs live in `docs/`. Read in this order:
 
 If something conflicts:
 - **As-built behavior** wins unless we are explicitly changing it via a task.
-- **HiveChat.md** defines the intended direction and non-negotiable goals.
+- **Tavok.md** defines the intended direction and non-negotiable goals.
 - **ROADMAP.md** defines V1 priorities and build order.
 
 ---
 
-## What HiveChat Is (One Sentence)
+## What Tavok Is (One Sentence)
 AI-native, self-hostable Discord-like chat where AI agents stream responses token-by-token as first-class participants.
 
 ---
@@ -47,7 +47,7 @@ AI-native, self-hostable Discord-like chat where AI agents stream responses toke
 ## Non-Negotiable Product Wedge
 Do not dilute the wedge.
 
-HiveChat must be:
+Tavok must be:
 - instantly familiar to Discord users
 - magical when an agent streams in-channel
 - reliable under reconnects and room activity
@@ -163,7 +163,7 @@ All streaming work must reference `docs/STREAMING.md`.
 ---
 
 ## Room / Agent Collaboration Model (V1 direction)
-HiveChat rooms can enforce collaboration rules:
+Tavok rooms can enforce collaboration rules:
 - allowed agents per room
 - tool permissions per role (read vs write vs test)
 - workflow mode (free chat vs sequential handoff)
@@ -182,7 +182,7 @@ Do not build these until the platform is stable:
 - native mobile apps (responsive web only)
 - threads
 - public server discovery
-- HiveDeck marketplace integration
+- TBD marketplace integration
 - LangChain/CrewAI as dependencies (we ARE the runtime)
 - Python anywhere in the stack
 - LiteLLM proxy (our Go proxy IS the provider-agnostic layer)
@@ -220,7 +220,7 @@ The product owner is not a programmer. Write plainly:
 ---
 
 ## Notes
-- `docs/HiveChat.md` is the current starter spec and north star.
+- `docs/Tavok.md` is the current starter spec and north star.
 - `docs/PROTOCOL.md` is the contract bible — all services implement against it.
 - `docs/DECISIONS.md` is append-only — never edit existing entries (DEC-0001 through DEC-0026).
 - `docs/ROADMAP.md` is the master build plan — synthesizes all source analyses, check priorities before starting work.

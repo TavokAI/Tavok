@@ -19,9 +19,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/hivechat/streaming/internal/config"
-	"github.com/hivechat/streaming/internal/gateway"
-	"github.com/hivechat/streaming/internal/provider"
+	"github.com/TavokAI/Tavok/streaming/internal/config"
+	"github.com/TavokAI/Tavok/streaming/internal/gateway"
+	"github.com/TavokAI/Tavok/streaming/internal/provider"
 )
 
 // streamRequest is the JSON payload from Redis hive:stream:request

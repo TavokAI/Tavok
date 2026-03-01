@@ -42,7 +42,7 @@ export function ChannelSidebar() {
         {/* Server name header */}
         <div className="flex h-12 items-center justify-between border-b border-background-tertiary px-4">
           <h2 className="truncate text-base font-bold text-text-primary">
-            {currentServerName || "HiveChat"}
+            {currentServerName || "Tavok"}
           </h2>
           {hasPermission(Permissions.CREATE_INVITE) && currentServerId && (
             <button

@@ -1,6 +1,6 @@
 # ARCHITECTURE-CURRENT.md — As-Built Reality
 
-> Updated after each structural change. If something conflicts with HiveChat.md, this document reflects what actually exists.
+> Updated after each structural change. If something conflicts with Tavok.md, this document reflects what actually exists.
 
 **Last updated**: 2026-02-27 (V0 complete)
 
@@ -103,15 +103,15 @@ V0 is complete. All core chat, streaming, and collaboration features are impleme
 ## Project Structure
 
 ```
-Hive-Chat/
+Tavok/
 ├── docs/                     # All documentation
 ├── packages/
 │   ├── web/                  # Next.js frontend + API (TypeScript)
 │   └── shared/               # Shared TypeScript types (message, user, server, channel, bot)
 ├── gateway/                  # Elixir/Phoenix real-time gateway
 │   ├── lib/                  # Application code
-│   │   ├── hive_gateway/     # Core modules (channels, presence, auth, watchdog)
-│   │   └── hive_gateway_web/ # Phoenix endpoint, socket, channels
+│   │   ├── tavok_gateway/     # Core modules (channels, presence, auth, watchdog)
+│   │   └── tavok_gateway_web/ # Phoenix endpoint, socket, channels
 │   └── test/                 # ExUnit tests
 ├── streaming/                # Go LLM streaming proxy
 │   ├── cmd/proxy/            # Entry point

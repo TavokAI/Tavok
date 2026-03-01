@@ -9,7 +9,7 @@
 
 **Date**: 2026-02-23
 **Status**: Accepted
-**Context**: HiveChat needs a product layer (UI, auth, DB), a real-time layer (WebSocket, presence, fan-out), and an AI streaming layer (LLM API calls, token parsing). These are fundamentally different workloads with different performance characteristics.
+**Context**: Tavok needs a product layer (UI, auth, DB), a real-time layer (WebSocket, presence, fan-out), and an AI streaming layer (LLM API calls, token parsing). These are fundamentally different workloads with different performance characteristics.
 **Decision**: Split into three services:
 - **Web** (TypeScript/Next.js): Product UI, auth, REST API, DB via Prisma
 - **Gateway** (Elixir/Phoenix): WebSocket connections, presence, typing, message fan-out
@@ -308,7 +308,7 @@ forever on ACTIVE.
 **Context**: V1 tools (web search, file ops, git, code execution) need an abstraction layer. The Model Context Protocol (MCP) is becoming an industry standard for tool integration. Options: custom tool interface, or design to match MCP patterns from day one.
 **Decision**: Design the Go proxy's tool interface to match MCP's `tools/list` and `tools/call` JSON-RPC patterns. Not a full MCP implementation, but structurally compatible.
 **Rationale**:
-- MCP hosting is a planned V1 post-launch feature (any MCP-compatible tool plugs into HiveChat)
+- MCP hosting is a planned V1 post-launch feature (any MCP-compatible tool plugs into Tavok)
 - Designing tool interfaces to match MCP patterns now makes MCP hosting a natural extension, not a retrofit
 - The JSON-RPC format is simple and well-specified
 - ~2 extra hours of design work that saves a refactor later
@@ -419,7 +419,7 @@ forever on ACTIVE.
 **Consequences**:
 - Messages are visible in real-time before they exist in the database
 - If Web API is down for 7+ seconds, messages appear in real-time but are absent from history on refresh (logged CRITICAL)
-- New module `HiveGateway.MessagePersistence` encapsulates retry logic
+- New module `TavokGateway.MessagePersistence` encapsulates retry logic
 - DEC-0011 (persist-first) is superseded — the reliability tradeoff is acceptable for the scale target
 
 ---
@@ -429,7 +429,7 @@ forever on ACTIVE.
 **Date**: 2026-02-28
 **Status**: Accepted
 **Context**: The Gateway makes HTTP calls to Next.js for bot config (per-message) and membership checks (per-join). At scale, the per-message bot config lookup is the largest source of unnecessary network I/O — 10-50ms per call, called for every message in every channel. No caching existed.
-**Decision**: Add a GenServer-owned ETS table (`HiveGateway.ConfigCache`) with TTL-based caching. Bot config cached per-channel (5 min TTL). Membership cached per-user+channel (15 min TTL). Negative results (no bot) cached to prevent repeated 404s. Errors NOT cached to allow retry. Raw ETS with `:public` read access — no external libraries.
+**Decision**: Add a GenServer-owned ETS table (`TavokGateway.ConfigCache`) with TTL-based caching. Bot config cached per-channel (5 min TTL). Membership cached per-user+channel (15 min TTL). Negative results (no bot) cached to prevent repeated 404s. Errors NOT cached to allow retry. Raw ETS with `:public` read access — no external libraries.
 **Rationale**:
 - ETS is the BEAM's native in-memory store — zero external dependencies, O(1) lookups
 - `:public` table with `read_concurrency: true` allows channel processes to read without going through the GenServer mailbox — zero contention on the hot path
@@ -439,7 +439,7 @@ forever on ACTIVE.
 - Caching nil (no bot) prevents channels without bots from generating useless 404 traffic
 - No external library — raw ETS is ~60 lines of code
 
-**Consequences**: New module `HiveGateway.ConfigCache` added to supervision tree. Bot config lookup drops from 10-50ms HTTP to <1us ETS read on cache hit. If the ConfigCache GenServer crashes, the supervisor restarts it with a fresh table. Bot config changes via UI may take up to 5 minutes to propagate unless explicit invalidation is called.
+**Consequences**: New module `TavokGateway.ConfigCache` added to supervision tree. Bot config lookup drops from 10-50ms HTTP to <1us ETS read on cache hit. If the ConfigCache GenServer crashes, the supervisor restarts it with a fresh table. Bot config changes via UI may take up to 5 minutes to propagate unless explicit invalidation is called.
 
 ---
 
@@ -463,7 +463,7 @@ Three broadcast patterns:
 - Custom Phoenix serializer: Would need to override the default serializer and maintain compatibility. Fragile across Phoenix upgrades.
 - Phoenix.Channel intercept + handle_out: Still serializes per-process, just adds a hook. Doesn't solve the core issue.
 
-**Consequences**: New module `HiveGateway.Broadcast` provides `broadcast_pre_serialized!/3`, `broadcast_from_pre_serialized!/3`, `endpoint_broadcast!/3`, and `endpoint_broadcast_raw!/3`. Wire format is byte-for-byte identical — no client changes needed. At 1000 subscribers, serialization drops from 1000x to 1x per broadcast. Stream tokens additionally save the decode step (zero-copy from Redis to WebSocket).
+**Consequences**: New module `TavokGateway.Broadcast` provides `broadcast_pre_serialized!/3`, `broadcast_from_pre_serialized!/3`, `endpoint_broadcast!/3`, and `endpoint_broadcast_raw!/3`. Wire format is byte-for-byte identical — no client changes needed. At 1000 subscribers, serialization drops from 1000x to 1x per broadcast. Stream tokens additionally save the decode step (zero-copy from Redis to WebSocket).
 
 ---
 
@@ -639,7 +639,7 @@ model ChannelBot {
 ## DEC-0039 — Message Edit/Delete: Sync-first, authorization in Web API
 
 **Date**: 2026-03-01
-**Context**: TASK-0014 — Adding message edit and delete to HiveChat.
+**Context**: TASK-0014 — Adding message edit and delete to Tavok.
 
 **Decision**: Edit and delete operations call the Next.js internal API **synchronously before broadcasting**, unlike the broadcast-first pattern used for new messages (DEC-0028). Authorization logic (ownership check, MANAGE_MESSAGES permission) lives entirely in the Web API, not the Gateway.
 

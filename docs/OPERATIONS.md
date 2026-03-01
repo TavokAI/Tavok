@@ -1,7 +1,7 @@
-# OPERATIONS.md — How We Build, Test, and Change HiveChat
+# OPERATIONS.md — How We Build, Test, and Change Tavok
 
 ## Purpose
-HiveChat is an AI-native realtime + streaming system.
+Tavok is an AI-native realtime + streaming system.
 This repo will degrade quickly without strict workflow discipline.
 
 This document defines:

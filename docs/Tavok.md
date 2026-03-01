@@ -1,10 +1,10 @@
-# HiveChat — AI-Native Self-Hostable Chat Platform
+# Tavok — AI-Native Self-Hostable Chat Platform
 
 ## What Is This
 
-HiveChat is an open-source, self-hostable chat platform that looks and feels like Discord but is purpose-built for AI. The killer feature is native token streaming — when an AI agent responds in a channel, tokens flow in smoothly word-by-word like Claude.ai or ChatGPT, not hacked together with message edits hitting rate limits like every Discord bot.
+Tavok is an open-source, self-hostable chat platform that looks and feels like Discord but is purpose-built for AI. The killer feature is native token streaming — when an AI agent responds in a channel, tokens flow in smoothly word-by-word like Claude.ai or ChatGPT, not hacked together with message edits hitting rate limits like every Discord bot.
 
-Three types of people use HiveChat:
+Three types of people use Tavok:
 
 1. **AI builders** running agent pipelines who need a place to watch agents work, interact with them, and let agents ask humans for clarification. They're currently hacking together Discord bots or staring at terminal logs.
 
@@ -14,7 +14,7 @@ Three types of people use HiveChat:
 
 All three groups need the same thing on day one: a chat interface that feels instantly familiar to any Discord user, with the moment of magic being when they see an AI agent streaming a response in real time.
 
-HiveChat is the front-end interface for HiveDeck, an AI agent marketplace. Agents from HiveDeck will eventually be first-class participants that users can browse and install directly into their servers.
+Tavok is the front-end interface for TBD, an AI agent marketplace. Agents from TBD will eventually be first-class participants that users can browse and install directly into their servers.
 
 ## Tech Stack
 
@@ -254,11 +254,11 @@ Bot {
 - Threads (channels only for MVP)
 - Custom emoji or stickers
 - Server discovery / public server listing
-- HiveDeck marketplace integration (comes after the platform is stable)
+- TBD marketplace integration (comes after the platform is stable)
 
 ## Project Structure
 ```
-hivechat/
+tavok/
 ├── docker-compose.yml
 ├── docker-compose.dev.yml
 ├── .env.example
@@ -297,8 +297,8 @@ hivechat/
 │
 ├── gateway/                    # Elixir/Phoenix real-time gateway
 │   ├── lib/
-│   │   ├── hive_gateway/       # Core modules (channels, presence, auth, watchdog)
-│   │   └── hive_gateway_web/   # Phoenix endpoint, socket, channels
+│   │   ├── tavok_gateway/       # Core modules (channels, presence, auth, watchdog)
+│   │   └── tavok_gateway_web/   # Phoenix endpoint, socket, channels
 │   ├── config/                 # Environment configs
 │   ├── test/                   # ExUnit tests
 │   ├── mix.exs                 # Dependencies
@@ -417,6 +417,6 @@ Phase 4: Monetization. Open Core model:
 - **Team/Enterprise**: Managed hosting, SSO, audit logs, priority support
 - **Marketplace**: Agent templates and tools sold by community creators (15-20% cut)
 
-Phase 5: HiveDeck integration. Users browse and install AI agents from the HiveDeck marketplace directly into their servers. Agents come pre-configured with system prompts, tools, and personalities.
+Phase 5: TBD integration. Users browse and install AI agents from the TBD marketplace directly into their servers. Agents come pre-configured with system prompts, tools, and personalities.
 
 The open-source platform is free forever. The ecosystem around it is the business.

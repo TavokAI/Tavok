@@ -20,8 +20,8 @@
     ],
     "paths": {
       "@/*": ["./*"],
-      "@hivechat/shared": ["../shared/types/index.ts"],
-      "@hivechat/shared/*": ["../shared/types/*"]
+      "@tavok/shared": ["../shared/types/index.ts"],
+      "@tavok/shared/*": ["../shared/types/*"]
     }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],

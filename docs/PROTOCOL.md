@@ -1,4 +1,4 @@
-# PROTOCOL.md — HiveChat Cross-Service Message Contracts
+# PROTOCOL.md — Tavok Cross-Service Message Contracts
 
 > **Version**: Protocol v1
 > **Status**: Active

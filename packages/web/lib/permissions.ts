@@ -1,5 +1,5 @@
 /**
- * HiveChat Permission Bitfield
+ * Tavok Permission Bitfield
  *
  * Each permission is a power of 2. A role's permissions field is the
  * bitwise OR of all granted permissions. To check: (perms & bit) === bit.

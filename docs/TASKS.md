@@ -281,7 +281,7 @@ Refactor Go proxy to abstract both API format and transport per provider. Each p
 
 ## TASK-0014: Message Edit & Delete
 
-**Status**: TODO
+**Status**: DONE
 **Priority**: P0 — Launch
 **Track**: B (Chat)
 **Assignee**: Builder
@@ -291,20 +291,20 @@ Refactor Go proxy to abstract both API format and transport per provider. Each p
 Edit own messages, delete own or admin-delete. Real-time broadcast.
 
 ### Acceptance Criteria
-- [ ] User can edit own messages (content update, `editedAt` timestamp)
-- [ ] User can delete own messages (soft delete)
-- [ ] Admins with MANAGE_MESSAGES can delete any message
-- [ ] Edit/delete events broadcast via WebSocket
-- [ ] Client updates in place
-- [ ] "(edited)" indicator on edited messages
-- [ ] Streaming messages (ACTIVE) cannot be edited
-- [ ] Protocol events added to PROTOCOL.md
+- [x] User can edit own messages (content update, `editedAt` timestamp)
+- [x] User can delete own messages (soft delete)
+- [x] Admins with MANAGE_MESSAGES can delete any message
+- [x] Edit/delete events broadcast via WebSocket
+- [x] Client updates in place
+- [x] "(edited)" indicator on edited messages
+- [x] Streaming messages (ACTIVE) cannot be edited
+- [x] Protocol events added to PROTOCOL.md
 
 ---
 
 ## TASK-0015: @Mentions with Autocomplete
 
-**Status**: IN PROGRESS
+**Status**: DONE
 **Priority**: P1 — Launch
 **Track**: B (Chat)
 **Assignee**: Builder
@@ -314,7 +314,7 @@ Edit own messages, delete own or admin-delete. Real-time broadcast.
 @mention users and bots with autocomplete dropdown. Mentions trigger bot responses when triggerMode=MENTION.
 
 ### Current State
-Core mention UX is already shipped in V0 (autocomplete, rendering, bot trigger-on-mention). V1 scope is to complete mention persistence/querying via `MessageMention` and strengthen the "you were mentioned" read-state signal.
+Complete. Core mention UX shipped in V0 (autocomplete, rendering, bot trigger-on-mention). V1 added mention persistence via `MessageMention` join table and mention counting for unread badges.
 
 ### Acceptance Criteria
 - [x] Typing `@` opens autocomplete dropdown
@@ -322,13 +322,13 @@ Core mention UX is already shipped in V0 (autocomplete, rendering, bot trigger-o
 - [x] Selected mention inserts formatted mention text
 - [x] Mentions render as highlighted pills in messages
 - [x] Bot @mentions trigger bot response
-- [ ] Mentioned users stored in `MessageMention` join table
+- [x] Mentioned users stored in `MessageMention` join table
 
 ---
 
 ## TASK-0016: Unread Indicators
 
-**Status**: TODO
+**Status**: DONE
 **Priority**: P0 — Launch
 **Track**: B (Chat)
 **Assignee**: Builder
@@ -338,20 +338,20 @@ Core mention UX is already shipped in V0 (autocomplete, rendering, bot trigger-o
 Track what users have read. Bold unread channels, red mention badges, new-message divider.
 
 ### Acceptance Criteria
-- [ ] `ChannelReadState` model tracking `lastReadSeq` and `mentionCount`
-- [ ] Channels with unread messages display bold in sidebar
-- [ ] Channels with mentions show red badge with count
-- [ ] Server icons show unread dot
-- [ ] Navigating to channel marks it as read
-- [ ] "New messages" divider in message history
-- [ ] State persists across refreshes
-- [ ] State syncs across tabs
+- [x] `ChannelReadState` model tracking `lastReadSeq` and `mentionCount`
+- [x] Channels with unread messages display bold in sidebar
+- [x] Channels with mentions show red badge with count
+- [x] Server icons show unread dot
+- [x] Navigating to channel marks it as read
+- [x] "New messages" divider in message history
+- [x] State persists across refreshes
+- [x] State syncs across tabs
 
 ---
 
 ## TASK-0017: README & Demo (Launch Prep)
 
-**Status**: TODO
+**Status**: IN PROGRESS
 **Priority**: P0 — Launch Gate
 **Track**: Launch
 **Assignee**: Builder + Strategist
@@ -712,10 +712,10 @@ Expandable "X-Ray" panel on any agent message showing execution details. Lite ve
 | **0011** | **Launch** | **Agent** | **P0** | **Agent Thinking Timeline** ⭐ | TODO |
 | **0012** | **Launch** | **Agent** | **P0** | **Multi-Stream in One Channel** ⭐ | TODO |
 | **0013** | **Launch** | **Agent** | **P0** | **Provider Abstraction + Transport** | TODO |
-| **0014** | **Launch** | **Chat** | **P0** | **Message Edit & Delete** | TODO |
-| **0015** | **Launch** | **Chat** | **P1** | **@Mentions with Autocomplete** | IN PROGRESS |
-| **0016** | **Launch** | **Chat** | **P0** | **Unread Indicators** | TODO |
-| **0017** | **Launch** | **Launch** | **P0** | **README + Demo GIF** | TODO |
+| **0014** | **Launch** | **Chat** | **P0** | **Message Edit & Delete** | DONE |
+| **0015** | **Launch** | **Chat** | **P1** | **@Mentions with Autocomplete** | DONE |
+| **0016** | **Launch** | **Chat** | **P0** | **Unread Indicators** | DONE |
+| **0017** | **Launch** | **Launch** | **P0** | **README + Demo GIF** | IN PROGRESS |
 | 0018 | Wave 1 | Agent | P1 | MCP Tool Interface | TODO |
 | 0019 | Wave 1 | Chat | P1 | Direct Messages | TODO |
 | 0020 | Wave 2 | Agent | P1 | Channel Charter / Swarm Modes ⭐ | TODO |

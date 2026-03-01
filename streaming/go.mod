@@ -1,4 +1,4 @@
-module github.com/hivechat/streaming
+module github.com/TavokAI/Tavok/streaming
 
 go 1.23
 

@@ -1,4 +1,4 @@
-// HiveChat Database Schema
+// Tavok Database Schema
 // All IDs are ULIDs (26-char, time-sortable, globally unique)
 // Generated in application code, NOT by the database
 //

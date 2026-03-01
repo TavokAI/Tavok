@@ -1,4 +1,4 @@
-# ROADMAP.md — HiveChat Master Roadmap
+# ROADMAP.md — Tavok Master Roadmap
 
 > **Created**: 2026-02-27
 > **Sources**: Strategic architecture review, competitive analysis, feature ideation (GPT), phased roadmap (Grok), market/protocol analysis (Google), detailed implementation specs (V1-ROADMAP)
@@ -8,7 +8,7 @@
 
 ## Strategic Position
 
-HiveChat occupies uncontested space:
+Tavok occupies uncontested space:
 
 | Category | Examples | What They Have | What They Don't |
 |----------|----------|---------------|-----------------|
@@ -17,7 +17,7 @@ HiveChat occupies uncontested space:
 | Self-hosted chat | Matrix/Element, Revolt, Stoat | Federation, social chat | Zero AI features |
 | Managed agents | OpenAI Frontier (Bedrock) | Enterprise scale | Open-source, self-hosted, BYOK |
 
-**HiveChat threads the needle: familiar Discord UX + first-class agent streaming + multi-agent orchestration + self-hosted sovereignty + provider agnosticism.**
+**Tavok threads the needle: familiar Discord UX + first-class agent streaming + multi-agent orchestration + self-hosted sovereignty + provider agnosticism.**
 
 The developer pain is acute and well-documented: senior engineers hate opaque AI chat boxes (Google analysis). They don't want to *talk* to agents — they want to *watch agents work* and *inspect what's happening*. The thinking timeline, tool execution traces, and visible state transitions answer that need directly.
 
@@ -158,7 +158,7 @@ Classified by monetization potential. The principle: **the core platform is free
 
 | Feature | Source | Notes |
 |---------|--------|-------|
-| IaC Workspace Config (`hivechat.yml`) | Google | Version-control your workspace alongside code |
+| IaC Workspace Config (`tavok.yml`) | Google | Version-control your workspace alongside code |
 | Enhanced Presence ("Interruptible / Deep Work") | GPT | Agents queue questions until human is available |
 | Per-channel Agent Personality Packs | GPT | System prompt + tool permissions + safety constraints + model fallback + rate limits as one bundle |
 | "Explain this code block" hover action | GPT | Channel bot offers summary/bug/tests inline |
@@ -201,7 +201,7 @@ Classified by monetization potential. The principle: **the core platform is free
 
 ## Protocol Landscape (Monitor)
 
-| Protocol | Owner | What It Does | HiveChat Status |
+| Protocol | Owner | What It Does | Tavok Status |
 |----------|-------|-------------|----------------|
 | **MCP** (Model Context Protocol) | Anthropic | Agent ↔ Tool communication via JSON-RPC 2.0 | Building (TASK-0018). Go tool interface matches MCP patterns (DEC-0022). |
 | **A2A** (Agent2Agent) | Google | Agent ↔ Agent task delegation via Agent Cards + task lifecycles | Monitor. Study Agent Card pattern for Channel Charter bot discovery. |
