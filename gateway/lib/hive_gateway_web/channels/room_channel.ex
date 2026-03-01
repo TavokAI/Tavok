@@ -7,6 +7,8 @@ defmodule HiveGatewayWeb.RoomChannel do
   Handles:
   - Join with optional lastSequence for reconnection sync
   - new_message — user sends a chat message
+  - message_edit — user edits own message (TASK-0014)
+  - message_delete — user deletes a message (TASK-0014)
   - typing — user is typing
   - sync — request missed messages
   - history — request older messages
@@ -136,28 +138,29 @@ defmodule HiveGatewayWeb.RoomChannel do
     # The channel process handles ALL messages for this room — blocking it with HTTP calls
     # would freeze message delivery for every user in the channel. (ISSUE-007)
     Task.Supervisor.async_nolink(HiveGateway.TaskSupervisor, fn ->
-      case ConfigCache.get_channel_bot(channel_id) do
-        {:ok, nil} ->
-          # No default bot for this channel
-          :noop
+      # Multi-bot: try ChannelBot join table first, fall back to single defaultBot (TASK-0012)
+      case ConfigCache.get_channel_bots(channel_id) do
+        {:ok, bots} when is_list(bots) and length(bots) > 0 ->
+          # Evaluate trigger condition for each bot independently
+          Enum.each(bots, fn bot_config ->
+            maybe_trigger_bot(socket, bot_config, trigger_message_id, content)
+          end)
 
-        {:ok, bot_config} ->
-          trigger_mode = Map.get(bot_config, "triggerMode", "ALWAYS")
-          bot_name = Map.get(bot_config, "name", "")
+        {:ok, _empty} ->
+          # No bots in ChannelBot table — fall back to single defaultBot (backward compat)
+          case ConfigCache.get_channel_bot(channel_id) do
+            {:ok, nil} ->
+              :noop
 
-          should_trigger =
-            case trigger_mode do
-              "ALWAYS" -> true
-              "MENTION" -> String.contains?(content, "@#{bot_name}")
-              _ -> false
-            end
+            {:ok, bot_config} ->
+              maybe_trigger_bot(socket, bot_config, trigger_message_id, content)
 
-          if should_trigger do
-            run_bot_trigger(socket, bot_config, trigger_message_id)
+            {:error, reason} ->
+              Logger.error("Failed to fetch channel bot: #{inspect(reason)}")
           end
 
         {:error, reason} ->
-          Logger.error("Failed to fetch channel bot: #{inspect(reason)}")
+          Logger.error("Failed to fetch channel bots: #{inspect(reason)}")
       end
     end)
 
@@ -359,9 +362,109 @@ defmodule HiveGatewayWeb.RoomChannel do
     {:noreply, socket}
   end
 
+  # ---------- Message Edit (TASK-0014) ----------
+
+  @impl true
+  def handle_in("message_edit", %{"messageId" => message_id, "content" => content}, socket)
+      when is_binary(message_id) and is_binary(content) do
+    trimmed = String.trim(content)
+
+    cond do
+      trimmed == "" ->
+        {:reply, {:error, %{reason: "empty_content"}}, socket}
+
+      String.length(content) > @max_content_length ->
+        {:reply, {:error, %{reason: "content_too_long", max: @max_content_length}}, socket}
+
+      true ->
+        user_id = socket.assigns.user_id
+
+        case WebClient.edit_message(message_id, %{userId: user_id, content: content}) do
+          {:ok, response} ->
+            # Broadcast the edit to all clients in the room
+            Broadcast.broadcast_pre_serialized!(socket, "message_edited", %{
+              messageId: Map.get(response, "messageId"),
+              content: Map.get(response, "content"),
+              editedAt: Map.get(response, "editedAt")
+            })
+
+            {:reply, {:ok, %{messageId: Map.get(response, "messageId")}}, socket}
+
+          {:error, {:http_error, 403, _body}} ->
+            {:reply, {:error, %{reason: "not_author"}}, socket}
+
+          {:error, {:http_error, 404, _body}} ->
+            {:reply, {:error, %{reason: "not_found"}}, socket}
+
+          {:error, {:http_error, 409, _body}} ->
+            {:reply, {:error, %{reason: "stream_active"}}, socket}
+
+          {:error, reason} ->
+            Logger.error("message_edit failed: #{inspect(reason)}")
+            {:reply, {:error, %{reason: "edit_failed"}}, socket}
+        end
+    end
+  end
+
+  @impl true
+  def handle_in("message_edit", _payload, socket) do
+    {:reply, {:error, %{reason: "invalid_payload", event: "message_edit"}}, socket}
+  end
+
+  # ---------- Message Delete (TASK-0014) ----------
+
+  @impl true
+  def handle_in("message_delete", %{"messageId" => message_id}, socket)
+      when is_binary(message_id) do
+    user_id = socket.assigns.user_id
+
+    case WebClient.delete_message(message_id, %{userId: user_id}) do
+      {:ok, response} ->
+        # Broadcast the deletion to all clients in the room
+        Broadcast.broadcast_pre_serialized!(socket, "message_deleted", %{
+          messageId: Map.get(response, "messageId"),
+          deletedBy: Map.get(response, "deletedBy")
+        })
+
+        {:reply, {:ok, %{messageId: Map.get(response, "messageId")}}, socket}
+
+      {:error, {:http_error, 403, _body}} ->
+        {:reply, {:error, %{reason: "unauthorized"}}, socket}
+
+      {:error, {:http_error, 404, _body}} ->
+        {:reply, {:error, %{reason: "not_found"}}, socket}
+
+      {:error, reason} ->
+        Logger.error("message_delete failed: #{inspect(reason)}")
+        {:reply, {:error, %{reason: "delete_failed"}}, socket}
+    end
+  end
+
+  @impl true
+  def handle_in("message_delete", _payload, socket) do
+    {:reply, {:error, %{reason: "invalid_payload", event: "message_delete"}}, socket}
+  end
+
   # ---------- Bot trigger helpers ----------
 
-  defp run_bot_trigger(socket, bot_config, trigger_message_id) do
+  # Evaluate trigger condition and run bot if matched (TASK-0012)
+  defp maybe_trigger_bot(socket, bot_config, trigger_message_id, content) do
+    trigger_mode = Map.get(bot_config, "triggerMode", "ALWAYS")
+    bot_name = Map.get(bot_config, "name", "")
+
+    should_trigger =
+      case trigger_mode do
+        "ALWAYS" -> true
+        "MENTION" -> String.contains?(content, "@#{bot_name}")
+        _ -> false
+      end
+
+    if should_trigger do
+      run_bot_trigger(socket, bot_config, trigger_message_id, content)
+    end
+  end
+
+  defp run_bot_trigger(socket, bot_config, trigger_message_id, trigger_content) do
     channel_id = socket.assigns.channel_id
     bot_id = Map.get(bot_config, "id")
     bot_name = Map.get(bot_config, "name")
@@ -401,8 +504,11 @@ defmodule HiveGatewayWeb.RoomChannel do
 
         MessagePersistence.persist_async(placeholder, message_id, channel_id)
 
-        # 6. Build context messages for the LLM
-        context_messages = fetch_context_messages(channel_id)
+        # 6. Build context messages for the LLM.
+        # Pass trigger message content to guarantee it's included in context.
+        # The user's message is persisted async (MessagePersistence.persist_async)
+        # and may not be in the DB yet when we fetch context. (ISSUE-027)
+        context_messages = fetch_context_messages(channel_id, trigger_content)
 
         # 7. Publish stream request to Redis for Go Proxy
         stream_request =
@@ -429,28 +535,54 @@ defmodule HiveGatewayWeb.RoomChannel do
     end
   end
 
-  defp fetch_context_messages(channel_id) do
-    case WebClient.get_messages(%{channelId: channel_id, limit: 20}) do
-      {:ok, %{"messages" => messages}} ->
-        messages
-        |> Enum.filter(fn m ->
-          # Include standard messages and completed streaming messages
-          Map.get(m, "type") == "STANDARD" or
-            (Map.get(m, "type") == "STREAMING" and
-               Map.get(m, "streamingStatus") == "COMPLETE")
-        end)
-        |> Enum.map(fn m ->
-          role =
-            case Map.get(m, "authorType") do
-              "BOT" -> "assistant"
-              _ -> "user"
-            end
+  defp fetch_context_messages(channel_id, trigger_content) do
+    history =
+      case WebClient.get_messages(%{channelId: channel_id, limit: 20}) do
+        {:ok, %{"messages" => messages}} ->
+          messages
+          |> Enum.filter(fn m ->
+            # Include standard messages and completed streaming messages
+            Map.get(m, "type") == "STANDARD" or
+              (Map.get(m, "type") == "STREAMING" and
+                 Map.get(m, "streamingStatus") == "COMPLETE")
+          end)
+          |> Enum.map(fn m ->
+            role =
+              case Map.get(m, "authorType") do
+                "BOT" -> "assistant"
+                _ -> "user"
+              end
 
-          %{"role" => role, "content" => Map.get(m, "content")}
-        end)
+            %{"role" => role, "content" => Map.get(m, "content") || ""}
+          end)
+          # Filter out messages with empty content — prevents cascade where a previous
+          # empty LLM response (tokenCount:0 bug) contaminates context and causes
+          # subsequent responses to also be empty. (ISSUE-027)
+          |> Enum.filter(fn m ->
+            content = Map.get(m, "content", "")
+            String.trim(content) != ""
+          end)
 
-      {:error, _reason} ->
-        []
+        {:error, _reason} ->
+          []
+      end
+
+    # Guarantee the trigger message is the last entry in context.
+    # The user's message is persisted async and may not be in the DB yet.
+    # If it IS already in the DB (appears as the last user message with matching
+    # content), skip the append to avoid duplication. (ISSUE-027)
+    trigger_msg = %{"role" => "user", "content" => trigger_content}
+
+    already_present =
+      case List.last(history) do
+        %{"role" => "user", "content" => c} when c == trigger_content -> true
+        _ -> false
+      end
+
+    if already_present do
+      history
+    else
+      history ++ [trigger_msg]
     end
   end
 

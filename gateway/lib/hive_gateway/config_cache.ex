@@ -60,6 +60,25 @@ defmodule HiveGateway.ConfigCache do
   end
 
   @doc """
+  Get ALL bots for a channel (multi-bot — TASK-0012).
+  Returns {:ok, [bot_config, ...]} or {:error, reason}.
+  Fast path: reads directly from ETS. Slow path: request collapsing via GenServer.
+  Separate cache key {:bots, channel_id} with same TTL as single-bot cache.
+  """
+  def get_channel_bots(channel_id) do
+    key = {:bots, channel_id}
+
+    case ets_lookup(key) do
+      {:hit, value} ->
+        GenServer.cast(__MODULE__, :hit)
+        {:ok, value}
+
+      :miss ->
+        GenServer.call(__MODULE__, {:fetch_bots, channel_id}, 10_000)
+    end
+  end
+
+  @doc """
   Check channel membership for a user. Returns {:ok, map} or {:error, reason}.
   Fast path: reads directly from ETS (no GenServer mailbox hop on cache hit).
   Slow path: routes through GenServer for request collapsing on cache miss.
@@ -77,10 +96,11 @@ defmodule HiveGateway.ConfigCache do
     end
   end
 
-  @doc "Invalidate cached bot config for a channel."
+  @doc "Invalidate cached bot config for a channel (single + multi-bot)."
   def invalidate_bot(channel_id) do
     try do
       :ets.delete(@table_name, {:bot, channel_id})
+      :ets.delete(@table_name, {:bots, channel_id})
     rescue
       ArgumentError -> :ok
     end
@@ -100,10 +120,11 @@ defmodule HiveGateway.ConfigCache do
     :ok
   end
 
-  @doc "Invalidate all cached entries for a channel (bot + all memberships)."
+  @doc "Invalidate all cached entries for a channel (bot + bots + all memberships)."
   def invalidate_channel(channel_id) do
     try do
       :ets.delete(@table_name, {:bot, channel_id})
+      :ets.delete(@table_name, {:bots, channel_id})
       :ets.match_delete(@table_name, {{:member, channel_id, :_}, :_, :_})
     rescue
       ArgumentError -> :ok
@@ -185,6 +206,45 @@ defmodule HiveGateway.ConfigCache do
 
           {_ref, waiters} ->
             # Request already in-flight — add caller to waiters list
+            in_flight = Map.put(state.in_flight, key, {elem(Map.get(state.in_flight, key), 0), [from | waiters]})
+            {:noreply, %{state | coalesced: state.coalesced + 1, in_flight: in_flight}}
+        end
+    end
+  end
+
+  # --- Request collapsing: multi-bot fetch (TASK-0012) ---
+
+  @impl true
+  def handle_call({:fetch_bots, channel_id}, from, state) do
+    key = {:bots, channel_id}
+
+    case ets_lookup(key) do
+      {:hit, value} ->
+        {:reply, {:ok, value}, %{state | hits: state.hits + 1}}
+
+      :miss ->
+        state = %{state | misses: state.misses + 1}
+
+        case Map.get(state.in_flight, key) do
+          nil ->
+            task =
+              Task.async(fn ->
+                case WebClient.get_channel_bots(channel_id) do
+                  {:ok, bots} ->
+                    now = System.monotonic_time(:millisecond)
+                    expires_at = now + @bot_ttl_ms
+                    :ets.insert(@table_name, {key, bots, expires_at})
+                    {:ok, bots}
+
+                  {:error, _reason} = error ->
+                    error
+                end
+              end)
+
+            in_flight = Map.put(state.in_flight, key, {task.ref, [from]})
+            {:noreply, %{state | in_flight: in_flight}}
+
+          {_ref, waiters} ->
             in_flight = Map.put(state.in_flight, key, {elem(Map.get(state.in_flight, key), 0), [from | waiters]})
             {:noreply, %{state | coalesced: state.coalesced + 1, in_flight: in_flight}}
         end

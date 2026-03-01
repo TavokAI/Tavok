@@ -18,6 +18,7 @@ export const Permissions = {
   KICK_MEMBERS: ONE << BigInt(5),
   MANAGE_SERVER: ONE << BigInt(6),
   ADMINISTRATOR: ONE << BigInt(7),
+  MANAGE_MESSAGES: ONE << BigInt(8), // TASK-0014: delete others' messages
 } as const;
 
 /** Default permissions for @everyone role */
@@ -78,6 +79,12 @@ export const PERMISSION_INFO: {
     bit: Permissions.MANAGE_SERVER,
     label: "Manage Server",
     description: "Edit server name and icon",
+  },
+  {
+    key: "MANAGE_MESSAGES",
+    bit: Permissions.MANAGE_MESSAGES,
+    label: "Manage Messages",
+    description: "Delete messages from other users",
   },
   {
     key: "ADMINISTRATOR",

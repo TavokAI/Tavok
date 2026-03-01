@@ -21,9 +21,12 @@ export interface MessagePayload {
   content: string;
   type: string;
   streamingStatus: string | null;
+  thinkingPhase?: string;
   sequence: string;
   createdAt: string;
   reactions: ReactionData[];
+  editedAt?: string | null;
+  isDeleted?: boolean;
 }
 
 function compareSequences(a: string, b: string): number {
@@ -49,6 +52,8 @@ export interface PresenceUser {
 interface UseChannelReturn {
   messages: MessagePayload[];
   sendMessage: (content: string) => void;
+  editMessage: (messageId: string, content: string) => Promise<boolean>;
+  deleteMessage: (messageId: string) => Promise<boolean>;
   loadHistory: () => void;
   updateReactions: (messageId: string, reactions: ReactionData[]) => void;
   hasMoreHistory: boolean;
@@ -303,6 +308,7 @@ export function useChannel(channelId: string | null): UseChannelReturn {
                   content: payload.finalContent,
                   streamingStatus: "COMPLETE",
                   type: "STREAMING",
+                  thinkingPhase: undefined,
                 }
               : m
           )
@@ -329,6 +335,7 @@ export function useChannel(channelId: string | null): UseChannelReturn {
                   content:
                     payload.partialContent || m.content || "[Error: " + payload.error + "]",
                   streamingStatus: "ERROR",
+                  thinkingPhase: undefined,
                 }
               : m
           )
@@ -336,6 +343,60 @@ export function useChannel(channelId: string | null): UseChannelReturn {
 
         // Clear any buffered tokens for this message
         streamBufferRef.current.delete(payload.messageId);
+      });
+
+      // stream_thinking: update thinking phase badge (TASK-0011)
+      channel.on("stream_thinking", (raw: unknown) => {
+        if (!mounted) return;
+        const payload = raw as {
+          messageId: string;
+          phase: string;
+        };
+
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === payload.messageId
+              ? { ...m, thinkingPhase: payload.phase }
+              : m
+          )
+        );
+      });
+
+      // ---- Edit & Delete events (TASK-0014) ----
+
+      // message_edited: update content and editedAt for the edited message
+      channel.on("message_edited", (raw: unknown) => {
+        if (!mounted) return;
+        const payload = raw as {
+          messageId: string;
+          content: string;
+          editedAt: string;
+        };
+
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === payload.messageId
+              ? { ...m, content: payload.content, editedAt: payload.editedAt }
+              : m
+          )
+        );
+      });
+
+      // message_deleted: mark the message as deleted
+      channel.on("message_deleted", (raw: unknown) => {
+        if (!mounted) return;
+        const payload = raw as {
+          messageId: string;
+          deletedBy: string;
+        };
+
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === payload.messageId
+              ? { ...m, isDeleted: true }
+              : m
+          )
+        );
       });
 
       channel
@@ -424,9 +485,59 @@ export function useChannel(channelId: string | null): UseChannelReturn {
     channelRef.current.push("typing", {});
   }, []);
 
+  // Edit a message (TASK-0014)
+  const editMessage = useCallback(
+    (messageId: string, content: string): Promise<boolean> => {
+      return new Promise((resolve) => {
+        if (!channelRef.current) {
+          resolve(false);
+          return;
+        }
+        channelRef.current
+          .push("message_edit", { messageId, content })
+          .receive("ok", () => resolve(true))
+          .receive("error", (resp: unknown) => {
+            console.error("[Channel] Edit error:", resp);
+            resolve(false);
+          })
+          .receive("timeout", () => {
+            console.error("[Channel] Edit timeout");
+            resolve(false);
+          });
+      });
+    },
+    []
+  );
+
+  // Delete a message (TASK-0014)
+  const deleteMessage = useCallback(
+    (messageId: string): Promise<boolean> => {
+      return new Promise((resolve) => {
+        if (!channelRef.current) {
+          resolve(false);
+          return;
+        }
+        channelRef.current
+          .push("message_delete", { messageId })
+          .receive("ok", () => resolve(true))
+          .receive("error", (resp: unknown) => {
+            console.error("[Channel] Delete error:", resp);
+            resolve(false);
+          })
+          .receive("timeout", () => {
+            console.error("[Channel] Delete timeout");
+            resolve(false);
+          });
+      });
+    },
+    []
+  );
+
   return {
     messages,
     sendMessage,
+    editMessage,
+    deleteMessage,
     loadHistory,
     updateReactions,
     hasMoreHistory,

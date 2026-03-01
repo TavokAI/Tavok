@@ -1,0 +1,104 @@
+import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/db";
+import { decrypt } from "@/lib/encryption";
+import { validateInternalSecret } from "@/lib/internal-auth";
+
+/**
+ * GET /api/internal/channels/{channelId}/bots
+ *
+ * Returns ALL bots assigned to a channel with API keys DECRYPTED.
+ * Falls back to the single defaultBot if no ChannelBot entries exist (backward compat).
+ * Used by the Gateway to trigger multiple bots on message send (TASK-0012).
+ * Auth: X-Internal-Secret header.
+ */
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ channelId: string }> }
+) {
+  if (!validateInternalSecret(request)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { channelId } = await params;
+
+  try {
+    // 1. Try ChannelBot join table first (multi-bot)
+    const channelBots = await prisma.channelBot.findMany({
+      where: { channelId },
+      include: { bot: true },
+      orderBy: { createdAt: "asc" },
+    });
+
+    if (channelBots.length > 0) {
+      // Return all active bots with decrypted keys
+      const bots = channelBots
+        .filter((cb) => cb.bot.isActive)
+        .map((cb) => {
+          let apiKey = "";
+          try {
+            apiKey = decrypt(cb.bot.apiKeyEncrypted);
+          } catch {
+            console.error(`[Internal] Failed to decrypt API key for bot ${cb.bot.id}`);
+          }
+
+          return {
+            id: cb.bot.id,
+            name: cb.bot.name,
+            avatarUrl: cb.bot.avatarUrl,
+            llmProvider: cb.bot.llmProvider,
+            llmModel: cb.bot.llmModel,
+            apiEndpoint: cb.bot.apiEndpoint,
+            apiKey,
+            systemPrompt: cb.bot.systemPrompt,
+            temperature: cb.bot.temperature,
+            maxTokens: cb.bot.maxTokens,
+            triggerMode: cb.bot.triggerMode,
+          };
+        });
+
+      return NextResponse.json({ bots });
+    }
+
+    // 2. Fallback: check defaultBot (backward compat for channels not yet migrated)
+    const channel = await prisma.channel.findUnique({
+      where: { id: channelId },
+      include: { defaultBot: true },
+    });
+
+    if (!channel || !channel.defaultBot || !channel.defaultBot.isActive) {
+      return NextResponse.json({ bots: [] });
+    }
+
+    const bot = channel.defaultBot;
+    let apiKey = "";
+    try {
+      apiKey = decrypt(bot.apiKeyEncrypted);
+    } catch {
+      console.error(`[Internal] Failed to decrypt API key for bot ${bot.id}`);
+    }
+
+    return NextResponse.json({
+      bots: [
+        {
+          id: bot.id,
+          name: bot.name,
+          avatarUrl: bot.avatarUrl,
+          llmProvider: bot.llmProvider,
+          llmModel: bot.llmModel,
+          apiEndpoint: bot.apiEndpoint,
+          apiKey,
+          systemPrompt: bot.systemPrompt,
+          temperature: bot.temperature,
+          maxTokens: bot.maxTokens,
+          triggerMode: bot.triggerMode,
+        },
+      ],
+    });
+  } catch (error) {
+    console.error("[Internal] Failed to get channel bots:", error);
+    return NextResponse.json(
+      { error: "Failed to get channel bots" },
+      { status: 500 }
+    );
+  }
+}

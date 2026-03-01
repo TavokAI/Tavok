@@ -70,6 +70,8 @@ On failure: socket connection is rejected by Phoenix transport (WebSocket close,
 | --- | --- | --- |
 | `phx_join` | `{lastSequence?: string}` | Join channel, optionally with last seen sequence for sync |
 | `new_message` | `{content: string}` | User sends a chat message (max 4000 chars) |
+| `message_edit` | `{messageId: string, content: string}` | Edit own message (max 4000 chars, TASK-0014) |
+| `message_delete` | `{messageId: string}` | Delete a message — own or with MANAGE_MESSAGES (TASK-0014) |
 | `typing` | `{}` | User is typing (debounced client-side, 3s cooldown) |
 | `sync` | `{lastSequence: string}` | Request missed messages since sequence N |
 | `history` | `{before?: string, limit?: int}` | Request older messages (before = ULID cursor, limit default 50, max 100) |
@@ -83,6 +85,9 @@ On failure: socket connection is rejected by Phoenix transport (WebSocket close,
 | `stream_token` | [StreamTokenPayload](#streamtokenpayload) | Single token from LLM |
 | `stream_complete` | [StreamCompletePayload](#streamcompletepayload) | Streaming finished successfully |
 | `stream_error` | [StreamErrorPayload](#streamerrorpayload) | Streaming failed |
+| `stream_thinking` | [StreamThinkingPayload](#streamthinkingpayload) | Agent thinking phase changed (TASK-0011) |
+| `message_edited` | [MessageEditedPayload](#messageeditedpayload) | Message content was edited (TASK-0014) |
+| `message_deleted` | [MessageDeletedPayload](#messagedeletedpayload) | Message was soft-deleted (TASK-0014) |
 | `user_typing` | [TypingPayload](#typingpayload) | Another user is typing |
 | `presence_state` | Phoenix.Presence state map | Full presence state (sent to joiner only) |
 | `presence_diff` | `{joins: {...}, leaves: {...}}` | Presence changes (broadcast) |
@@ -110,7 +115,8 @@ On failure: socket connection is rejected by Phoenix transport (WebSocket close,
   "type": "STANDARD",        // "STANDARD" | "STREAMING" | "SYSTEM"
   "streamingStatus": null,   // null | "ACTIVE" | "COMPLETE" | "ERROR"
   "sequence": "42",          // per-channel sequence number (BigInt-safe decimal string)
-  "createdAt": "2026-02-23T12:00:00.000Z"
+  "createdAt": "2026-02-23T12:00:00.000Z",
+  "editedAt": null           // ISO 8601 string or null (TASK-0014)
 }
 ```
 
@@ -155,6 +161,17 @@ On failure: socket connection is rejected by Phoenix transport (WebSocket close,
 }
 ```
 
+#### StreamThinkingPayload
+
+```json
+{
+  "messageId": "01HXY...",
+  "phase": "Thinking"           // "Thinking" | "Writing"
+}
+```
+
+Lifecycle: Go Proxy emits `"Thinking"` after loading bot config (about to call LLM), then `"Writing"` when the first token arrives. The frontend clears the phase on `stream_complete` or `stream_error`. See DEC-0037.
+
 #### TypingPayload
 
 ```json
@@ -164,6 +181,29 @@ On failure: socket connection is rejected by Phoenix transport (WebSocket close,
   "displayName": "Alice"
 }
 ```
+
+#### MessageEditedPayload
+
+```json
+{
+  "messageId": "01HXY...",
+  "content": "Updated message text",
+  "editedAt": "2026-03-01T12:00:00.000Z"
+}
+```
+
+Broadcast to all clients in channel when a message is edited. The Gateway calls the internal API synchronously before broadcasting — correctness > speed for edits. Only the message author can edit; bot messages cannot be edited.
+
+#### MessageDeletedPayload
+
+```json
+{
+  "messageId": "01HXY...",
+  "deletedBy": "01HXY..."
+}
+```
+
+Broadcast to all clients in channel when a message is soft-deleted. The author can delete own messages. Users with `MANAGE_MESSAGES` permission (bit 8) can delete any message. The internal API validates authorization; Gateway only broadcasts on success.
 
 ---
 
@@ -179,6 +219,7 @@ All Redis messages are JSON-encoded strings.
 | `hive:stream:request` | Gateway | Go Proxy | Request AI response for a message |
 | `hive:stream:tokens:{channelId}:{messageId}` | Go Proxy | Gateway | Individual tokens from LLM |
 | `hive:stream:status:{channelId}:{messageId}` | Go Proxy | Gateway | Stream completion or error |
+| `hive:stream:thinking:{channelId}:{messageId}` | Go Proxy | Gateway | Agent thinking phase change (TASK-0011) |
 
 ### Stream Request Payload
 
@@ -238,6 +279,19 @@ For errors:
   "durationMs": 800
 }
 ```
+
+### Stream Thinking Payload
+
+Published by Go Proxy when the agent's thinking phase changes:
+
+```json
+{
+  "messageId": "01HXY...",
+  "phase": "Thinking"
+}
+```
+
+Phases: `"Thinking"` (about to call LLM) → `"Writing"` (first token received). Cleared by `stream_complete` or `stream_error` on the frontend.
 
 ### Sequence Number Assignment
 
@@ -328,6 +382,100 @@ Get the default bot configuration for a channel.
 
 Note: `apiKeyEncrypted` is decrypted server-side and included as `apiKey` in this internal response only.
 
+#### GET /api/internal/channels/{channelId}/bots
+
+Get ALL bots assigned to a channel (multi-bot — TASK-0012). Falls back to the single `defaultBot` if no ChannelBot entries exist.
+
+**Response:** `200 OK` with array of bot configs.
+
+```json
+{
+  "bots": [
+    {
+      "id": "01HXY...",
+      "name": "Claude Assistant",
+      "llmProvider": "anthropic",
+      "llmModel": "claude-sonnet-4-20250514",
+      "apiEndpoint": "https://api.anthropic.com",
+      "systemPrompt": "You are a helpful assistant.",
+      "temperature": 0.7,
+      "maxTokens": 4096,
+      "triggerMode": "ALWAYS"
+    },
+    {
+      "id": "01HXZ...",
+      "name": "GPT Helper",
+      "llmProvider": "openai",
+      "llmModel": "gpt-4o",
+      "apiEndpoint": "https://api.openai.com",
+      "systemPrompt": "You are a helpful assistant.",
+      "temperature": 0.7,
+      "maxTokens": 4096,
+      "triggerMode": "ALWAYS"
+    }
+  ]
+}
+```
+
+Note: Each bot's `apiKeyEncrypted` is decrypted server-side and included as `apiKey`. Returns `{"bots": []}` if no bots assigned. See DEC-0038.
+
+#### PATCH /api/internal/messages/{messageId}
+
+Edit a message's content. Called by Gateway on `message_edit` WebSocket event. (TASK-0014)
+
+**Request body:**
+
+```json
+{
+  "userId": "01HXY...",
+  "content": "Updated message text"
+}
+```
+
+**Validations:**
+- Message exists and is not deleted
+- `authorType` is not BOT
+- `authorId === userId` (only author can edit)
+- `streamingStatus` is not ACTIVE
+- `content` is non-empty, max 4000 chars
+
+**Response:** `200 OK`
+
+```json
+{
+  "messageId": "01HXY...",
+  "content": "Updated message text",
+  "editedAt": "2026-03-01T12:00:00.000Z"
+}
+```
+
+**Errors:** `400` (bad input), `403` (not author / bot message), `404` (not found / deleted), `409` (active stream)
+
+#### DELETE /api/internal/messages/{messageId}
+
+Soft-delete a message. Called by Gateway on `message_delete` WebSocket event. (TASK-0014)
+
+**Request body:**
+
+```json
+{
+  "userId": "01HXY..."
+}
+```
+
+**Authorization:** Author can always delete own messages. Non-authors need `MANAGE_MESSAGES` permission (bit 8) on the server.
+
+**Response:** `200 OK`
+
+```json
+{
+  "messageId": "01HXY...",
+  "deletedBy": "01HXY..."
+}
+```
+
+**Errors:** `403` (not author and missing permission), `404` (not found / already deleted)
+
 ### Go Proxy → Next.js (Web)
 
 #### GET /api/internal/bots/{botId}
@@ -365,6 +513,47 @@ For errors:
 Fetch a single message by ID. Used by Gateway StreamWatchdog to check stream terminal state.
 
 **Response:** `200 OK` with message fields (`id`, `channelId`, `content`, `type`, `streamingStatus`), or `404` if not found.
+
+### Session-Authenticated Endpoints (TASK-0016)
+
+These endpoints use NextAuth session cookies (not internal secret). Called directly by the frontend.
+
+#### POST /api/servers/{serverId}/channels/{channelId}/read
+
+Mark a channel as read for the current user. Upserts `ChannelReadState` with `lastReadSeq = channel.lastSequence` and resets `mentionCount = 0`.
+
+**Auth:** NextAuth session (cookie)
+
+**Response:** `200 OK`
+
+```json
+{ "ok": true }
+```
+
+**Errors:** `401` (not authenticated), `403` (not a member)
+
+#### GET /api/servers/{serverId}/unread
+
+Get unread state for all channels in a server. Compares each channel's `lastSequence` with the user's `ChannelReadState.lastReadSeq`.
+
+**Auth:** NextAuth session (cookie)
+
+**Response:** `200 OK`
+
+```json
+{
+  "channels": [
+    {
+      "channelId": "01HXY...",
+      "hasUnread": true,
+      "mentionCount": 2,
+      "lastReadSeq": "42"
+    }
+  ]
+}
+```
+
+**Errors:** `401` (not authenticated), `403` (not a member)
 
 ---
 
@@ -510,3 +699,7 @@ In production, these endpoints are not exposed to the public internet.
 | 2026-02-23 | v1 | Initial protocol definition |
 | 2026-02-28 | v1.1 | Fix finalization endpoint (POST → PUT), add GET single message, add content length constraint, document StreamWatchdog endpoint |
 | 2026-02-28 | v1.2 | Add §4b Message Delivery Semantics (broadcast-first pattern, DEC-0028), update Invariant 1 for concurrent persist |
+| 2026-02-28 | v1.3 | Add stream_thinking event, StreamThinkingPayload, hive:stream:thinking Redis channel (TASK-0011, DEC-0037) |
+| 2026-03-01 | v1.4 | Add GET /api/internal/channels/{id}/bots multi-bot endpoint (TASK-0012, DEC-0038) |
+| 2026-03-01 | v1.5 | Add message_edit/message_delete client events, message_edited/message_deleted broadcasts, PATCH/DELETE internal endpoints, editedAt in MessagePayload (TASK-0014) |
+| 2026-03-01 | v1.6 | Add POST mark-as-read + GET unread state session endpoints, ChannelReadState model, mentionCount increment on message persist (TASK-0015, TASK-0016) |

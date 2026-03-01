@@ -17,6 +17,7 @@ interface ChannelSettingsModalProps {
   onClose: () => void;
   channelId: string;
   channelName: string;
+  currentBotIds?: string[];
   currentDefaultBotId: string | null;
 }
 
@@ -25,11 +26,12 @@ export function ChannelSettingsModal({
   onClose,
   channelId,
   channelName,
+  currentBotIds,
   currentDefaultBotId,
 }: ChannelSettingsModalProps) {
   const { currentServerId } = useChatContext();
   const [bots, setBots] = useState<Bot[]>([]);
-  const [selectedBotId, setSelectedBotId] = useState<string>("");
+  const [selectedBotIds, setSelectedBotIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -54,10 +56,29 @@ export function ChannelSettingsModal({
   useEffect(() => {
     if (isOpen) {
       fetchBots();
-      setSelectedBotId(currentDefaultBotId || "");
+      // Initialize from currentBotIds or fall back to single defaultBotId
+      if (currentBotIds && currentBotIds.length > 0) {
+        setSelectedBotIds(new Set(currentBotIds));
+      } else if (currentDefaultBotId) {
+        setSelectedBotIds(new Set([currentDefaultBotId]));
+      } else {
+        setSelectedBotIds(new Set());
+      }
       setError("");
     }
-  }, [isOpen, fetchBots, currentDefaultBotId]);
+  }, [isOpen, fetchBots, currentBotIds, currentDefaultBotId]);
+
+  function toggleBot(botId: string) {
+    setSelectedBotIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(botId)) {
+        next.delete(botId);
+      } else {
+        next.add(botId);
+      }
+      return next;
+    });
+  }
 
   async function handleSave() {
     if (!currentServerId) return;
@@ -72,7 +93,7 @@ export function ChannelSettingsModal({
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            defaultBotId: selectedBotId || null,
+            botIds: Array.from(selectedBotIds),
           }),
         }
       );
@@ -95,31 +116,45 @@ export function ChannelSettingsModal({
     <Modal isOpen={isOpen} onClose={onClose} title={`#${channelName} Settings`}>
       <div className="space-y-4">
         <div>
-          <label className="mb-1 block text-sm font-medium text-text-primary">
-            Default Bot
+          <label className="mb-2 block text-sm font-medium text-text-primary">
+            Channel Agents
           </label>
-          <select
-            value={selectedBotId}
-            onChange={(e) => setSelectedBotId(e.target.value)}
-            className="w-full rounded bg-background-primary px-3 py-2 text-sm text-text-primary border border-background-tertiary focus:border-brand focus:outline-none"
-          >
-            <option value="">None (no bot)</option>
-            {bots.map((bot) => (
-              <option key={bot.id} value={bot.id}>
-                {bot.name} ({bot.llmProvider}/{bot.llmModel})
-              </option>
-            ))}
-          </select>
-          <p className="mt-1 text-xs text-text-muted">
-            The bot will automatically respond to messages in this channel.
+          <p className="mb-3 text-xs text-text-muted">
+            Select one or more agents to respond in this channel. Multiple agents can stream simultaneously.
           </p>
-        </div>
 
-        {bots.length === 0 && (
-          <p className="text-xs text-text-muted">
-            No bots created yet. Use &quot;Manage Bots&quot; to create one first.
-          </p>
-        )}
+          {bots.length === 0 ? (
+            <p className="text-xs text-text-muted py-2">
+              No bots created yet. Use &quot;Manage Bots&quot; to create one first.
+            </p>
+          ) : (
+            <div className="space-y-1 max-h-48 overflow-y-auto">
+              {bots.map((bot) => (
+                <label
+                  key={bot.id}
+                  className={`flex items-center gap-3 rounded px-3 py-2 cursor-pointer transition-colors ${
+                    selectedBotIds.has(bot.id)
+                      ? "bg-accent-cyan/10 border border-accent-cyan/30"
+                      : "bg-background-primary border border-background-tertiary hover:border-text-dim"
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={selectedBotIds.has(bot.id)}
+                    onChange={() => toggleBot(bot.id)}
+                    className="rounded border-text-dim text-accent-cyan focus:ring-accent-cyan"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <span className="text-sm font-mono text-text-primary">{bot.name}</span>
+                    <span className="ml-2 text-[10px] text-text-muted">
+                      {bot.llmProvider}/{bot.llmModel}
+                    </span>
+                  </div>
+                </label>
+              ))}
+            </div>
+          )}
+        </div>
 
         {error && <p className="text-sm text-status-danger">{error}</p>}
 

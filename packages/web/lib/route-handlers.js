@@ -6,6 +6,8 @@ import {
   parseNonNegativeSequence,
   serializeSequence,
 } from "./api-safety.js";
+import { parseMentionedUserIds } from "./mention-parser";
+import { generateId } from "./ulid";
 
 function isAuthorType(value) {
   return value === "USER" || value === "BOT" || value === "SYSTEM";
@@ -119,6 +121,80 @@ export function createInternalMessagesPostHandler({ prismaClient }) {
 
         return [createdMessage];
       });
+
+      // TASK-0015: Extract and persist @mentions for USER messages.
+      // Runs outside the transaction (non-blocking, best-effort).
+      if (authorType === "USER" && content.includes("@")) {
+        try {
+          // Fetch server members and bots via the channel's serverId
+          const channel = await prismaClient.channel.findUnique({
+            where: { id: channelId },
+            select: { serverId: true },
+          });
+
+          if (channel) {
+            const [serverMembers, serverBots] = await Promise.all([
+              prismaClient.member.findMany({
+                where: { serverId: channel.serverId },
+                select: {
+                  userId: true,
+                  user: { select: { displayName: true } },
+                },
+              }),
+              prismaClient.bot.findMany({
+                where: { serverId: channel.serverId, isActive: true },
+                select: { id: true, name: true },
+              }),
+            ]);
+
+            const memberTargets = serverMembers.map((m) => ({
+              id: m.userId,
+              name: m.user.displayName,
+            }));
+            const botTargets = serverBots.map((b) => ({
+              id: b.id,
+              name: b.name,
+            }));
+
+            const mentionedIds = parseMentionedUserIds(
+              content,
+              memberTargets,
+              botTargets
+            );
+
+            if (mentionedIds.length > 0) {
+              await prismaClient.messageMention.createMany({
+                data: mentionedIds.map((userId) => ({
+                  id: generateId(),
+                  messageId: id,
+                  userId,
+                })),
+                skipDuplicates: true,
+              });
+
+              // TASK-0016: Increment mentionCount for mentioned users (excluding author).
+              // Users who don't have a ChannelReadState yet: updateMany affects 0 rows — fine for V1.
+              const mentionedOthers = mentionedIds.filter(
+                (uid) => uid !== authorId
+              );
+              if (mentionedOthers.length > 0) {
+                await prismaClient.channelReadState.updateMany({
+                  where: {
+                    channelId,
+                    userId: { in: mentionedOthers },
+                  },
+                  data: {
+                    mentionCount: { increment: 1 },
+                  },
+                });
+              }
+            }
+          }
+        } catch (mentionError) {
+          // Non-fatal: log and continue — message is already persisted
+          console.error("[Mentions] Failed to persist mentions:", mentionError);
+        }
+      }
 
       let authorName = "Unknown";
       let authorAvatarUrl = null;

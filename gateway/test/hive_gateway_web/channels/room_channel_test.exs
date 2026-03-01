@@ -51,8 +51,15 @@ defmodule HiveGatewayWeb.RoomChannelTest do
         assigns: %{channel_id: "channel-1", user_id: "user-1", display_name: "User 1"}
       }
 
-      result = RoomChannel.handle_in("new_message", %{"content" => "  hello  "}, socket)
-      refute match?({:reply, {:error, %{reason: "empty_content"}}, _}, result)
+      # Content validation passes (trimmed "  hello  " is not empty), so the code
+      # proceeds past validation to rate limiter / Redis. In the test environment
+      # (no Redis), it will fail downstream with "rate_limited" or "sequence_failed".
+      # The key assertion: the error is NOT "empty_content", proving validation passed.
+      {:reply, {:error, %{reason: reason}}, _socket} =
+        RoomChannel.handle_in("new_message", %{"content" => "  hello  "}, socket)
+
+      refute reason == "empty_content",
+             "Content with surrounding whitespace should pass validation"
     end
   end
 end

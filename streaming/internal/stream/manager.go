@@ -174,6 +174,9 @@ func (m *Manager) handleStream(ctx context.Context, req streamRequest) {
 		"model", botConfig.LLMModel,
 	)
 
+	// Emit "Thinking" phase — bot config loaded, about to call LLM (TASK-0011)
+	m.publishThinking(ctx, req, "Thinking")
+
 	// 3. Build provider request
 	streamReq := provider.StreamRequest{
 		BotID:           req.BotID,
@@ -208,6 +211,7 @@ func (m *Manager) handleStream(ctx context.Context, req streamRequest) {
 	// Gateway and frontend require zero changes — they just see larger "token" strings.
 	var lastContent string
 	tokenCount := 0
+	firstTokenSeen := false // Tracks first token for "Writing" phase (TASK-0011)
 	tokenTimeout := 30 * time.Second
 
 	const batchMaxTokens = 10
@@ -253,6 +257,12 @@ func (m *Manager) handleStream(ctx context.Context, req streamRequest) {
 				flushBatch()
 				streamDone = true
 				break
+			}
+
+			// Emit "Writing" phase on first token (TASK-0011)
+			if !firstTokenSeen {
+				firstTokenSeen = true
+				m.publishThinking(ctx, req, "Writing")
 			}
 
 			// Reset the per-token timeout timer
@@ -325,6 +335,17 @@ func (m *Manager) handleStream(ctx context.Context, req streamRequest) {
 	}
 	if pr.result != nil && pr.result.TokenCount > 0 {
 		tokenCount = pr.result.TokenCount
+	}
+
+	// Guard against empty responses — if the LLM returned no content, persist a
+	// visible placeholder instead of empty string. Empty content in the DB cascades
+	// into broken context for future requests. (ISSUE-027)
+	if strings.TrimSpace(finalContent) == "" {
+		m.logger.Warn("Stream completed with empty content — using placeholder",
+			"messageId", req.MessageID,
+			"durationMs", durationMs,
+		)
+		finalContent = "*[No response generated]*"
 	}
 
 	statusPayload, _ := json.Marshal(map[string]interface{}{
@@ -400,6 +421,23 @@ func (m *Manager) publishError(ctx context.Context, req streamRequest, partialCo
 	if err := m.loader.FinalizeMessageWithRetry(req.MessageID, content, "ERROR", m.logger); err != nil {
 		m.logger.Error("FinalizeMessage (error path) exhausted retries — DB may be ACTIVE, watchdog will recover",
 			"messageId", req.MessageID,
+			"error", err,
+		)
+	}
+}
+
+// publishThinking emits a thinking phase change to Redis.
+// Phase transitions: "Thinking" (about to call LLM) → "Writing" (first token received).
+// The frontend clears the phase on stream_complete/stream_error. (TASK-0011, DEC-0037)
+func (m *Manager) publishThinking(ctx context.Context, req streamRequest, phase string) {
+	payload, _ := json.Marshal(map[string]interface{}{
+		"messageId": req.MessageID,
+		"phase":     phase,
+	})
+	if err := m.gwClient.PublishThinking(ctx, req.ChannelID, req.MessageID, string(payload)); err != nil {
+		m.logger.Error("Failed to publish thinking phase",
+			"messageId", req.MessageID,
+			"phase", phase,
 			"error", err,
 		)
 	}

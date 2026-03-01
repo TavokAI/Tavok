@@ -1,13 +1,17 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { useSession } from "next-auth/react";
 import { useChatContext } from "@/components/providers/chat-provider";
 import { useChannel } from "@/lib/hooks/use-channel";
+import { Permissions } from "@/lib/permissions";
 import { ChannelHeader } from "./channel-header";
 import { MessageList } from "./message-list";
 import { MessageInput } from "./message-input";
 import { TypingIndicator } from "./typing-indicator";
+import { DeleteMessageModal } from "@/components/modals/delete-message-modal";
 import type { MentionOption } from "./mention-autocomplete";
+import type { MessagePayload } from "@/lib/hooks/use-channel";
 
 interface ChatAreaProps {
   channelId: string;
@@ -23,10 +27,27 @@ export function ChatArea({
   channelTopic,
   onPresenceChange,
 }: ChatAreaProps) {
-  const { refreshMembers, members, bots } = useChatContext();
+  const { data: session } = useSession();
+  const currentUserId = session?.user?.id;
+  const { refreshMembers, members, bots, hasPermission, markAsRead, unreadMap } = useChatContext();
+  const canManageMessages = hasPermission(Permissions.MANAGE_MESSAGES);
+
+  // TASK-0016: Capture lastReadSeq BEFORE we mark-as-read, so the divider shows correctly.
+  // Reset whenever channelId changes.
+  const lastReadSeqRef = useRef<string | null>(null);
+  const capturedChannelRef = useRef<string | null>(null);
+  if (channelId !== capturedChannelRef.current) {
+    // Channel changed — capture the current lastReadSeq for the new channel
+    const unread = unreadMap.get(channelId);
+    lastReadSeqRef.current = unread?.lastReadSeq ?? null;
+    capturedChannelRef.current = channelId;
+  }
+
   const {
     messages,
     sendMessage,
+    editMessage,
+    deleteMessage,
     loadHistory,
     updateReactions,
     hasMoreHistory,
@@ -35,6 +56,29 @@ export function ChatArea({
     sendTyping,
     presenceMap,
   } = useChannel(channelId);
+
+  // Delete modal state (TASK-0014)
+  const [deleteTarget, setDeleteTarget] = useState<MessagePayload | null>(null);
+
+  const handleDeleteRequest = useCallback(
+    (messageId: string) => {
+      const message = messages.find((m) => m.id === messageId);
+      if (message) setDeleteTarget(message);
+    },
+    [messages]
+  );
+
+  const handleDeleteConfirm = useCallback(async (): Promise<boolean> => {
+    if (!deleteTarget) return false;
+    return deleteMessage(deleteTarget.id);
+  }, [deleteTarget, deleteMessage]);
+
+  // TASK-0016: Mark channel as read when the user views it
+  useEffect(() => {
+    if (channelId) {
+      markAsRead(channelId);
+    }
+  }, [channelId, markAsRead]);
 
   // Expose presence to parent when it changes.
   useEffect(() => {
@@ -76,6 +120,11 @@ export function ChatArea({
         hasMoreHistory={hasMoreHistory}
         onLoadHistory={loadHistory}
         onReactionsChange={updateReactions}
+        currentUserId={currentUserId}
+        canManageMessages={canManageMessages}
+        onEditMessage={editMessage}
+        onDeleteMessage={handleDeleteRequest}
+        lastReadSeq={lastReadSeqRef.current}
       />
       <TypingIndicator typingUsers={typingUsers} />
       <MessageInput
@@ -84,6 +133,15 @@ export function ChatArea({
         disabled={!isConnected}
         channelName={channelName}
         mentionOptions={mentionOptions}
+      />
+
+      {/* Delete confirmation modal (TASK-0014) */}
+      <DeleteMessageModal
+        isOpen={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={handleDeleteConfirm}
+        messagePreview={deleteTarget?.content || ""}
+        authorName={deleteTarget?.authorName || ""}
       />
     </div>
   );

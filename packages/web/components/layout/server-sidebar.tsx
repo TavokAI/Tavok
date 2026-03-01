@@ -8,7 +8,7 @@ import { CreateServerModal } from "@/components/modals/create-server-modal";
 import { passthroughImageLoader } from "@/lib/image-loader";
 
 export function ServerSidebar() {
-  const { servers, currentServerId } = useChatContext();
+  const { servers, currentServerId, serverUnreadMap } = useChatContext();
   const router = useRouter();
   const [showCreateModal, setShowCreateModal] = useState(false);
 
@@ -42,33 +42,55 @@ export function ServerSidebar() {
         {/* Server icons */}
         {servers.map((server) => {
           const isActive = currentServerId === server.id;
+          const serverUnread = serverUnreadMap.get(server.id);
+          const hasUnread = !isActive && !!serverUnread?.hasUnread;
+          const hasMentions = !isActive && !!serverUnread?.hasMentions;
           return (
-            <button
-              key={server.id}
-              title={server.name}
-              onClick={() => router.push(`/servers/${server.id}`)}
-              className={`flex h-12 w-12 items-center justify-center transition-all ${
-                isActive
-                  ? "rounded-xl bg-brand text-background-floating"
-                  : "rounded-3xl bg-background-primary text-text-primary hover:rounded-xl hover:bg-brand hover:text-background-floating"
-              }`}
-            >
-              {server.iconUrl ? (
-                <Image
-                  src={server.iconUrl}
-                  alt={server.name}
-                  loader={passthroughImageLoader}
-                  unoptimized
-                  width={48}
-                  height={48}
-                  className="h-full w-full rounded-[inherit] object-cover"
+            <div key={server.id} className="relative">
+              <button
+                title={server.name}
+                onClick={() => router.push(`/servers/${server.id}`)}
+                className={`flex h-12 w-12 items-center justify-center transition-all ${
+                  isActive
+                    ? "rounded-xl bg-brand text-background-floating"
+                    : "rounded-3xl bg-background-primary text-text-primary hover:rounded-xl hover:bg-brand hover:text-background-floating"
+                }`}
+              >
+                {server.iconUrl ? (
+                  <Image
+                    src={server.iconUrl}
+                    alt={server.name}
+                    loader={passthroughImageLoader}
+                    unoptimized
+                    width={48}
+                    height={48}
+                    className="h-full w-full rounded-[inherit] object-cover"
+                  />
+                ) : (
+                  <span className="text-lg font-semibold">
+                    {server.name.charAt(0).toUpperCase()}
+                  </span>
+                )}
+              </button>
+              {/* TASK-0016: Unread indicator — pill on left side */}
+              {(hasUnread || isActive) && (
+                <span
+                  className={`absolute left-0 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-r-full bg-text-primary transition-all ${
+                    isActive
+                      ? "h-10 w-1"
+                      : hasMentions
+                        ? "h-5 w-1 bg-status-error"
+                        : "h-2 w-1"
+                  }`}
                 />
-              ) : (
-                <span className="text-lg font-semibold">
-                  {server.name.charAt(0).toUpperCase()}
+              )}
+              {/* TASK-0016: Mention badge — bottom-right corner */}
+              {hasMentions && (
+                <span className="absolute -bottom-0.5 -right-0.5 flex h-4 min-w-[16px] items-center justify-center rounded-full border-2 border-background-tertiary bg-status-error px-0.5 text-[9px] font-bold text-white">
+                  !
                 </span>
               )}
-            </button>
+            </div>
           );
         })}
 

@@ -37,7 +37,10 @@ defmodule HiveGateway.StreamListener do
         {:ok, _ref_status} =
           Redix.PubSub.psubscribe(pubsub, "hive:stream:status:*", self())
 
-        Logger.info("[StreamListener] Started — listening for stream tokens and status")
+        {:ok, _ref_thinking} =
+          Redix.PubSub.psubscribe(pubsub, "hive:stream:thinking:*", self())
+
+        Logger.info("[StreamListener] Started — listening for stream tokens, status, and thinking")
         {:ok, %{pubsub: pubsub}}
 
       {:error, reason} ->
@@ -82,6 +85,9 @@ defmodule HiveGateway.StreamListener do
 
     {:ok, _ref_status} =
       Redix.PubSub.psubscribe(state.pubsub, "hive:stream:status:*", self())
+
+    {:ok, _ref_thinking} =
+      Redix.PubSub.psubscribe(state.pubsub, "hive:stream:thinking:*", self())
 
     {:noreply, state}
   end
@@ -132,6 +138,18 @@ defmodule HiveGateway.StreamListener do
 
       _ ->
         Logger.error("[StreamListener] Invalid status channel format: hive:stream:status:#{rest}")
+    end
+  end
+
+  defp handle_stream_message("hive:stream:thinking:" <> rest, payload) do
+    # rest = "{channelId}:{messageId}"
+    # Zero-copy: payload is already valid JSON from Go Proxy — broadcast raw. (DEC-0030)
+    case String.split(rest, ":", parts: 2) do
+      [channel_id, _message_id] ->
+        Broadcast.endpoint_broadcast_raw!("room:#{channel_id}", "stream_thinking", payload)
+
+      _ ->
+        Logger.error("[StreamListener] Invalid thinking channel format: hive:stream:thinking:#{rest}")
     end
   end
 

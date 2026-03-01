@@ -69,3 +69,11 @@ func (c *Client) PublishStatus(ctx context.Context, channelID, messageID, payloa
 	topic := "hive:stream:status:" + channelID + ":" + messageID
 	return c.rdb.Publish(ctx, topic, payload).Err()
 }
+
+// PublishThinking publishes a thinking phase change to Redis.
+// The Gateway subscribes to this pattern and broadcasts to WebSocket clients.
+// See docs/PROTOCOL.md — StreamThinkingPayload.
+func (c *Client) PublishThinking(ctx context.Context, channelID, messageID, payload string) error {
+	topic := "hive:stream:thinking:" + channelID + ":" + messageID
+	return c.rdb.Publish(ctx, topic, payload).Err()
+}

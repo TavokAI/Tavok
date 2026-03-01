@@ -79,6 +79,8 @@ model User {
   createdInvites Invite[]     @relation("InviteCreator")
   reactions      Reaction[]
   attachments    Attachment[]
+  mentions       MessageMention[]
+  readStates     ChannelReadState[]
 }
 
 model Server {
@@ -113,9 +115,11 @@ model Channel {
   updatedAt    DateTime    @updatedAt
 
   // Relations
-  server     Server    @relation(fields: [serverId], references: [id], onDelete: Cascade)
-  defaultBot Bot?      @relation("ChannelDefaultBot", fields: [defaultBotId], references: [id], onDelete: SetNull)
-  messages   Message[]
+  server      Server       @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  defaultBot  Bot?         @relation("ChannelDefaultBot", fields: [defaultBotId], references: [id], onDelete: SetNull)
+  messages    Message[]
+  channelBots ChannelBot[]
+  readStates  ChannelReadState[]
 
   @@index([serverId, position])
 }
@@ -129,13 +133,16 @@ model Message {
   type            MessageType   @default(STANDARD)
   streamingStatus StreamStatus?
   sequence        BigInt // per-channel sequence number (assigned via Redis INCR)
+  editedAt        DateTime?                // null if never edited (TASK-0014)
+  isDeleted       Boolean       @default(false)  // soft delete (TASK-0014)
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 
   // Relations
-  channel     Channel      @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  channel     Channel          @relation(fields: [channelId], references: [id], onDelete: Cascade)
   reactions   Reaction[]
   attachments Attachment[]
+  mentions    MessageMention[]
 
   // Primary query path: messages in a channel, sorted by time (ULID is time-sorted)
   @@index([channelId, id])
@@ -249,10 +256,59 @@ model Bot {
   updatedAt       DateTime    @updatedAt
 
   // Relations
-  server          Server    @relation(fields: [serverId], references: [id], onDelete: Cascade)
-  defaultChannels Channel[] @relation("ChannelDefaultBot")
+  server          Server       @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  defaultChannels Channel[]    @relation("ChannelDefaultBot")
+  channelBots     ChannelBot[]
 
   @@index([serverId])
+}
+
+// Multi-bot channel assignment (TASK-0012, DEC-0038)
+// Replaces the single defaultBotId for multi-stream support.
+// defaultBotId is kept on Channel for backward compatibility.
+model ChannelBot {
+  id        String   @id @db.VarChar(26)
+  channelId String   @db.VarChar(26)
+  botId     String   @db.VarChar(26)
+  createdAt DateTime @default(now())
+
+  channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  bot     Bot     @relation(fields: [botId], references: [id], onDelete: Cascade)
+
+  @@unique([channelId, botId])
+  @@index([channelId])
+}
+
+// Mention persistence (TASK-0015)
+// Tracks which users are mentioned in each message.
+// Used by TASK-0016 (unread mention counting) and TASK-0029 (notifications).
+model MessageMention {
+  id        String @id @db.VarChar(26)
+  messageId String @db.VarChar(26)
+  userId    String @db.VarChar(26)
+
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId])
+  @@index([userId])
+}
+
+// Per-user per-channel read state (TASK-0016)
+// Tracks what each user has read. Used for unread indicators and mention badges.
+model ChannelReadState {
+  id           String   @id @db.VarChar(26)
+  userId       String   @db.VarChar(26)
+  channelId    String   @db.VarChar(26)
+  lastReadSeq  BigInt   @default(0)
+  mentionCount Int      @default(0)
+  updatedAt    DateTime @updatedAt
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, channelId])
+  @@index([userId])
 }
 
 // ============================================================

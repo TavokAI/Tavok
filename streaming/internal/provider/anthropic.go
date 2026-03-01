@@ -26,17 +26,7 @@ type Anthropic struct {
 
 func NewAnthropic() *Anthropic {
 	return &Anthropic{
-		client: &http.Client{
-			Timeout: 5 * time.Minute,
-			// Tuned transport for high-concurrency streaming (DEC-0034).
-			// Go's default MaxIdleConnsPerHost=2 causes TCP churn at scale.
-			Transport: &http.Transport{
-				MaxConnsPerHost:     200,
-				MaxIdleConns:        200,
-				MaxIdleConnsPerHost: 20,
-				IdleConnTimeout:     120 * time.Second,
-			},
-		},
+		client: NewStreamingHTTPClient(), // Shared tuned transport (DEC-0034)
 	}
 }
 
@@ -74,10 +64,17 @@ func (a *Anthropic) Stream(ctx context.Context, req StreamRequest, tokens chan<-
 	startTime := time.Now()
 
 	// Build messages (Anthropic doesn't put system in messages, it's a separate field)
-	messages := make([]anthropicMessage, 0, len(req.ContextMessages))
+	// Consolidate consecutive same-role messages — Anthropic requires strictly
+	// alternating user/assistant turns. In chat history, consecutive user messages
+	// can appear when a previous bot response was empty or multiple users posted
+	// in sequence. Sending non-alternating roles causes the model to intermittently
+	// return empty responses (stopReason: "end_turn", zero content blocks). (ISSUE-027)
+	rawMessages := make([]anthropicMessage, 0, len(req.ContextMessages))
 	for _, m := range req.ContextMessages {
-		messages = append(messages, anthropicMessage{Role: m.Role, Content: m.Content})
+		rawMessages = append(rawMessages, anthropicMessage{Role: m.Role, Content: m.Content})
 	}
+
+	messages := consolidateMessages(rawMessages)
 
 	// Default max tokens
 	maxTokens := req.MaxTokens
@@ -134,7 +131,14 @@ func (a *Anthropic) Stream(ctx context.Context, req StreamRequest, tokens chan<-
 	tokenIndex := 0
 	var streamErr error // capture error events from SSE stream (ISSUE-002)
 
+	// Counters for empty response detection (ISSUE-027)
+	eventCounts := make(map[string]int)
+	emptyTextDeltas := 0
+	var stopReason string
+
 	err = sse.Parse(resp.Body, func(event sse.Event) {
+		eventCounts[event.EventType]++
+
 		switch event.EventType {
 		case "content_block_delta":
 			var delta anthropicDelta
@@ -144,23 +148,46 @@ func (a *Anthropic) Stream(ctx context.Context, req StreamRequest, tokens chan<-
 			}
 
 			text := delta.Delta.Text
-			if text != "" {
-				finalContent.WriteString(text)
-				// Context-aware channel send — prevents goroutine leak if manager
-				// stops reading (timeout, cancel). (ISSUE-005)
-				select {
-				case tokens <- Token{
-					Text:  text,
-					Index: tokenIndex,
-				}:
-					tokenIndex++
-				case <-ctx.Done():
-					return
+			if text == "" {
+				emptyTextDeltas++
+				// Log first empty delta for diagnostics
+				if emptyTextDeltas == 1 {
+					slog.Warn("Anthropic content_block_delta with empty text",
+						"deltaType", delta.Delta.Type,
+						"outerType", delta.Type,
+						"rawData", event.Data,
+					)
 				}
+				return
+			}
+
+			finalContent.WriteString(text)
+			// Context-aware channel send — prevents goroutine leak if manager
+			// stops reading (timeout, cancel). (ISSUE-005)
+			select {
+			case tokens <- Token{
+				Text:  text,
+				Index: tokenIndex,
+			}:
+				tokenIndex++
+			case <-ctx.Done():
+				return
 			}
 
 		case "message_stop":
 			// Stream is done
+			return
+
+		case "message_delta":
+			// Capture stop_reason for diagnostics
+			var md struct {
+				Delta struct {
+					StopReason string `json:"stop_reason"`
+				} `json:"delta"`
+			}
+			if err := json.Unmarshal([]byte(event.Data), &md); err == nil {
+				stopReason = md.Delta.StopReason
+			}
 			return
 
 		case "message_start", "content_block_start", "content_block_stop", "ping":
@@ -181,6 +208,15 @@ func (a *Anthropic) Stream(ctx context.Context, req StreamRequest, tokens chan<-
 		}
 	})
 
+	// Debug-level stream summary (promoted to Warn for empty responses below)
+	slog.Debug("Anthropic SSE stream summary",
+		"tokenIndex", tokenIndex,
+		"emptyTextDeltas", emptyTextDeltas,
+		"eventCounts", eventCounts,
+		"finalContentLen", finalContent.Len(),
+		"stopReason", stopReason,
+	)
+
 	if err != nil {
 		return &StreamResult{
 			FinalContent: finalContent.String(),
@@ -200,9 +236,65 @@ func (a *Anthropic) Stream(ctx context.Context, req StreamRequest, tokens chan<-
 		}, streamErr
 	}
 
+	// Detect empty responses — model returned valid SSE stream but no content blocks.
+	// This happens intermittently and can cascade if empty content is persisted and
+	// included in future context. Log a warning for monitoring. (ISSUE-027)
+	if tokenIndex == 0 && finalContent.Len() == 0 {
+		slog.Warn("Anthropic returned empty response (no content blocks)",
+			"stopReason", stopReason,
+			"eventCounts", eventCounts,
+			"durationMs", time.Since(startTime).Milliseconds(),
+		)
+	}
+
 	return &StreamResult{
 		FinalContent: finalContent.String(),
 		TokenCount:   tokenIndex,
 		DurationMs:   time.Since(startTime).Milliseconds(),
 	}, nil
+}
+
+// consolidateMessages merges consecutive same-role messages into single messages.
+// Anthropic's Messages API requires strictly alternating user/assistant turns.
+// Consecutive same-role messages can appear in chat history when:
+//   - A previous bot response was empty (now persisted as placeholder)
+//   - Multiple users posted without bot responses between them
+//   - Messages were deleted leaving gaps
+//
+// Without consolidation, the model intermittently returns empty responses. (ISSUE-027)
+func consolidateMessages(messages []anthropicMessage) []anthropicMessage {
+	if len(messages) == 0 {
+		return messages
+	}
+
+	consolidated := make([]anthropicMessage, 0, len(messages))
+	consolidated = append(consolidated, messages[0])
+
+	for i := 1; i < len(messages); i++ {
+		last := &consolidated[len(consolidated)-1]
+		if messages[i].Role == last.Role {
+			// Merge: append content with newline separator
+			last.Content += "\n\n" + messages[i].Content
+		} else {
+			consolidated = append(consolidated, messages[i])
+		}
+	}
+
+	// Anthropic requires the first message to be from "user" role.
+	// If the first message is "assistant", prepend a synthetic user message.
+	if len(consolidated) > 0 && consolidated[0].Role == "assistant" {
+		consolidated = append([]anthropicMessage{{
+			Role:    "user",
+			Content: "[Previous conversation context follows]",
+		}}, consolidated...)
+	}
+
+	if len(consolidated) != len(messages) {
+		slog.Info("Consolidated context messages for Anthropic API",
+			"original", len(messages),
+			"consolidated", len(consolidated),
+		)
+	}
+
+	return consolidated
 }

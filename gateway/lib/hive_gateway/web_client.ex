@@ -68,6 +68,34 @@ defmodule HiveGateway.WebClient do
   end
 
   @doc """
+  Get ALL bots assigned to a channel (multi-bot — TASK-0012).
+  Returns {:ok, [bot_config, ...]} or {:ok, []} (no bots) or {:error, reason}.
+  Falls back to defaultBot if no ChannelBot entries exist.
+  """
+  def get_channel_bots(channel_id) do
+    url = "#{web_url()}/api/internal/channels/#{channel_id}/bots"
+
+    case Req.get(url,
+           headers: [{"x-internal-secret", internal_secret()}],
+           receive_timeout: 10_000
+         ) do
+      {:ok, %Req.Response{status: 200, body: %{"bots" => bots}}} ->
+        {:ok, bots}
+
+      {:ok, %Req.Response{status: 200, body: _}} ->
+        {:ok, []}
+
+      {:ok, %Req.Response{status: status, body: response_body}} ->
+        Logger.error("get_channel_bots failed: status=#{status} body=#{inspect(response_body)}")
+        {:error, {:http_error, status, response_body}}
+
+      {:error, reason} ->
+        Logger.error("get_channel_bots request failed: #{inspect(reason)}")
+        {:error, reason}
+    end
+  end
+
+  @doc """
   Fetch channel metadata for authorization and sequence fallback.
   Returns {:ok, %{serverId: ..., lastSequence: ..., isMember: ...}} or {:error, reason}.
   """
@@ -200,6 +228,58 @@ defmodule HiveGateway.WebClient do
 
       {:error, reason} ->
         Logger.error("update_message request failed: #{inspect(reason)}")
+        {:error, reason}
+    end
+  end
+
+  @doc """
+  Edit a message's content via PATCH /api/internal/messages/{messageId}.
+  The internal API validates ownership and streaming status. (TASK-0014)
+  Returns {:ok, %{messageId, content, editedAt}} | {:error, reason}.
+  """
+  def edit_message(message_id, body) do
+    url = "#{web_url()}/api/internal/messages/#{message_id}"
+
+    case Req.patch(url,
+           json: body,
+           headers: [{"x-internal-secret", internal_secret()}],
+           receive_timeout: 10_000
+         ) do
+      {:ok, %Req.Response{status: 200, body: response_body}} ->
+        {:ok, response_body}
+
+      {:ok, %Req.Response{status: status, body: response_body}} ->
+        Logger.warning("edit_message rejected: status=#{status} body=#{inspect(response_body)}")
+        {:error, {:http_error, status, response_body}}
+
+      {:error, reason} ->
+        Logger.error("edit_message request failed: #{inspect(reason)}")
+        {:error, reason}
+    end
+  end
+
+  @doc """
+  Soft-delete a message via DELETE /api/internal/messages/{messageId}.
+  The internal API validates ownership and MANAGE_MESSAGES permission. (TASK-0014)
+  Returns {:ok, %{messageId, deletedBy}} | {:error, reason}.
+  """
+  def delete_message(message_id, body) do
+    url = "#{web_url()}/api/internal/messages/#{message_id}"
+
+    case Req.delete(url,
+           json: body,
+           headers: [{"x-internal-secret", internal_secret()}],
+           receive_timeout: 10_000
+         ) do
+      {:ok, %Req.Response{status: 200, body: response_body}} ->
+        {:ok, response_body}
+
+      {:ok, %Req.Response{status: status, body: response_body}} ->
+        Logger.warning("delete_message rejected: status=#{status} body=#{inspect(response_body)}")
+        {:error, {:http_error, status, response_body}}
+
+      {:error, reason} ->
+        Logger.error("delete_message request failed: #{inspect(reason)}")
         {:error, reason}
     end
   end
