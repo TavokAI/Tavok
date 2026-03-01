@@ -8,13 +8,16 @@ import {
 } from "./api-safety.js";
 import { parseMentionedUserIds } from "./mention-parser";
 import { generateId } from "./ulid";
+import crypto from "crypto";
 
 function isAuthorType(value) {
   return value === "USER" || value === "BOT" || value === "SYSTEM";
 }
 
 function isMessageType(value) {
-  return value === "STANDARD" || value === "STREAMING" || value === "SYSTEM";
+  return value === "STANDARD" || value === "STREAMING" || value === "SYSTEM"
+    || value === "TOOL_CALL" || value === "TOOL_RESULT" || value === "CODE_BLOCK"
+    || value === "ARTIFACT" || value === "STATUS";
 }
 
 function isStreamingStatus(value) {
@@ -86,13 +89,13 @@ export function createInternalMessagesPostHandler({ prismaClient }) {
       );
     }
 
+    const metadata = body.metadata; // TASK-0039: agent execution metadata (optional)
     const attachmentIds =
       authorType === "USER" ? extractAttachmentIds(content) : [];
 
     try {
       const [message] = await prismaClient.$transaction(async (tx) => {
-        const createdMessage = await tx.message.create({
-          data: {
+        const createData = {
             id,
             channelId,
             authorId,
@@ -101,7 +104,12 @@ export function createInternalMessagesPostHandler({ prismaClient }) {
             type,
             streamingStatus: streamingStatus ?? null,
             sequence: sequenceBigInt,
-          },
+        };
+        if (metadata !== undefined && metadata !== null) {
+          createData.metadata = metadata;
+        }
+        const createdMessage = await tx.message.create({
+          data: createData,
         });
 
         if (attachmentIds.length > 0) {
@@ -467,5 +475,336 @@ export function createServerChannelPatchHandler({
     });
 
     return NextResponse.json(channel);
+  };
+}
+
+// ============================================================
+// AGENT SELF-REGISTRATION HANDLERS (DEC-0040)
+// ============================================================
+
+/**
+ * Hash an API key with SHA-256 for indexed lookup.
+ * Exported for testing.
+ */
+export function hashApiKey(apiKey) {
+  return crypto.createHash("sha256").update(apiKey).digest("hex");
+}
+
+/**
+ * POST /api/v1/agents/register
+ * Creates Bot + AgentRegistration, returns API key once.
+ */
+export function createAgentRegisterHandler({ prismaClient, generateIdFn, generateKeyFn }) {
+  return async function agentRegisterHandler(request) {
+    let body;
+    try {
+      const parsedBody = await request.json();
+      if (!isJsonObjectBody(parsedBody)) {
+        return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+      }
+      body = parsedBody;
+    } catch {
+      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    }
+
+    const displayName = body.displayName;
+    const serverId = body.serverId;
+    const model = body.model;
+    const capabilities = body.capabilities;
+    const healthUrl = body.healthUrl;
+    const webhookUrl = body.webhookUrl;
+    const systemPrompt = body.systemPrompt;
+    const avatarUrl = body.avatarUrl;
+
+    if (!displayName || typeof displayName !== "string" || displayName.trim().length === 0) {
+      return NextResponse.json({ error: "displayName is required" }, { status: 400 });
+    }
+
+    if (!serverId || typeof serverId !== "string") {
+      return NextResponse.json({ error: "serverId is required" }, { status: 400 });
+    }
+
+    const server = await prismaClient.server.findUnique({
+      where: { id: serverId },
+      select: { id: true },
+    });
+
+    if (!server) {
+      return NextResponse.json({ error: "Server not found" }, { status: 404 });
+    }
+
+    const apiKey = generateKeyFn
+      ? generateKeyFn()
+      : `sk-tvk-${crypto.randomBytes(32).toString("base64url")}`;
+    const apiKeyHash = hashApiKey(apiKey);
+
+    const botId = generateIdFn ? generateIdFn() : generateId();
+    const registrationId = generateIdFn ? generateIdFn() : generateId();
+
+    try {
+      const result = await prismaClient.$transaction(async (tx) => {
+        const bot = await tx.bot.create({
+          data: {
+            id: botId,
+            name: displayName.trim(),
+            avatarUrl: avatarUrl,
+            serverId,
+            llmProvider: "custom",
+            llmModel: model || "custom",
+            apiEndpoint: "",
+            apiKeyEncrypted: "",
+            systemPrompt: systemPrompt || "",
+            temperature: 0.7,
+            maxTokens: 4096,
+            isActive: true,
+            triggerMode: "MENTION",
+          },
+        });
+
+        const registration = await tx.agentRegistration.create({
+          data: {
+            id: registrationId,
+            botId: bot.id,
+            apiKeyHash,
+            capabilities: Array.isArray(capabilities) ? capabilities : [],
+            healthUrl: healthUrl,
+            webhookUrl: webhookUrl,
+          },
+        });
+
+        return { bot, registration };
+      });
+
+      return NextResponse.json(
+        {
+          agentId: result.bot.id,
+          apiKey,
+          websocketUrl: "ws://localhost:4001/socket/websocket",
+          serverId,
+          capabilities: result.registration.capabilities,
+        },
+        { status: 201 }
+      );
+    } catch (error) {
+      console.error("Agent registration failed:", error);
+      return NextResponse.json({ error: "Registration failed" }, { status: 500 });
+    }
+  };
+}
+
+/**
+ * GET /api/v1/agents/{id}
+ * Public agent info (no auth required).
+ */
+export function createAgentGetHandler({ prismaClient }) {
+  return async function agentGetHandler(agentId) {
+    const bot = await prismaClient.bot.findUnique({
+      where: { id: agentId },
+      select: {
+        id: true,
+        name: true,
+        avatarUrl: true,
+        serverId: true,
+        llmModel: true,
+        isActive: true,
+        triggerMode: true,
+        createdAt: true,
+        agentRegistration: {
+          select: {
+            capabilities: true,
+            healthUrl: true,
+            webhookUrl: true,
+            maxTokensSec: true,
+            lastHealthCheck: true,
+            lastHealthOk: true,
+          },
+        },
+      },
+    });
+
+    if (!bot || !bot.agentRegistration) {
+      return NextResponse.json({ error: "Agent not found" }, { status: 404 });
+    }
+
+    return NextResponse.json({
+      agentId: bot.id,
+      displayName: bot.name,
+      avatarUrl: bot.avatarUrl,
+      serverId: bot.serverId,
+      model: bot.llmModel,
+      isActive: bot.isActive,
+      triggerMode: bot.triggerMode,
+      capabilities: bot.agentRegistration.capabilities,
+      healthUrl: bot.agentRegistration.healthUrl,
+      webhookUrl: bot.agentRegistration.webhookUrl,
+      maxTokensSec: bot.agentRegistration.maxTokensSec,
+      lastHealthCheck: bot.agentRegistration.lastHealthCheck,
+      lastHealthOk: bot.agentRegistration.lastHealthOk,
+      createdAt: bot.createdAt,
+    });
+  };
+}
+
+/**
+ * Authenticate an agent via Authorization: Bearer sk-tvk-...
+ * Returns { authorized, error, status }.
+ */
+export async function authenticateAgentKey(authHeader, agentId, prismaClient) {
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return { authorized: false, error: "Missing Authorization header", status: 401 };
+  }
+
+  const apiKey = authHeader.slice(7);
+  const apiKeyHash = hashApiKey(apiKey);
+
+  const registration = await prismaClient.agentRegistration.findFirst({
+    where: { apiKeyHash, botId: agentId },
+    select: { id: true, botId: true },
+  });
+
+  if (!registration) {
+    return { authorized: false, error: "Invalid API key", status: 401 };
+  }
+
+  return { authorized: true };
+}
+
+/**
+ * PATCH /api/v1/agents/{id}
+ * Update agent. Requires Bearer auth.
+ */
+export function createAgentPatchHandler({ prismaClient }) {
+  return async function agentPatchHandler(request, agentId) {
+    const authHeader = request.headers.get("authorization");
+    const auth = await authenticateAgentKey(authHeader, agentId, prismaClient);
+    if (!auth.authorized) {
+      return NextResponse.json({ error: auth.error }, { status: auth.status });
+    }
+
+    let body;
+    try {
+      const parsedBody = await request.json();
+      if (!isJsonObjectBody(parsedBody)) {
+        return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+      }
+      body = parsedBody;
+    } catch {
+      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    }
+
+    const { displayName, avatarUrl, capabilities, healthUrl, webhookUrl, maxTokensSec } = body;
+
+    try {
+      await prismaClient.$transaction(async (tx) => {
+        const botUpdate = {};
+        if (displayName !== undefined) botUpdate.name = displayName;
+        if (avatarUrl !== undefined) botUpdate.avatarUrl = avatarUrl;
+
+        if (Object.keys(botUpdate).length > 0) {
+          await tx.bot.update({ where: { id: agentId }, data: botUpdate });
+        }
+
+        const regUpdate = {};
+        if (capabilities !== undefined) regUpdate.capabilities = capabilities;
+        if (healthUrl !== undefined) regUpdate.healthUrl = healthUrl;
+        if (webhookUrl !== undefined) regUpdate.webhookUrl = webhookUrl;
+        if (maxTokensSec !== undefined) regUpdate.maxTokensSec = maxTokensSec;
+
+        if (Object.keys(regUpdate).length > 0) {
+          await tx.agentRegistration.update({
+            where: { botId: agentId },
+            data: regUpdate,
+          });
+        }
+      });
+
+      return NextResponse.json({ success: true });
+    } catch (error) {
+      console.error("Agent update failed:", error);
+      return NextResponse.json({ error: "Update failed" }, { status: 500 });
+    }
+  };
+}
+
+/**
+ * DELETE /api/v1/agents/{id}
+ * Deregister agent. Cascade deletes Bot. Requires Bearer auth.
+ */
+export function createAgentDeleteHandler({ prismaClient }) {
+  return async function agentDeleteHandler(request, agentId) {
+    const authHeader = request.headers.get("authorization");
+    const auth = await authenticateAgentKey(authHeader, agentId, prismaClient);
+    if (!auth.authorized) {
+      return NextResponse.json({ error: auth.error }, { status: auth.status });
+    }
+
+    try {
+      await prismaClient.bot.delete({ where: { id: agentId } });
+      return NextResponse.json({ success: true });
+    } catch (error) {
+      console.error("Agent deregistration failed:", error);
+      return NextResponse.json({ error: "Deregistration failed" }, { status: 500 });
+    }
+  };
+}
+
+/**
+ * GET /api/internal/agents/verify?api_key=sk-tvk-...
+ * Called by Gateway to verify agent API key.
+ * Requires X-Internal-Secret header.
+ */
+export function createAgentVerifyHandler({ prismaClient }) {
+  return async function agentVerifyHandler(request) {
+    const secret = request.headers.get("x-internal-secret");
+    if (secret !== process.env.INTERNAL_API_SECRET) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const apiKey = request.searchParams?.get("api_key") || new URL(request.url).searchParams.get("api_key");
+
+    if (!apiKey || !apiKey.startsWith("sk-tvk-")) {
+      return NextResponse.json({ error: "Invalid API key format" }, { status: 400 });
+    }
+
+    const apiKeyHash = hashApiKey(apiKey);
+
+    try {
+      const registration = await prismaClient.agentRegistration.findFirst({
+        where: { apiKeyHash },
+        select: {
+          id: true,
+          capabilities: true,
+          bot: {
+            select: {
+              id: true,
+              name: true,
+              avatarUrl: true,
+              serverId: true,
+              isActive: true,
+            },
+          },
+        },
+      });
+
+      if (!registration) {
+        return NextResponse.json({ error: "Agent not found", valid: false }, { status: 404 });
+      }
+
+      if (!registration.bot.isActive) {
+        return NextResponse.json({ error: "Agent is deactivated", valid: false }, { status: 403 });
+      }
+
+      return NextResponse.json({
+        valid: true,
+        botId: registration.bot.id,
+        botName: registration.bot.name,
+        botAvatarUrl: registration.bot.avatarUrl,
+        serverId: registration.bot.serverId,
+        capabilities: registration.capabilities,
+      });
+    } catch (error) {
+      console.error("Agent verification failed:", error);
+      return NextResponse.json({ error: "Verification failed" }, { status: 500 });
+    }
   };
 }

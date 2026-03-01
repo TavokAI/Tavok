@@ -3,7 +3,7 @@ import type { NextRequest } from "next/server";
 import { getToken } from "next-auth/jwt";
 
 const publicRoutes = ["/login", "/register"];
-const publicPrefixes = ["/api/auth", "/api/health", "/api/internal"];
+const publicPrefixes = ["/api/auth", "/api/health", "/api/internal", "/api/v1"];
 
 function isPublicRoute(pathname: string): boolean {
   if (publicRoutes.includes(pathname)) return true;

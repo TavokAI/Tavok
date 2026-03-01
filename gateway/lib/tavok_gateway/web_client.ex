@@ -283,4 +283,31 @@ defmodule TavokGateway.WebClient do
         {:error, reason}
     end
   end
+
+  @doc """
+  Verify an agent API key via GET /api/internal/agents/verify.
+  Called by UserSocket on WebSocket connect with ?api_key=sk-tvk-...
+  Returns {:ok, %{valid: true, botId: ..., botName: ..., serverId: ...}} or {:error, reason}.
+  (DEC-0040: Agent self-registration)
+  """
+  def verify_agent_api_key(api_key) do
+    url = "#{web_url()}/api/internal/agents/verify"
+
+    case Req.get(url,
+           params: [{"api_key", api_key}],
+           headers: [{"x-internal-secret", internal_secret()}],
+           receive_timeout: 10_000
+         ) do
+      {:ok, %Req.Response{status: 200, body: response_body}} ->
+        {:ok, response_body}
+
+      {:ok, %Req.Response{status: status, body: response_body}} ->
+        Logger.warning("verify_agent_api_key failed: status=#{status} body=#{inspect(response_body)}")
+        {:error, {:http_error, status, response_body}}
+
+      {:error, reason} ->
+        Logger.error("verify_agent_api_key request failed: #{inspect(reason)}")
+        {:error, reason}
+    end
+  end
 end

@@ -133,6 +133,7 @@ model Message {
   type            MessageType   @default(STANDARD)
   streamingStatus StreamStatus?
   sequence        BigInt // per-channel sequence number (assigned via Redis INCR)
+  metadata        Json?         // Agent execution metadata: {model, provider, tokensIn, tokensOut, latencyMs, ...} (TASK-0039)
   thinkingTimeline String?       @db.Text // JSON array of {phase, timestamp} for thinking timeline replay (TASK-0011)
   editedAt        DateTime?                // null if never edited (TASK-0014)
   isDeleted       Boolean       @default(false)  // soft delete (TASK-0014)
@@ -258,11 +259,36 @@ model Bot {
   updatedAt       DateTime    @updatedAt
 
   // Relations
-  server          Server       @relation(fields: [serverId], references: [id], onDelete: Cascade)
-  defaultChannels Channel[]    @relation("ChannelDefaultBot")
-  channelBots     ChannelBot[]
+  server            Server             @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  defaultChannels   Channel[]          @relation("ChannelDefaultBot")
+  channelBots       ChannelBot[]
+  agentRegistration AgentRegistration? // null for UI-configured bots (DEC-0040)
 
   @@index([serverId])
+}
+
+// Agent self-registration (DEC-0040)
+// Agents that register themselves via API, not configured through the UI.
+// Each AgentRegistration creates and owns a Bot record, so all existing
+// streaming/channel/persistence logic works unchanged.
+model AgentRegistration {
+  id              String   @id @db.VarChar(26)
+  botId           String   @unique @db.VarChar(26)
+  apiKeyHash      String   @db.VarChar(64) // SHA-256 hex hash (high-entropy key, fast lookup)
+  capabilities    Json     @default("[]") // ["text", "code", "web_search", "tool_use"]
+  healthUrl       String?  // endpoint for health checks
+  webhookUrl      String?  // endpoint for inbound events
+  maxTokensSec    Int      @default(100) // rate limit: tokens per second
+  lastHealthCheck DateTime?
+  lastHealthOk    Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relation: each AgentRegistration owns exactly one Bot
+  bot Bot @relation(fields: [botId], references: [id], onDelete: Cascade)
+
+  // Fast lookup by API key hash on every WebSocket connect
+  @@index([apiKeyHash])
 }
 
 // Multi-bot channel assignment (TASK-0012, DEC-0038)
@@ -326,6 +352,11 @@ enum MessageType {
   STANDARD
   STREAMING
   SYSTEM
+  TOOL_CALL    // Agent tool invocation — content is JSON: {callId, toolName, arguments, status} (TASK-0039)
+  TOOL_RESULT  // Agent tool result — content is JSON: {callId, result, error, durationMs} (TASK-0039)
+  CODE_BLOCK   // Agent code output — content is JSON: {language, code, filename?} (TASK-0039)
+  ARTIFACT     // Agent artifact — content is JSON: {artifactType, title, content} (TASK-0039)
+  STATUS       // Agent status update — content is JSON: {state, detail} (TASK-0039)
 }
 
 enum StreamStatus {

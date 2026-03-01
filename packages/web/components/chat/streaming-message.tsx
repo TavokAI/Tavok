@@ -8,6 +8,7 @@ import { MarkdownContent } from "./markdown-content";
 import { ReactionBar } from "./reaction-bar";
 import { FileAttachment, parseFileReferences } from "./file-attachment";
 import { MessageActions } from "./message-actions";
+import { MessageMetadata } from "./MessageMetadata";
 import { passthroughImageLoader } from "@/lib/image-loader";
 import { formatTime } from "@/lib/format-time";
 
@@ -136,6 +137,9 @@ export function StreamingMessage({
               ))}
             </div>
           )}
+          {isComplete && message.metadata && (
+            <MessageMetadata metadata={message.metadata} />
+          )}
           {!isActive && (
             <ReactionBar
               messageId={message.id}
@@ -233,6 +237,9 @@ export function StreamingMessage({
               </div>
             ))}
           </div>
+        )}
+        {isComplete && message.metadata && (
+          <MessageMetadata metadata={message.metadata} />
         )}
         {!isActive && (
           <ReactionBar

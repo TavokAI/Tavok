@@ -38,11 +38,20 @@ Before coding:
 ### Step 3 — Validate
 Run the relevant checks for the services you touched (see Validation section).
 
-### Step 4 — Update docs if needed
+### Step 4 — Add tests for new code
+**MANDATORY:** Every new feature, route, handler, or module must have corresponding tests added to the test suite before it is considered done.
+- **Web routes/handlers**: Extract logic into testable handler factories in `lib/route-handlers.js`, add vitest tests in `lib/__tests__/` (see existing patterns in `route-handlers.test.ts` and `agent-handlers.test.ts`)
+- **Python SDK**: Add test cases to `scripts/test-sdk.py` for any new SDK functionality
+- **Gateway changes**: Verify via SDK E2E tests (`make test-sdk`) since Gateway has no standalone test suite yet
+- **Run `make test-all`** after adding tests to confirm everything passes
+- Never merge code with zero test coverage for new functionality
+
+### Step 5 — Update docs if needed
 Update:
 - `docs/KNOWN-ISSUES.md` if you found/confirmed a bug
 - `docs/DECISIONS.md` if you made a real tradeoff
 - `docs/ARCHITECTURE-CURRENT.md` if structure/contracts changed
+- `docs/PROTOCOL.md` if cross-service contracts changed
 - `README.md` if run commands/env changed
 
 ---
@@ -62,9 +71,11 @@ No single chat should do all roles.
 ## Validation: What to Run
 
 ### Baseline checks (run often)
+- Web unit tests: `make test-web` or `cd packages/web && npx vitest run` (161 tests: 118 core + 43 agent)
+- SDK E2E tests: `make test-sdk` or `python scripts/test-sdk.py` (requires Docker services running)
+- All tests: `make test-all` (runs both of the above sequentially)
 - Web typecheck: `make typecheck` or `docker-compose exec web npx tsc --noEmit`
 - Web lint: `make lint` or `docker-compose exec web npx next lint`
-- Web tests: `make test-web` or `docker-compose exec web npx vitest run`
 - Gateway compile: `docker-compose exec gateway mix compile --warnings-as-errors`
 - Go vet: `docker-compose exec streaming go vet ./...`
 - Health check all services: `make health`
@@ -111,6 +122,16 @@ Before adding new features to a fresh v0:
    - mid-stream error
    - channel switch mid-stream
 8) Log failures in `docs/KNOWN-ISSUES.md`
+9) Agent self-registration and WebSocket auth:
+   - `POST /api/v1/agents/register` returns API key
+   - WebSocket connect with `?api_key=sk-tvk-...` succeeds
+   - Agent sends message in channel → appears in UI
+   - Agent triggers streaming → tokens flow through pipeline
+   - `GET /api/internal/agents/verify` returns bot info for valid key
+   - Agent PATCH/DELETE via Bearer auth works
+10) Run full test suite: `make test-all`
+   - All 161 web unit tests pass (vitest)
+   - All SDK E2E tests pass (requires Docker services running)
 
 ---
 

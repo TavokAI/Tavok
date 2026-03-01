@@ -2,7 +2,8 @@
 # Run `make help` to see all available commands.
 
 .PHONY: help dev up down logs logs-web logs-gateway logs-stream \
-        db-migrate db-studio db-seed clean health build regression-harness
+        db-migrate db-studio db-seed clean health build regression-harness \
+        test-web test-sdk test-all
 
 # Default target
 help: ## Show this help
@@ -27,6 +28,20 @@ down: ## Stop all services
 
 build: ## Build all Docker images without starting
 	docker-compose build
+
+# ============================================================
+# TESTS
+# ============================================================
+
+test-web: ## Run web unit tests (vitest — 161 tests)
+	cd packages/web && npx vitest run
+
+test-sdk: ## Run Python SDK E2E test (requires Docker services running)
+	python scripts/test-sdk.py
+
+test-all: ## Run all tests (web unit + SDK E2E)
+	cd packages/web && npx vitest run
+	python scripts/test-sdk.py
 
 # ============================================================
 # REGRESSION HARNESS

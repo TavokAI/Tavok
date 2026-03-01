@@ -28,7 +28,7 @@ All docs live in `docs/`. Read in this order:
 7) `docs/ARCHITECTURE-CURRENT.md` (as-built reality — V0 complete)
 8) `docs/ARCHITECTURE-TARGET.md` (V1 target architecture)
 9) `docs/STREAMING.md` (streaming lifecycle rules and event contracts)
-10) `docs/DECISIONS.md` (architectural decision log — append-only, DEC-0001 through DEC-0026)
+10) `docs/DECISIONS.md` (architectural decision log — append-only, DEC-0001 through DEC-0040)
 11) `docs/KNOWN-ISSUES.md` (confirmed failures + repro steps)
 12) `docs/PERFORMANCE.md` (speed benchmarks and targets)
 
@@ -63,6 +63,8 @@ Everything else is secondary.
 **V0: COMPLETE.** Core chat, streaming, markdown, invite links, roles & permissions all working. Break-tested and hardened (11 issues found and resolved). See `docs/ARCHITECTURE-CURRENT.md` for full inventory.
 
 **V1: IN PROGRESS (two parallel tracks).** Track A (Agent): Thinking Timeline, Multi-stream, Provider Abstraction. Track B (Chat): Edit/Delete, Mentions, Unreads. See `docs/ROADMAP.md` for strategy and `docs/TASKS.md` for work items. For chat implementation specs see `docs/V1-IMPLEMENTATION.md`.
+
+**Agent-First Launch: IN PROGRESS.** Agent self-registration (DEC-0040) is complete — agents register via `POST /api/v1/agents/register`, receive an API key (`sk-tvk-...`), and connect via WebSocket without any human UI configuration. 161 tests passing (118 core + 43 agent). Next: Python SDK (`pip install tavok-sdk`).
 
 ---
 
@@ -139,7 +141,9 @@ Supporting services:
 ## Definition of Done (Per Task)
 A task is done only when:
 - Acceptance criteria in `docs/TASKS.md` is met
-- Typecheck/build passes (and lint/tests where applicable)
+- **Tests added for all new code** — new routes, handlers, SDK features, or modules must have corresponding tests in the test suite. Run `make test-all` to verify. See `docs/OPERATIONS.md` Step 4 for patterns.
+- `make test-all` passes (161+ web unit tests + SDK E2E tests)
+- Typecheck/build passes (and lint where applicable)
 - Core flows still work (auth + chat send/receive + history at minimum)
 - If streaming is touched: success path + error path verified
 - Docs updated if behavior/contracts changed
@@ -222,7 +226,7 @@ The product owner is not a programmer. Write plainly:
 ## Notes
 - `docs/Tavok.md` is the current starter spec and north star.
 - `docs/PROTOCOL.md` is the contract bible — all services implement against it.
-- `docs/DECISIONS.md` is append-only — never edit existing entries (DEC-0001 through DEC-0026).
+- `docs/DECISIONS.md` is append-only — never edit existing entries (DEC-0001 through DEC-0040).
 - `docs/ROADMAP.md` is the master build plan — synthesizes all source analyses, check priorities before starting work.
 - `docs/V1-IMPLEMENTATION.md` has detailed chat task specs (data models, API endpoints, file lists).
 - The stack is TypeScript/Next.js + Elixir/Phoenix + Go (see DEC-0001, DEC-0002, DEC-0023).

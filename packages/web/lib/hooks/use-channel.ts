@@ -23,6 +23,7 @@ export interface MessagePayload {
   streamingStatus: string | null;
   thinkingPhase?: string;
   thinkingTimeline?: Array<{ phase: string; timestamp: string }>; // TASK-0011
+  metadata?: Record<string, unknown> | null; // Agent execution metadata: model, tokens, latency (TASK-0039)
   sequence: string;
   createdAt: string;
   reactions: ReactionData[];
@@ -294,13 +295,14 @@ export function useChannel(channelId: string | null): UseChannelReturn {
         flushStreamBuffer();
       });
 
-      // stream_complete: set final content, mark COMPLETE, capture thinking timeline (TASK-0011)
+      // stream_complete: set final content, mark COMPLETE, capture thinking timeline + metadata (TASK-0011, TASK-0039)
       channel.on("stream_complete", (raw: unknown) => {
         if (!mounted) return;
         const payload = raw as {
           messageId: string;
           finalContent: string;
           thinkingTimeline?: Array<{ phase: string; timestamp: string }>;
+          metadata?: Record<string, unknown>;
         };
 
         setMessages((prev) =>
@@ -313,6 +315,7 @@ export function useChannel(channelId: string | null): UseChannelReturn {
                   type: "STREAMING",
                   thinkingPhase: undefined,
                   thinkingTimeline: payload.thinkingTimeline,
+                  metadata: payload.metadata || m.metadata,
                 }
               : m
           )
@@ -364,6 +367,14 @@ export function useChannel(channelId: string | null): UseChannelReturn {
               : m
           )
         );
+      });
+
+      // ---- Typed messages (TASK-0039) ----
+      // Agents can send typed messages (TOOL_CALL, TOOL_RESULT, CODE_BLOCK, etc.)
+      channel.on("typed_message", (raw: unknown) => {
+        if (!mounted) return;
+        const payload = raw as MessagePayload;
+        addMessages([{ ...payload, reactions: payload.reactions || [] }]);
       });
 
       // ---- Edit & Delete events (TASK-0014) ----

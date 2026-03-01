@@ -4,6 +4,7 @@ import { useRef, useEffect, useCallback, useMemo } from "react";
 import type { MessagePayload, ReactionData } from "@/lib/hooks/use-channel";
 import { MessageItem } from "./message-item";
 import { StreamingMessage } from "./streaming-message";
+import { TypedMessageItem } from "./typed-message-item";
 import { UnreadDivider } from "./unread-divider";
 
 interface MessageListProps {
@@ -168,6 +169,20 @@ export function MessageList({
                 currentUserId={currentUserId}
                 canManageMessages={canManageMessages}
                 onDelete={onDeleteMessage}
+              />
+            </div>
+          );
+        }
+
+        // Use TypedMessageItem for structured agent messages (TASK-0039)
+        const typedTypes = ["TOOL_CALL", "TOOL_RESULT", "CODE_BLOCK", "ARTIFACT", "STATUS"];
+        if (typedTypes.includes(message.type)) {
+          return (
+            <div key={message.id}>
+              {showDivider && <UnreadDivider />}
+              <TypedMessageItem
+                message={message}
+                isGrouped={isGrouped}
               />
             </div>
           );

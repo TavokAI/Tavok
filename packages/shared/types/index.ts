@@ -6,3 +6,4 @@ export * from "./channel";
 export * from "./message";
 export * from "./bot";
 export * from "./protocol";
+export * from "./typed-messages";

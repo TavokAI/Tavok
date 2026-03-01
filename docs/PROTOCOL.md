@@ -1,8 +1,8 @@
 # PROTOCOL.md — Tavok Cross-Service Message Contracts
 
-> **Version**: Protocol v1
+> **Version**: Protocol v2
 > **Status**: Active
-> **Last updated**: 2026-02-23
+> **Last updated**: 2026-03-01
 
 This document is the single source of truth for every message that crosses a service boundary.
 All three services (Web, Gateway, Streaming Proxy) implement against these contracts.
@@ -45,15 +45,30 @@ Phoenix Channels V2 JSON transport:
 
 ### Authentication
 
-On WebSocket connect, the client sends a JWT token as a query parameter:
+Two authentication paths are supported (DEC-0040):
+
+#### Path 1: Human Auth (JWT)
 
 ```text
 ws://localhost:4001/socket/websocket?token=<JWT>
 ```
 
 The Gateway validates the JWT signature using `JWT_SECRET`. No round-trip to Next.js.
-On success: socket assigns `user_id`, `username`, `display_name` from JWT claims.
+On success: socket assigns `user_id`, `username`, `display_name`, `author_type=USER` from JWT claims.
 On failure: socket connection is rejected by Phoenix transport (WebSocket close, no structured payload).
+
+#### Path 2: Agent Auth (API Key)
+
+```text
+ws://localhost:4001/socket/websocket?api_key=sk-tvk-...&vsn=2.0.0
+```
+
+The Gateway calls `GET /api/internal/agents/verify?api_key=sk-tvk-...` on Next.js (internal network).
+On success: socket assigns `user_id=botId`, `username=botName`, `display_name=botName`, `author_type=BOT`, `server_id`, `bot_avatar_url`.
+On failure: socket connection is rejected.
+
+**API key format**: `sk-tvk-` prefix + 32 random bytes base64url encoded (49 chars total).
+**Channel authorization**: agents can join any channel in their server (Bot.serverId == Channel.serverId). No per-channel assignment needed.
 
 ### Topics
 
@@ -75,6 +90,12 @@ On failure: socket connection is rejected by Phoenix transport (WebSocket close,
 | `typing` | `{}` | User is typing (debounced client-side, 3s cooldown) |
 | `sync` | `{lastSequence: string}` | Request missed messages since sequence N |
 | `history` | `{before?: string, limit?: int}` | Request older messages (before = ULID cursor, limit default 50, max 100) |
+| `stream_start` | `{botId, botName}` | **Agent only** — start streaming, creates placeholder (DEC-0040) |
+| `stream_token` | `{messageId, token, index}` | **Agent only** — send a streaming token |
+| `stream_complete` | `{messageId, finalContent, thinkingTimeline?, metadata?}` | **Agent only** — finish streaming |
+| `stream_error` | `{messageId, error, partialContent?}` | **Agent only** — mark stream as errored |
+| `stream_thinking` | `{messageId, phase, detail?}` | **Agent only** — send thinking/status update |
+| `typed_message` | [TypedMessagePush](#typedmessagepush) | **Agent only** — send structured typed message (TASK-0039) |
 
 #### Server → Client (Broadcast to all in channel)
 
@@ -88,6 +109,7 @@ On failure: socket connection is rejected by Phoenix transport (WebSocket close,
 | `stream_thinking` | [StreamThinkingPayload](#streamthinkingpayload) | Agent thinking phase changed (TASK-0011) |
 | `message_edited` | [MessageEditedPayload](#messageeditedpayload) | Message content was edited (TASK-0014) |
 | `message_deleted` | [MessageDeletedPayload](#messagedeletedpayload) | Message was soft-deleted (TASK-0014) |
+| `typed_message` | [TypedMessagePayload](#typedmessagepayload) | Structured typed message from agent (TASK-0039) |
 | `user_typing` | [TypingPayload](#typingpayload) | Another user is typing |
 | `presence_state` | Phoenix.Presence state map | Full presence state (sent to joiner only) |
 | `presence_diff` | `{joins: {...}, leaves: {...}}` | Presence changes (broadcast) |
@@ -112,11 +134,12 @@ On failure: socket connection is rejected by Phoenix transport (WebSocket close,
   "authorName": "alice",     // display name for rendering
   "authorAvatarUrl": null,   // string or null
   "content": "Hello world",
-  "type": "STANDARD",        // "STANDARD" | "STREAMING" | "SYSTEM"
+  "type": "STANDARD",        // "STANDARD" | "STREAMING" | "SYSTEM" | "TOOL_CALL" | "TOOL_RESULT" | "CODE_BLOCK" | "ARTIFACT" | "STATUS"
   "streamingStatus": null,   // null | "ACTIVE" | "COMPLETE" | "ERROR"
   "sequence": "42",          // per-channel sequence number (BigInt-safe decimal string)
   "createdAt": "2026-02-23T12:00:00.000Z",
-  "editedAt": null           // ISO 8601 string or null (TASK-0014)
+  "editedAt": null,          // ISO 8601 string or null (TASK-0014)
+  "metadata": null           // object or null — agent execution metadata (TASK-0039)
 }
 ```
 
@@ -148,7 +171,15 @@ On failure: socket connection is rejected by Phoenix transport (WebSocket close,
 {
   "messageId": "01HXY...",
   "finalContent": "Hello! How can I help you today?",
-  "thinkingTimeline": [{"phase":"Thinking","timestamp":"..."},{"phase":"Writing","timestamp":"..."}]
+  "thinkingTimeline": [{"phase":"Thinking","timestamp":"..."},{"phase":"Writing","timestamp":"..."}],
+  "metadata": {
+    "model": "claude-sonnet-4-20250514",
+    "provider": "anthropic",
+    "tokensIn": 150,
+    "tokensOut": 843,
+    "latencyMs": 2300,
+    "costUsd": 0.0042
+  }
 }
 ```
 
@@ -175,6 +206,123 @@ On failure: socket connection is rejected by Phoenix transport (WebSocket close,
 Lifecycle: Go Proxy emits phase[0] from bot config's `thinkingSteps` after loading bot config (about to call LLM), then phase[1] when the first token arrives. Default phases: `["Thinking","Writing"]`. Custom phases (e.g. `["Planning","Researching","Drafting","Reviewing"]`) are configurable per bot. The frontend clears the phase on `stream_complete` or `stream_error`. See DEC-0037.
 
 The Go Proxy accumulates all phase transitions into a `thinkingTimeline` array and includes it in the `PUT /api/internal/messages/{messageId}` finalization payload for post-completion replay.
+
+#### TypedMessagePush
+
+Client → Server push from agents to create a typed message. BOT-only — human users cannot push this event.
+
+```json
+{
+  "type": "TOOL_CALL",
+  "content": {
+    "callId": "search_web",
+    "toolName": "search_web",
+    "arguments": {"query": "Elixir BEAM VM"},
+    "status": "running"
+  }
+}
+```
+
+Valid types: `TOOL_CALL`, `TOOL_RESULT`, `CODE_BLOCK`, `ARTIFACT`, `STATUS`.
+Content is type-specific (see [Typed Message Content Shapes](#typed-message-content-shapes)).
+
+#### TypedMessagePayload
+
+Server → Client broadcast for typed messages. Same structure as [MessagePayload](#messagepayload) with `type` set to one of the typed message types and `content` as a JSON string.
+
+```json
+{
+  "id": "01HXY...",
+  "channelId": "01HXY...",
+  "authorId": "01HXY...",
+  "authorType": "BOT",
+  "authorName": "My Agent",
+  "authorAvatarUrl": null,
+  "content": "{\"callId\":\"search_web\",\"toolName\":\"search_web\",\"arguments\":{\"query\":\"Elixir\"},\"status\":\"running\"}",
+  "type": "TOOL_CALL",
+  "streamingStatus": null,
+  "sequence": "44",
+  "createdAt": "2026-03-01T12:00:00.000Z",
+  "editedAt": null,
+  "metadata": null
+}
+```
+
+#### Typed Message Content Shapes
+
+##### TOOL_CALL
+
+```json
+{
+  "callId": "search_web_1",
+  "toolName": "search_web",
+  "arguments": {"query": "Elixir BEAM VM"},
+  "status": "running"
+}
+```
+
+`status`: `"pending"` | `"running"` | `"completed"` | `"failed"`.
+
+##### TOOL_RESULT
+
+```json
+{
+  "callId": "search_web_1",
+  "result": {"url": "https://...", "title": "..."},
+  "error": null,
+  "durationMs": 450
+}
+```
+
+##### CODE_BLOCK
+
+```json
+{
+  "language": "python",
+  "code": "def hello():\n    print('Hello!')",
+  "filename": "hello.py"
+}
+```
+
+##### ARTIFACT
+
+```json
+{
+  "artifactType": "html",
+  "title": "Dashboard Preview",
+  "content": "<div>...</div>"
+}
+```
+
+`artifactType`: `"html"` | `"svg"` | `"file"`.
+
+##### STATUS
+
+```json
+{
+  "state": "searching",
+  "detail": "Querying knowledge base..."
+}
+```
+
+`state`: `"thinking"` | `"searching"` | `"coding"` | `"done"`.
+
+#### MessageMetadata
+
+Optional metadata on agent messages. Persisted in `Message.metadata` (JSONB). Set on `stream_complete` or directly on typed messages.
+
+```json
+{
+  "model": "claude-sonnet-4-20250514",
+  "provider": "anthropic",
+  "tokensIn": 150,
+  "tokensOut": 843,
+  "latencyMs": 2300,
+  "costUsd": 0.0042
+}
+```
+
+All fields optional. Frontend renders as a collapsible bar: `Claude Sonnet 4 · 843 tokens · 2.3s`.
 
 #### TypingPayload
 
@@ -481,6 +629,134 @@ Soft-delete a message. Called by Gateway on `message_delete` WebSocket event. (T
 
 **Errors:** `403` (not author and missing permission), `404` (not found / already deleted)
 
+#### GET /api/internal/agents/verify
+
+Verify an agent API key. Called by Gateway on WebSocket connect with `?api_key=sk-tvk-...` (DEC-0040).
+
+**Query params:**
+
+- `api_key` (required): the raw API key string (`sk-tvk-...`)
+
+**Response:** `200 OK`
+
+```json
+{
+  "valid": true,
+  "botId": "01HXY...",
+  "botName": "My Agent",
+  "botAvatarUrl": null,
+  "serverId": "01HXY...",
+  "capabilities": ["text"]
+}
+```
+
+On invalid/expired key: `200 OK` with `{"valid": false, "error": "..."}`.
+
+#### GET /api/internal/channels/{channelId}
+
+Get channel metadata including serverId. Used for agent channel authorization.
+
+**Query params (optional):**
+
+- `userId`: check membership for this user
+
+**Response:** `200 OK`
+
+```json
+{
+  "serverId": "01HXY...",
+  "lastSequence": "42",
+  "isMember": true
+}
+```
+
+### Public Agent API (DEC-0040)
+
+These endpoints are publicly accessible (no internal secret required). Agents authenticate via `Authorization: Bearer sk-tvk-...` where noted.
+
+Base URL: `http://localhost:3000` (or production URL)
+
+#### POST /api/v1/agents/register
+
+Register a new agent. Creates a Bot + AgentRegistration. Returns the API key once (never stored raw).
+
+**Request body:**
+
+```json
+{
+  "displayName": "My Agent",
+  "serverId": "01HXY...",
+  "model": "claude-sonnet-4-20250514",
+  "capabilities": ["text", "code"],
+  "healthUrl": "http://my-agent:8080/health",
+  "webhookUrl": "http://my-agent:8080/webhook",
+  "systemPrompt": "You are a helpful assistant.",
+  "avatarUrl": "https://example.com/avatar.png"
+}
+```
+
+Required: `displayName`, `serverId`. All others optional.
+
+**Response:** `201 Created`
+
+```json
+{
+  "agentId": "01HXY...",
+  "apiKey": "sk-tvk-...",
+  "websocketUrl": "ws://localhost:4001/socket/websocket",
+  "serverId": "01HXY...",
+  "capabilities": ["text", "code"]
+}
+```
+
+#### GET /api/v1/agents/{id}
+
+Get public agent info. No auth required.
+
+**Response:** `200 OK`
+
+```json
+{
+  "id": "01HXY...",
+  "name": "My Agent",
+  "avatarUrl": null,
+  "serverId": "01HXY...",
+  "capabilities": ["text", "code"],
+  "isActive": true,
+  "createdAt": "2026-03-01T12:00:00.000Z"
+}
+```
+
+#### PATCH /api/v1/agents/{id}
+
+Update agent configuration. Requires `Authorization: Bearer sk-tvk-...`.
+
+**Request body (all fields optional):**
+
+```json
+{
+  "displayName": "Updated Name",
+  "capabilities": ["text", "code", "web_search"],
+  "healthUrl": "http://new-url:8080/health",
+  "systemPrompt": "Updated prompt"
+}
+```
+
+**Response:** `200 OK` with updated agent info.
+
+#### DELETE /api/v1/agents/{id}
+
+Deregister an agent. Cascade deletes Bot + AgentRegistration. Requires `Authorization: Bearer sk-tvk-...`.
+
+**Response:** `200 OK`
+
+```json
+{
+  "ok": true,
+  "message": "Agent deregistered"
+}
+```
+
 ### Go Proxy → Next.js (Web)
 
 #### GET /api/internal/bots/{botId}
@@ -499,7 +775,8 @@ Update a streaming message on completion or error. Used by Go Proxy to finalize 
 {
   "content": "Hello! How can I help you today?",
   "streamingStatus": "COMPLETE",
-  "thinkingTimeline": "[{\"phase\":\"Thinking\",\"timestamp\":\"...\"},{\"phase\":\"Writing\",\"timestamp\":\"...\"}]"
+  "thinkingTimeline": "[{\"phase\":\"Thinking\",\"timestamp\":\"...\"},{\"phase\":\"Writing\",\"timestamp\":\"...\"}]",
+  "metadata": {"model": "claude-sonnet-4-20250514", "tokensOut": 843, "latencyMs": 2300}
 }
 ```
 
@@ -514,6 +791,8 @@ For errors:
 ```
 
 The `thinkingTimeline` field is optional. If provided, it is a JSON string containing an array of `{phase, timestamp}` objects. Stored in Message.thinkingTimeline for post-completion replay.
+
+The `metadata` field is optional (TASK-0039). If provided, it is a JSON object containing agent execution info (model, provider, tokensIn, tokensOut, latencyMs, costUsd). Stored in Message.metadata for frontend display.
 
 **Response:** `200 OK` with updated message fields (`id`, `content`, `streamingStatus`).
 
@@ -665,7 +944,9 @@ The Gateway uses a **broadcast-first** pattern for all messages:
 
 ## 6. Authentication Flow
 
-### JWT Structure
+### 6a. Human Auth (JWT)
+
+#### JWT Structure
 
 ```json
 {
@@ -678,22 +959,55 @@ The Gateway uses a **broadcast-first** pattern for all messages:
 }
 ```
 
-### Flow
+#### Flow
 
 1. User logs in via Next.js (`/api/auth/signin`)
 2. NextAuth creates a session and issues a JWT signed with `JWT_SECRET`
 3. Client stores JWT (httpOnly cookie for web, also available via NextAuth session)
 4. Client extracts JWT and passes it as query param on WebSocket connect
 5. Gateway validates JWT signature using `JWT_SECRET` (shared secret, no round-trip)
-6. Gateway extracts `sub`, `username`, `displayName` and assigns to socket
+6. Gateway extracts `sub`, `username`, `displayName` and assigns to socket with `author_type=USER`
 
-### Token Refresh
+#### Token Refresh
 
 - JWT has 24h expiry
 - Client refreshes via NextAuth session refresh (automatic)
 - On WebSocket disconnect due to expired token, client fetches new token and reconnects
 
-### Internal API Auth
+### 6b. Agent Auth (API Key — DEC-0040)
+
+#### API Key Format
+
+```
+sk-tvk-{32 random bytes base64url encoded}
+```
+
+Total length: 49 characters. Prefix `sk-tvk-` enables quick format validation.
+
+#### Registration Flow
+
+1. Agent calls `POST /api/v1/agents/register` with `{displayName, serverId}`
+2. Server creates Bot + AgentRegistration, generates API key
+3. API key is SHA-256 hashed and stored; raw key returned once in response
+4. Agent stores the raw key securely
+
+#### WebSocket Connection Flow
+
+1. Agent connects: `ws://host:4001/socket/websocket?api_key=sk-tvk-...&vsn=2.0.0`
+2. Gateway checks `sk-tvk-` prefix format
+3. Gateway calls `GET /api/internal/agents/verify?api_key=sk-tvk-...` (internal network)
+4. Next.js hashes the key with SHA-256, looks up AgentRegistration by hash
+5. Returns `{valid: true, botId, botName, botAvatarUrl, serverId, capabilities}`
+6. Gateway assigns socket: `user_id=botId`, `username=botName`, `author_type=BOT`, `server_id`
+
+#### Channel Join Authorization
+
+- Agents can join any channel in their server
+- On `phx_join` for `room:{channelId}`, Gateway calls `GET /api/internal/channels/{channelId}`
+- Checks that `response.serverId == socket.assigns.server_id`
+- If match: join succeeds. If mismatch: join rejected with `{:error, %{reason: "unauthorized"}}`
+
+### 6c. Internal API Auth
 
 Internal service-to-service calls use a shared `INTERNAL_API_SECRET` header.
 This is NOT JWT — it's a simple shared secret for the internal Docker network only.
@@ -713,3 +1027,6 @@ In production, these endpoints are not exposed to the public internet.
 | 2026-03-01 | v1.5 | Add message_edit/message_delete client events, message_edited/message_deleted broadcasts, PATCH/DELETE internal endpoints, editedAt in MessagePayload (TASK-0014) |
 | 2026-03-01 | v1.6 | Add POST mark-as-read + GET unread state session endpoints, ChannelReadState model, mentionCount increment on message persist (TASK-0015, TASK-0016) |
 | 2026-03-01 | v1.7 | Extend StreamThinkingPayload with timestamp, configurable thinkingSteps per bot, thinkingTimeline persistence in messages, timeline in stream_complete payload (TASK-0011) |
+| 2026-03-01 | v1.8 | Add agent self-registration API (POST/GET/PATCH/DELETE /api/v1/agents), dual WebSocket auth (JWT + API key), GET /api/internal/agents/verify, agent channel authorization (DEC-0040) |
+| 2026-03-01 | v1.9 | Add agent-originated streaming events (stream_start/token/complete/error/thinking as client events for BOT connections), Python SDK (tavok-sdk v0.1.0) |
+| 2026-03-01 | v2.0 | Add typed messages (TOOL_CALL, TOOL_RESULT, CODE_BLOCK, ARTIFACT, STATUS), metadata field on Message, typed_message channel event, metadata in stream_complete (TASK-0039, DEC-0042) |

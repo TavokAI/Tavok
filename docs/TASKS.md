@@ -349,6 +349,89 @@ Track what users have read. Bold unread channels, red mention badges, new-messag
 
 ---
 
+## TASK-0037: Agent Self-Registration + Gateway Auth
+
+**Status**: DONE
+**Priority**: P0 — Agent-First Launch
+**Track**: A (Agent)
+**Assignee**: Builder
+**Decision**: DEC-0040
+
+### Description
+Agents register themselves via API and connect via WebSocket without any human configuring them through a UI. Creates the foundation for the Python SDK and typed messages.
+
+### Acceptance Criteria
+- [x] `AgentRegistration` model in Prisma schema (1:1 with Bot)
+- [x] `POST /api/v1/agents/register` — creates Bot + AgentRegistration, returns `sk-tvk-...` API key
+- [x] `GET /api/v1/agents/{id}` — agent info (public, no auth)
+- [x] `PATCH /api/v1/agents/{id}` — update capabilities/URLs (Bearer auth)
+- [x] `DELETE /api/v1/agents/{id}` — deregister with cascade (Bearer auth)
+- [x] `GET /api/internal/agents/verify` — Gateway verification (internal secret auth)
+- [x] Gateway dual auth: `?token=<JWT>` for humans, `?api_key=sk-tvk-...` for agents
+- [x] SHA-256 API key hashing for indexed lookup
+- [x] Agent connects via WebSocket, joins channel, appears in presence
+- [x] All existing bot/streaming infrastructure works unchanged
+- [x] 43 agent handler tests passing (161 total)
+- [x] PROTOCOL.md updated (v1.8), DECISIONS.md updated (DEC-0040)
+
+---
+
+## TASK-0038: Python SDK + Agent-Originated Streaming
+
+**Status**: DONE
+**Priority**: P0 — Agent-First Launch
+**Track**: A (Agent)
+**Assignee**: Builder
+**Decision**: DEC-0041
+
+### Description
+Python SDK (`tavok-sdk`) that lets developers build AI agents in 10 lines of code with token streaming. Added agent-originated streaming event handlers to Gateway so SDK agents can stream tokens directly via WebSocket channel pushes.
+
+### Acceptance Criteria
+- [x] `sdk/python/` package with `pyproject.toml`, installable via `pip install -e .`
+- [x] `Agent` class with `@on_mention`, `@on_message` decorators
+- [x] `StreamContext` async context manager (`token()`, `status()`, `finish()`, `error()`)
+- [x] `PhoenixSocket` speaking Phoenix Channel V2 wire protocol
+- [x] Auto-registration via `POST /api/v1/agents/register`
+- [x] Reconnect with exponential backoff (1s → 30s)
+- [x] Gateway `room_channel.ex` handles `stream_start/token/complete/error/thinking` from BOT connections
+- [x] Example agents: echo, LLM streaming, multi-agent
+- [x] 5 SDK E2E tests passing (`make test-sdk`)
+- [x] `make test-web` (161 tests), `make test-sdk` (5 tests), `make test-all` targets added
+- [x] PROTOCOL.md updated (v1.9), DECISIONS.md updated (DEC-0041)
+
+---
+
+## TASK-0039: Typed Messages + Metadata
+
+**Status**: DONE
+**Priority**: P0 — Agent-First Launch
+**Track**: A (Agent)
+**Assignee**: Builder
+**Decision**: DEC-0042
+
+### Description
+Structured message types for agent output (tool calls, code blocks, artifacts, status) and execution metadata (model, tokens, latency) on completed agent messages. Makes agent output beautiful and informative instead of text blobs.
+
+### Acceptance Criteria
+- [x] `MessageType` enum extended with `TOOL_CALL`, `TOOL_RESULT`, `CODE_BLOCK`, `ARTIFACT`, `STATUS`
+- [x] `metadata Json?` field on Message model for agent execution info
+- [x] Shared TypeScript type definitions (`packages/shared/types/typed-messages.ts`)
+- [x] Gateway `typed_message` event handler (BOT-only, validates type, generates ULID/sequence, broadcasts, persists)
+- [x] Gateway `stream_complete` passes metadata through to persistence
+- [x] Internal API endpoints persist and return metadata
+- [x] Frontend `TypedMessageRenderer` dispatches to card components based on type
+- [x] `ToolCallCard` — collapsible card with tool name, arguments, status indicator
+- [x] `ToolResultCard` — result card with success/error styling, duration
+- [x] `CodeBlockMessage` — syntax highlighted code with copy button
+- [x] `ArtifactRenderer` — sandboxed iframe for HTML/SVG
+- [x] `StatusIndicator` — inline status with state icons
+- [x] `MessageMetadata` — collapsible bar showing model · tokens · latency
+- [x] Python SDK `StreamContext` extended with `tool_call()`, `tool_result()`, `code()`, `artifact()`
+- [x] PROTOCOL.md updated (v2.0), DECISIONS.md updated (DEC-0042)
+
+---
+
 ## TASK-0017: README & Demo (Launch Prep)
 
 **Status**: IN PROGRESS
@@ -731,6 +814,9 @@ Expandable "X-Ray" panel on any agent message showing execution details. Lite ve
 | 0030 | Wave 3 | Chat | P2 | Emoji Reactions | IN PROGRESS |
 | 0031 | Wave 3 | Agent | P1 | X-Ray Observability | TODO |
 | 0032 | Wave 3 | Agent | P2 | Branching Conversations | TODO |
+| **0037** | **Launch** | **Agent** | **P0** | **Agent Self-Registration + Gateway Auth** | ✅ DONE |
+| **0038** | **Launch** | **Agent** | **P0** | **Python SDK + Agent-Originated Streaming** | ✅ DONE |
+| **0039** | **Launch** | **Agent** | **P0** | **Typed Messages + Metadata** | ✅ DONE |
 | 0033 | Deploy | Deploy | P1 | Caddy HTTPS | ✅ DONE |
 | 0034 | Deploy | Deploy | P2 | Admin Dashboard | TODO |
 | 0035 | Deploy | Deploy | P2 | Data Export | TODO |

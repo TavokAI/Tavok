@@ -177,6 +177,7 @@ export async function GET(request: NextRequest) {
         createdAt: m.createdAt.toISOString(),
         editedAt: m.editedAt?.toISOString() || null,
         thinkingTimeline: m.thinkingTimeline ? JSON.parse(m.thinkingTimeline) : undefined, // TASK-0011
+        metadata: m.metadata || undefined, // TASK-0039
         reactions,
       };
     });

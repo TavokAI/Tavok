@@ -656,3 +656,142 @@ model ChannelBot {
 **Soft-delete pattern**: `isDeleted: Boolean @default(false)` on Message. Queries filter with `isDeleted: false`. Frontend shows `[message deleted]` placeholder. Hard-delete not supported in V1.
 
 **Consequences**: PATCH and DELETE internal API endpoints. `message_edit` and `message_delete` WebSocket events (client→server). `message_edited` and `message_deleted` broadcasts (server→client). `MANAGE_MESSAGES` permission bit (8) added. All documented in PROTOCOL.md v1.5.
+
+---
+
+## DEC-0040 — Agent Self-Registration: Agents as First-Class Bot Records
+
+**Date**: 2026-03-01
+**Status**: Accepted
+**Relates to**: Session 1 of the Agent-First Launch Plan
+
+**Context**: Tavok treats AI agents as first-class participants, but all bot configuration required a human to set up a Bot record through the UI. For the "holy shit" developer experience — `pip install tavok-sdk`, write 10 lines, agent appears in the channel streaming tokens — agents need to register themselves programmatically.
+
+**Decision**: Agents self-register via `POST /api/v1/agents/register`, which creates a `Bot` record (reusing ALL existing streaming/channel/persistence infrastructure) plus a linked `AgentRegistration` record that stores the API key hash and agent-specific metadata. The API returns a one-time API key (`sk-tvk-...`) that the agent uses for WebSocket authentication.
+
+**Key design choices**:
+
+1. **AgentRegistration wraps Bot (1:1, optional)**:
+   - Every self-registered agent IS a Bot — zero changes to RoomChannel, streaming, persistence, presence
+   - UI-configured bots have no AgentRegistration (the relation is optional on Bot)
+   - Cascade delete: removing AgentRegistration removes the Bot
+
+2. **SHA-256 for API key hashing** (not argon2/bcrypt):
+   - API keys are 32 random bytes (base64url encoded) — high entropy, no brute-force risk
+   - SHA-256 is fast enough for indexed database lookup on every WebSocket connect
+   - `@@index([apiKeyHash])` ensures O(log n) lookup
+   - argon2 would add 100-500ms per connection — unacceptable for real-time WebSocket auth
+
+3. **Dual WebSocket auth in Gateway** (`user_socket.ex`):
+   - Path 1: `?token=<JWT>` — existing human auth, validated locally (DEC-0003)
+   - Path 2: `?api_key=sk-tvk-...` — agent auth via internal API call to Next.js
+   - Both paths produce identical socket assigns (`user_id`, `username`, `display_name`, `author_type`)
+   - Agent path additionally assigns `server_id` and `bot_avatar_url`
+
+4. **Agent channel authorization**:
+   - Agents can join any channel in their server (Bot.serverId == Channel.serverId)
+   - Verified via `GET /api/internal/channels/{channelId}` → check serverId match
+   - No per-channel bot assignment needed for agent-initiated joins
+
+5. **API key format**: `sk-tvk-` prefix + 32 random bytes base64url = 49 chars total
+   - Prefix enables quick format validation before any DB lookup
+   - Recognizable pattern for developer experience
+
+**Schema**:
+```prisma
+model AgentRegistration {
+  id              String   @id @db.VarChar(26)
+  botId           String   @unique @db.VarChar(26)
+  apiKeyHash      String   @db.VarChar(64) // SHA-256 hex
+  capabilities    Json     @default("[]")
+  healthUrl       String?
+  webhookUrl      String?
+  maxTokensSec    Int      @default(100)
+  lastHealthCheck DateTime?
+  lastHealthOk    Boolean  @default(true)
+  bot Bot @relation(fields: [botId], references: [id], onDelete: Cascade)
+  @@index([apiKeyHash])
+}
+```
+
+**API surface**:
+- `POST /api/v1/agents/register` — create agent, returns API key (shown once)
+- `GET /api/v1/agents/{id}` — public agent info
+- `PATCH /api/v1/agents/{id}` — update (auth via Bearer token)
+- `DELETE /api/v1/agents/{id}` — deregister (cascade deletes Bot)
+- `GET /api/internal/agents/verify?api_key=...` — Gateway verification endpoint
+
+**Consequences**: Agents register in one curl command, connect via WebSocket with their API key, join channels in their server, and appear in presence with bot avatars. All existing streaming, persistence, and broadcast infrastructure works unchanged because agents ARE Bots. Documented in PROTOCOL.md v1.8.
+
+## DEC-0041 — Agent-Originated Streaming via WebSocket Push
+
+**Date**: 2026-03-01
+**Status**: Accepted
+**Relates to**: Session 2 of the Agent-First Launch Plan, Python SDK
+
+**Context**: Existing streaming flows go through Go Proxy (Go → Redis pub/sub → Elixir broadcast). Agents built with the Python SDK need to stream tokens directly through their WebSocket connection without involving the Go proxy — they manage their own LLM calls.
+
+**Decision**: Add `stream_start`, `stream_token`, `stream_complete`, `stream_error`, and `stream_thinking` as client→server events in `room_channel.ex`, gated to `author_type == "BOT"` connections only. Human users cannot push these events.
+
+**How it works**:
+1. Agent pushes `stream_start` → Gateway generates message ULID + Redis sequence, broadcasts `stream_start` to all clients, persists placeholder, replies with `{messageId, sequence}`
+2. Agent pushes `stream_token` → Gateway broadcasts token to all clients (no persistence per-token)
+3. Agent pushes `stream_complete` → Gateway broadcasts completion, finalizes message via internal API in background
+4. Agent pushes `stream_error` → Gateway broadcasts error, marks message as errored via internal API
+
+**Why not route through Go**: External agents manage their own LLM calls (Anthropic, OpenAI, local models). Routing through Go would add unnecessary latency, require a new protocol for agent→Go communication, and violate the principle that agents are autonomous. The Go proxy remains the orchestrator for UI-configured bots.
+
+**Consequences**: Agents stream tokens with the same visual fidelity as Go-originated streams. All existing broadcast infrastructure, message persistence, and client-side rendering works unchanged. The SDK provides a clean `async with agent.stream() as s: await s.token()` API. Documented in PROTOCOL.md v1.9.
+
+---
+
+## DEC-0042 — Typed Messages + Metadata: Structured Agent Output
+
+**Date**: 2026-03-01
+**Status**: Accepted
+**Relates to**: Session 3 of the Agent-First Launch Plan, TASK-0039
+
+**Context**: Agent output was rendered as plain text blobs. Tool calls, code blocks, and results all looked the same — a wall of text. No visibility into which model the agent used, how many tokens it consumed, or how long it took. Developers and users need structured, beautiful output to trust and understand agents.
+
+**Decision**: Extend the `MessageType` enum with 5 new types (`TOOL_CALL`, `TOOL_RESULT`, `CODE_BLOCK`, `ARTIFACT`, `STATUS`) and add a `metadata Json?` field to the Message model. Typed messages are standalone messages (not embedded in streaming content) with their own ULID and sequence. The `content` field stores JSON when the type is one of the new values. Agent execution metadata (model, tokens, latency) persists with messages for post-completion display.
+
+**Key design choices**:
+
+1. **Typed messages as standalone messages (not embedded in streams)**:
+   - Each typed message gets its own ULID, sequence, and database row
+   - Renders as a distinct card in the message list, not inline with streaming text
+   - Keeps the streaming pipeline completely unchanged
+   - Tool call + tool result messages are correlated by `callId` but live independently
+
+2. **JSON content in the existing `content` column**:
+   - No new columns for typed content — the `content` text field stores JSON for typed types
+   - The `type` enum tells the frontend how to parse and render the content
+   - Falls back to raw text display if JSON parsing fails (graceful degradation)
+   - Standard/streaming messages continue using `content` as plain text
+
+3. **`metadata` as a JSONB column (not separate fields)**:
+   - Agent execution metadata is schemaless — different providers return different info
+   - Fields: `model`, `provider`, `tokensIn`, `tokensOut`, `latencyMs`, `costUsd` (all optional)
+   - Persisted via `stream_complete` payload or directly on typed messages
+   - Frontend renders as a collapsible metadata bar under completed agent messages
+
+4. **Gateway `typed_message` event handler (BOT-only)**:
+   - New channel event that validates BOT author, validates type is one of 5 allowed values
+   - Generates ULID + Redis sequence, encodes content as JSON, broadcasts to all clients
+   - Persists in background via existing `MessagePersistence.persist_async`
+   - Reuses 100% of existing broadcast and persistence infrastructure
+
+5. **Frontend component architecture**:
+   - `TypedMessageRenderer` — dispatcher that parses JSON content, switches on `message.type`, renders appropriate card component
+   - Each type gets a dedicated card: `ToolCallCard`, `ToolResultCard`, `CodeBlockMessage`, `ArtifactRenderer`, `StatusIndicator`
+   - `MessageMetadata` — collapsible bar (compact: `model · N tokens · Xs`, expanded: full details)
+   - `TypedMessageItem` — wrapper with avatar/name layout for typed messages in the message list
+
+6. **Python SDK extensions**:
+   - `StreamContext.tool_call(name, args)` → pushes `typed_message` with type `TOOL_CALL`
+   - `StreamContext.tool_result(call_id, result)` → pushes `typed_message` with type `TOOL_RESULT`
+   - `StreamContext.code(language, code)` → pushes `typed_message` with type `CODE_BLOCK`
+   - `StreamContext.artifact(title, content)` → pushes `typed_message` with type `ARTIFACT`
+   - All send the `typed_message` channel event and wait for Gateway reply
+
+**Consequences**: Agent output is structured, interactive, and informative. Tool calls render as collapsible cards with status indicators. Code blocks have syntax highlighting and copy buttons. Artifacts render in sandboxed iframes. Metadata shows model, tokens, and latency on completed agent messages. The streaming pipeline and existing message types are completely unchanged. Documented in PROTOCOL.md v2.0.

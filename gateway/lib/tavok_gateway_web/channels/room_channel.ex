@@ -32,9 +32,9 @@ defmodule TavokGatewayWeb.RoomChannel do
 
   @impl true
   def join("room:" <> channel_id, params, socket) do
-    Logger.info("User #{socket.assigns.user_id} joining room:#{channel_id}")
+    Logger.info("#{socket.assigns[:author_type] || "USER"} #{socket.assigns.user_id} joining room:#{channel_id}")
 
-    case authorize_join(channel_id, socket.assigns.user_id) do
+    case authorize_join(channel_id, socket) do
       {:ok} ->
         do_join_room(params, socket, channel_id)
 
@@ -73,7 +73,20 @@ defmodule TavokGatewayWeb.RoomChannel do
     end
   end
 
-  defp authorize_join(channel_id, user_id) do
+  defp authorize_join(channel_id, socket) do
+    case socket.assigns[:author_type] do
+      "BOT" ->
+        # Agents can join any channel in their server (DEC-0040)
+        # The agent's server_id was set during WebSocket connect auth
+        authorize_agent_join(channel_id, socket.assigns[:server_id])
+
+      _ ->
+        # Humans use membership check (existing flow)
+        authorize_human_join(channel_id, socket.assigns.user_id)
+    end
+  end
+
+  defp authorize_human_join(channel_id, user_id) do
     case ConfigCache.get_channel_membership(channel_id, user_id) do
       {:ok, %{"isMember" => true}} ->
         {:ok}
@@ -83,6 +96,21 @@ defmodule TavokGatewayWeb.RoomChannel do
 
       _ ->
         {:error, :membership_check_failed}
+    end
+  end
+
+  defp authorize_agent_join(channel_id, agent_server_id) do
+    # Verify the channel belongs to the agent's server (DEC-0040)
+    # Uses WebClient directly — agent joins are infrequent (once per connection)
+    case WebClient.get_channel_info(channel_id) do
+      {:ok, %{"serverId" => server_id}} when server_id == agent_server_id ->
+        {:ok}
+
+      {:ok, %{"serverId" => _other_server}} ->
+        {:error, :agent_wrong_server}
+
+      _ ->
+        {:error, :channel_lookup_failed}
     end
   end
 
@@ -443,6 +471,312 @@ defmodule TavokGatewayWeb.RoomChannel do
   @impl true
   def handle_in("message_delete", _payload, socket) do
     {:reply, {:error, %{reason: "invalid_payload", event: "message_delete"}}, socket}
+  end
+
+  # ---------- Agent-Originated Streaming (DEC-0040 / Session 2) ----------
+  # These handlers allow agents connected via API key to stream tokens
+  # directly through the WebSocket, bypassing the Go streaming proxy.
+  # Only BOT author_type connections can use these events.
+
+  @impl true
+  def handle_in("stream_start", payload, socket) do
+    case socket.assigns[:author_type] do
+      "BOT" ->
+        handle_agent_stream_start(payload, socket)
+
+      _ ->
+        {:reply, {:error, %{reason: "only_agents_can_stream"}}, socket}
+    end
+  end
+
+  @impl true
+  def handle_in("stream_token", payload, socket) do
+    case socket.assigns[:author_type] do
+      "BOT" ->
+        handle_agent_stream_token(payload, socket)
+
+      _ ->
+        {:reply, {:error, %{reason: "only_agents_can_stream"}}, socket}
+    end
+  end
+
+  @impl true
+  def handle_in("stream_complete", payload, socket) do
+    case socket.assigns[:author_type] do
+      "BOT" ->
+        handle_agent_stream_complete(payload, socket)
+
+      _ ->
+        {:reply, {:error, %{reason: "only_agents_can_stream"}}, socket}
+    end
+  end
+
+  @impl true
+  def handle_in("stream_error", payload, socket) do
+    case socket.assigns[:author_type] do
+      "BOT" ->
+        handle_agent_stream_error(payload, socket)
+
+      _ ->
+        {:reply, {:error, %{reason: "only_agents_can_stream"}}, socket}
+    end
+  end
+
+  defp handle_agent_stream_start(_payload, socket) do
+    channel_id = socket.assigns.channel_id
+    bot_id = socket.assigns.user_id
+    bot_name = socket.assigns.display_name
+    bot_avatar_url = socket.assigns[:bot_avatar_url]
+
+    message_id = Ulid.generate()
+
+    case next_sequence(channel_id) do
+      {:ok, sequence} ->
+        seq_str = Integer.to_string(sequence)
+
+        # Broadcast stream_start to all clients
+        Broadcast.broadcast_pre_serialized!(socket, "stream_start", %{
+          messageId: message_id,
+          botId: bot_id,
+          botName: bot_name,
+          botAvatarUrl: bot_avatar_url,
+          sequence: seq_str
+        })
+
+        # Persist placeholder message in background
+        placeholder = %{
+          id: message_id,
+          channelId: channel_id,
+          authorId: bot_id,
+          authorType: "BOT",
+          content: "",
+          type: "STREAMING",
+          streamingStatus: "ACTIVE",
+          sequence: seq_str
+        }
+
+        MessagePersistence.persist_async(placeholder, message_id, channel_id)
+
+        {:reply, {:ok, %{messageId: message_id, sequence: seq_str}}, socket}
+
+      {:error, reason} ->
+        Logger.error("Redis INCR failed for agent stream: #{inspect(reason)}")
+        {:reply, {:error, %{reason: "sequence_failed"}}, socket}
+    end
+  end
+
+  defp handle_agent_stream_token(
+         %{"messageId" => message_id, "token" => token, "index" => index},
+         socket
+       ) do
+    # Broadcast token to all clients — no persistence needed per-token
+    Broadcast.broadcast_pre_serialized!(socket, "stream_token", %{
+      messageId: message_id,
+      token: token,
+      index: index
+    })
+
+    {:noreply, socket}
+  end
+
+  defp handle_agent_stream_token(_payload, socket) do
+    {:reply, {:error, %{reason: "invalid_payload", event: "stream_token"}}, socket}
+  end
+
+  defp handle_agent_stream_complete(
+         %{"messageId" => message_id, "finalContent" => final_content} = payload,
+         socket
+       ) do
+    channel_id = socket.assigns.channel_id
+    thinking_timeline = Map.get(payload, "thinkingTimeline", [])
+    metadata = Map.get(payload, "metadata")
+
+    # Finalize the message via internal API (include metadata + thinkingTimeline for persistence)
+    update_body = %{
+      content: final_content,
+      streamingStatus: "COMPLETE"
+    }
+    update_body = if metadata, do: Map.put(update_body, :metadata, metadata), else: update_body
+    update_body = if thinking_timeline != [], do: Map.put(update_body, :thinkingTimeline, Jason.encode!(thinking_timeline)), else: update_body
+
+    Task.Supervisor.async_nolink(TavokGateway.TaskSupervisor, fn ->
+      case WebClient.update_message(message_id, update_body) do
+        {:ok, _} ->
+          Logger.info("Agent stream finalized: channel=#{channel_id} message=#{message_id}")
+
+        {:error, reason} ->
+          Logger.error("Failed to finalize agent stream: #{inspect(reason)}")
+      end
+    end)
+
+    # Broadcast stream_complete to all clients
+    complete_payload = %{
+      messageId: message_id,
+      finalContent: final_content,
+      thinkingTimeline: thinking_timeline
+    }
+
+    complete_payload =
+      if metadata, do: Map.put(complete_payload, :metadata, metadata), else: complete_payload
+
+    Broadcast.broadcast_pre_serialized!(socket, "stream_complete", complete_payload)
+
+    {:reply, {:ok, %{messageId: message_id}}, socket}
+  end
+
+  defp handle_agent_stream_complete(_payload, socket) do
+    {:reply, {:error, %{reason: "invalid_payload", event: "stream_complete"}}, socket}
+  end
+
+  defp handle_agent_stream_error(
+         %{"messageId" => message_id} = payload,
+         socket
+       ) do
+    channel_id = socket.assigns.channel_id
+    error_msg = Map.get(payload, "error", "Unknown error")
+    partial_content = Map.get(payload, "partialContent", "")
+
+    # Mark message as errored via internal API
+    update_body = %{
+      content: partial_content,
+      streamingStatus: "ERROR"
+    }
+
+    Task.Supervisor.async_nolink(TavokGateway.TaskSupervisor, fn ->
+      case WebClient.update_message(message_id, update_body) do
+        {:ok, _} ->
+          Logger.info("Agent stream error persisted: channel=#{channel_id} message=#{message_id}")
+
+        {:error, reason} ->
+          Logger.error("Failed to persist agent stream error: #{inspect(reason)}")
+      end
+    end)
+
+    # Broadcast stream_error to all clients
+    Broadcast.broadcast_pre_serialized!(socket, "stream_error", %{
+      messageId: message_id,
+      error: error_msg,
+      partialContent: partial_content
+    })
+
+    {:reply, {:ok, %{messageId: message_id}}, socket}
+  end
+
+  defp handle_agent_stream_error(_payload, socket) do
+    {:reply, {:error, %{reason: "invalid_payload", event: "stream_error"}}, socket}
+  end
+
+  # Also handle stream_thinking from agents
+  @impl true
+  def handle_in("stream_thinking", %{"messageId" => message_id, "phase" => phase} = payload, socket) do
+    case socket.assigns[:author_type] do
+      "BOT" ->
+        Broadcast.broadcast_pre_serialized!(socket, "stream_thinking", %{
+          messageId: message_id,
+          phase: phase,
+          detail: Map.get(payload, "detail", ""),
+          timestamp: DateTime.utc_now() |> DateTime.to_iso8601()
+        })
+
+        {:noreply, socket}
+
+      _ ->
+        {:reply, {:error, %{reason: "only_agents_can_stream"}}, socket}
+    end
+  end
+
+  @impl true
+  def handle_in("stream_thinking", _payload, socket) do
+    {:reply, {:error, %{reason: "invalid_payload", event: "stream_thinking"}}, socket}
+  end
+
+  # ---------- Typed Messages (TASK-0039) ----------
+  # Agents can send structured messages (TOOL_CALL, TOOL_RESULT, CODE_BLOCK, ARTIFACT, STATUS)
+  # These are standalone messages (not part of a stream) with JSON content.
+
+  @valid_typed_message_types ~w(TOOL_CALL TOOL_RESULT CODE_BLOCK ARTIFACT STATUS)
+
+  @impl true
+  def handle_in("typed_message", %{"type" => msg_type, "content" => content} = payload, socket) do
+    case socket.assigns[:author_type] do
+      "BOT" when msg_type in @valid_typed_message_types ->
+        handle_agent_typed_message(msg_type, content, payload, socket)
+
+      "BOT" ->
+        {:reply, {:error, %{reason: "invalid_message_type", type: msg_type}}, socket}
+
+      _ ->
+        {:reply, {:error, %{reason: "only_agents_can_send_typed_messages"}}, socket}
+    end
+  end
+
+  @impl true
+  def handle_in("typed_message", _payload, socket) do
+    {:reply, {:error, %{reason: "invalid_payload", event: "typed_message"}}, socket}
+  end
+
+  defp handle_agent_typed_message(msg_type, content, payload, socket) do
+    channel_id = socket.assigns.channel_id
+    bot_id = socket.assigns.user_id
+    bot_name = socket.assigns.display_name
+    bot_avatar_url = socket.assigns[:bot_avatar_url]
+    metadata = Map.get(payload, "metadata")
+
+    message_id = Ulid.generate()
+
+    case next_sequence(channel_id) do
+      {:ok, sequence} ->
+        seq_str = Integer.to_string(sequence)
+
+        # Encode content as JSON string if it's a map
+        content_str =
+          if is_map(content) or is_list(content) do
+            Jason.encode!(content)
+          else
+            to_string(content)
+          end
+
+        # Build broadcast payload
+        broadcast_payload = %{
+          id: message_id,
+          channelId: channel_id,
+          authorId: bot_id,
+          authorType: "BOT",
+          authorName: bot_name,
+          authorAvatarUrl: bot_avatar_url,
+          content: content_str,
+          type: msg_type,
+          streamingStatus: nil,
+          sequence: seq_str,
+          createdAt: DateTime.utc_now() |> DateTime.to_iso8601(),
+          reactions: [],
+          metadata: metadata
+        }
+
+        # Broadcast to all clients
+        Broadcast.broadcast_pre_serialized!(socket, "typed_message", broadcast_payload)
+
+        # Persist in background
+        persist_payload = %{
+          id: message_id,
+          channelId: channel_id,
+          authorId: bot_id,
+          authorType: "BOT",
+          content: content_str,
+          type: msg_type,
+          streamingStatus: nil,
+          sequence: seq_str,
+          metadata: metadata
+        }
+
+        MessagePersistence.persist_async(persist_payload, message_id, channel_id)
+
+        {:reply, {:ok, %{messageId: message_id, sequence: seq_str}}, socket}
+
+      {:error, reason} ->
+        Logger.error("Redis INCR failed for typed message: #{inspect(reason)}")
+        {:reply, {:error, %{reason: "sequence_failed"}}, socket}
+    end
   end
 
   # ---------- Bot trigger helpers ----------
