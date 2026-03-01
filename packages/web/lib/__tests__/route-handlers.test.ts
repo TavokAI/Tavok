@@ -458,4 +458,114 @@ describe("createServerChannelPatchHandler", () => {
     expect(res.status).toBe(200);
     expect(capturedUpdate.defaultBotId).toBeNull();
   });
+
+  // --- TASK-0012: Multi-bot channel assignment tests ---
+
+  it("returns 400 when botIds is not an array", async () => {
+    const handler = createServerChannelPatchHandler({
+      getServerSession: async () => ({ user: { id: "owner-1" } }),
+      authOptions: {},
+      prismaClient: {
+        server: { findUnique: async () => ({ ownerId: "owner-1" }) },
+        channel: { findUnique: async () => ({ serverId: "s1" }) },
+      },
+    });
+    const res = await handler(
+      { json: async () => ({ botIds: "not-an-array" }) },
+      { params: Promise.resolve({ serverId: "s1", channelId: "c1" }) }
+    );
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toBe("botIds must be an array of strings");
+  });
+
+  it("returns 400 when botIds contains non-string elements", async () => {
+    const handler = createServerChannelPatchHandler({
+      getServerSession: async () => ({ user: { id: "owner-1" } }),
+      authOptions: {},
+      prismaClient: {
+        server: { findUnique: async () => ({ ownerId: "owner-1" }) },
+        channel: { findUnique: async () => ({ serverId: "s1" }) },
+      },
+    });
+    const res = await handler(
+      { json: async () => ({ botIds: ["bot-1", 123, "bot-3"] }) },
+      { params: Promise.resolve({ serverId: "s1", channelId: "c1" }) }
+    );
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toBe("botIds must be an array of strings");
+  });
+
+  it("returns 400 when botIds contains bots not in server", async () => {
+    const handler = createServerChannelPatchHandler({
+      getServerSession: async () => ({ user: { id: "owner-1" } }),
+      authOptions: {},
+      prismaClient: {
+        server: { findUnique: async () => ({ ownerId: "owner-1" }) },
+        channel: {
+          findUnique: async () => ({ serverId: "s1" }),
+          update: async ({ data }: any) => ({ id: "c1", name: "general", ...data }),
+        },
+        bot: {
+          findMany: async () => [{ id: "bot-1" }], // Only bot-1 exists
+        },
+      },
+    });
+    const res = await handler(
+      { json: async () => ({ botIds: ["bot-1", "bot-nonexistent"] }) },
+      { params: Promise.resolve({ serverId: "s1", channelId: "c1" }) }
+    );
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toContain("bot-nonexistent");
+  });
+
+  it("accepts valid botIds array and proceeds to update", async () => {
+    const handler = createServerChannelPatchHandler({
+      getServerSession: async () => ({ user: { id: "owner-1" } }),
+      authOptions: {},
+      prismaClient: {
+        server: { findUnique: async () => ({ ownerId: "owner-1" }) },
+        channel: {
+          findUnique: async () => ({ serverId: "s1" }),
+          update: async () => ({
+            id: "c1",
+            name: "general",
+            topic: null,
+            defaultBotId: "bot-1",
+          }),
+        },
+        bot: {
+          findMany: async () => [{ id: "bot-1" }, { id: "bot-2" }],
+        },
+      },
+    });
+    const res = await handler(
+      { json: async () => ({ botIds: ["bot-1", "bot-2"] }) },
+      { params: Promise.resolve({ serverId: "s1", channelId: "c1" }) }
+    );
+    expect(res.status).toBe(200);
+  });
+
+  it("accepts empty botIds array (remove all bots)", async () => {
+    const handler = createServerChannelPatchHandler({
+      getServerSession: async () => ({ user: { id: "owner-1" } }),
+      authOptions: {},
+      prismaClient: {
+        server: { findUnique: async () => ({ ownerId: "owner-1" }) },
+        channel: {
+          findUnique: async () => ({ serverId: "s1" }),
+          update: async () => ({
+            id: "c1",
+            name: "general",
+            topic: null,
+            defaultBotId: null,
+          }),
+        },
+      },
+    });
+    const res = await handler(
+      { json: async () => ({ botIds: [] }) },
+      { params: Promise.resolve({ serverId: "s1", channelId: "c1" }) }
+    );
+    expect(res.status).toBe(200);
+  });
 });

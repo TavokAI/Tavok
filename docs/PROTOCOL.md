@@ -147,7 +147,8 @@ On failure: socket connection is rejected by Phoenix transport (WebSocket close,
 ```json
 {
   "messageId": "01HXY...",
-  "finalContent": "Hello! How can I help you today?"
+  "finalContent": "Hello! How can I help you today?",
+  "thinkingTimeline": [{"phase":"Thinking","timestamp":"..."},{"phase":"Writing","timestamp":"..."}]
 }
 ```
 
@@ -166,11 +167,14 @@ On failure: socket connection is rejected by Phoenix transport (WebSocket close,
 ```json
 {
   "messageId": "01HXY...",
-  "phase": "Thinking"           // "Thinking" | "Writing"
+  "phase": "Thinking",          // configurable via bot's thinkingSteps
+  "timestamp": "2026-03-01T12:00:00.123Z"  // ISO 8601
 }
 ```
 
-Lifecycle: Go Proxy emits `"Thinking"` after loading bot config (about to call LLM), then `"Writing"` when the first token arrives. The frontend clears the phase on `stream_complete` or `stream_error`. See DEC-0037.
+Lifecycle: Go Proxy emits phase[0] from bot config's `thinkingSteps` after loading bot config (about to call LLM), then phase[1] when the first token arrives. Default phases: `["Thinking","Writing"]`. Custom phases (e.g. `["Planning","Researching","Drafting","Reviewing"]`) are configurable per bot. The frontend clears the phase on `stream_complete` or `stream_error`. See DEC-0037.
+
+The Go Proxy accumulates all phase transitions into a `thinkingTimeline` array and includes it in the `PUT /api/internal/messages/{messageId}` finalization payload for post-completion replay.
 
 #### TypingPayload
 
@@ -287,11 +291,12 @@ Published by Go Proxy when the agent's thinking phase changes:
 ```json
 {
   "messageId": "01HXY...",
-  "phase": "Thinking"
+  "phase": "Thinking",
+  "timestamp": "2026-03-01T12:00:00.123Z"
 }
 ```
 
-Phases: `"Thinking"` (about to call LLM) → `"Writing"` (first token received). Cleared by `stream_complete` or `stream_error` on the frontend.
+Phases are configurable per bot via `thinkingSteps` (default: `["Thinking","Writing"]`). Cleared by `stream_complete` or `stream_error` on the frontend.
 
 ### Sequence Number Assignment
 
@@ -493,7 +498,8 @@ Update a streaming message on completion or error. Used by Go Proxy to finalize 
 ```json
 {
   "content": "Hello! How can I help you today?",
-  "streamingStatus": "COMPLETE"
+  "streamingStatus": "COMPLETE",
+  "thinkingTimeline": "[{\"phase\":\"Thinking\",\"timestamp\":\"...\"},{\"phase\":\"Writing\",\"timestamp\":\"...\"}]"
 }
 ```
 
@@ -502,9 +508,12 @@ For errors:
 ```json
 {
   "content": "Hello! How can I",
-  "streamingStatus": "ERROR"
+  "streamingStatus": "ERROR",
+  "thinkingTimeline": "[{\"phase\":\"Thinking\",\"timestamp\":\"...\"}]"
 }
 ```
+
+The `thinkingTimeline` field is optional. If provided, it is a JSON string containing an array of `{phase, timestamp}` objects. Stored in Message.thinkingTimeline for post-completion replay.
 
 **Response:** `200 OK` with updated message fields (`id`, `content`, `streamingStatus`).
 
@@ -703,3 +712,4 @@ In production, these endpoints are not exposed to the public internet.
 | 2026-03-01 | v1.4 | Add GET /api/internal/channels/{id}/bots multi-bot endpoint (TASK-0012, DEC-0038) |
 | 2026-03-01 | v1.5 | Add message_edit/message_delete client events, message_edited/message_deleted broadcasts, PATCH/DELETE internal endpoints, editedAt in MessagePayload (TASK-0014) |
 | 2026-03-01 | v1.6 | Add POST mark-as-read + GET unread state session endpoints, ChannelReadState model, mentionCount increment on message persist (TASK-0015, TASK-0016) |
+| 2026-03-01 | v1.7 | Extend StreamThinkingPayload with timestamp, configurable thinkingSteps per bot, thinkingTimeline persistence in messages, timeline in stream_complete payload (TASK-0011) |

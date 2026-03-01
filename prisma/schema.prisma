@@ -133,6 +133,7 @@ model Message {
   type            MessageType   @default(STANDARD)
   streamingStatus StreamStatus?
   sequence        BigInt // per-channel sequence number (assigned via Redis INCR)
+  thinkingTimeline String?       @db.Text // JSON array of {phase, timestamp} for thinking timeline replay (TASK-0011)
   editedAt        DateTime?                // null if never edited (TASK-0014)
   isDeleted       Boolean       @default(false)  // soft delete (TASK-0014)
   createdAt       DateTime      @default(now())
@@ -252,6 +253,7 @@ model Bot {
   maxTokens       Int         @default(4096)
   isActive        Boolean     @default(true)
   triggerMode     TriggerMode @default(MENTION)
+  thinkingSteps   String?     @db.Text // JSON array of phase labels e.g. ["Planning","Researching","Drafting","Reviewing"]
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
 

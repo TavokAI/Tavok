@@ -53,6 +53,7 @@ export async function GET(
             temperature: cb.bot.temperature,
             maxTokens: cb.bot.maxTokens,
             triggerMode: cb.bot.triggerMode,
+            thinkingSteps: cb.bot.thinkingSteps ? JSON.parse(cb.bot.thinkingSteps) : [], // TASK-0011
           };
         });
 
@@ -91,6 +92,7 @@ export async function GET(
           temperature: bot.temperature,
           maxTokens: bot.maxTokens,
           triggerMode: bot.triggerMode,
+          thinkingSteps: bot.thinkingSteps ? JSON.parse(bot.thinkingSteps) : [], // TASK-0011
         },
       ],
     });

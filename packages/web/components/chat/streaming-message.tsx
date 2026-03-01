@@ -52,6 +52,8 @@ export function StreamingMessage({
   );
   const isActive = message.streamingStatus === "ACTIVE";
   const isError = message.streamingStatus === "ERROR";
+  const isComplete = message.streamingStatus === "COMPLETE";
+  const hasTimeline = isComplete && message.thinkingTimeline && message.thinkingTimeline.length > 0;
 
   // Delete only when not actively streaming, not already deleted, and user has MANAGE_MESSAGES
   const canDelete = !isActive && !message.isDeleted && !!canManageMessages;
@@ -120,6 +122,19 @@ export function StreamingMessage({
             <p className="text-xs text-status-dnd mt-1 font-mono">
               [SYSTEM: Stream ended with an error]
             </p>
+          )}
+          {hasTimeline && (
+            <div className="flex items-center gap-1 mt-1.5">
+              {message.thinkingTimeline!.map((entry, i) => (
+                <div key={i} className="flex items-center gap-1">
+                  {i > 0 && <span className="w-3 h-px bg-text-muted/30" />}
+                  <span className="inline-flex items-center gap-1 rounded px-1 py-0.5 text-[8px] font-bold uppercase tracking-wider bg-background-secondary text-text-muted border border-border">
+                    <span className="w-1 h-1 rounded-full bg-accent-cyan/50" />
+                    {entry.phase}
+                  </span>
+                </div>
+              ))}
+            </div>
           )}
           {!isActive && (
             <ReactionBar
@@ -205,6 +220,19 @@ export function StreamingMessage({
           <p className="text-xs text-status-dnd mt-1 font-mono">
             [SYSTEM: Stream ended with an error]
           </p>
+        )}
+        {hasTimeline && (
+          <div className="flex items-center gap-1 mt-1.5">
+            {message.thinkingTimeline!.map((entry, i) => (
+              <div key={i} className="flex items-center gap-1">
+                {i > 0 && <span className="w-3 h-px bg-text-muted/30" />}
+                <span className="inline-flex items-center gap-1 rounded px-1 py-0.5 text-[8px] font-bold uppercase tracking-wider bg-background-secondary text-text-muted border border-border">
+                  <span className="w-1 h-1 rounded-full bg-accent-cyan/50" />
+                  {entry.phase}
+                </span>
+              </div>
+            ))}
+          </div>
         )}
         {!isActive && (
           <ReactionBar

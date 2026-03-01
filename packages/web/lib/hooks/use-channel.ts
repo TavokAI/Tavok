@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import type { Channel, Socket } from "phoenix";
 import { Presence } from "phoenix";
 import { getSocket } from "@/lib/socket";
@@ -22,6 +22,7 @@ export interface MessagePayload {
   type: string;
   streamingStatus: string | null;
   thinkingPhase?: string;
+  thinkingTimeline?: Array<{ phase: string; timestamp: string }>; // TASK-0011
   sequence: string;
   createdAt: string;
   reactions: ReactionData[];
@@ -61,6 +62,7 @@ interface UseChannelReturn {
   typingUsers: TypingUser[];
   sendTyping: () => void;
   presenceMap: Map<string, PresenceUser>;
+  activeStreamCount: number; // TASK-0012: number of concurrently streaming messages
 }
 
 /**
@@ -292,12 +294,13 @@ export function useChannel(channelId: string | null): UseChannelReturn {
         flushStreamBuffer();
       });
 
-      // stream_complete: set final content and mark COMPLETE
+      // stream_complete: set final content, mark COMPLETE, capture thinking timeline (TASK-0011)
       channel.on("stream_complete", (raw: unknown) => {
         if (!mounted) return;
         const payload = raw as {
           messageId: string;
           finalContent: string;
+          thinkingTimeline?: Array<{ phase: string; timestamp: string }>;
         };
 
         setMessages((prev) =>
@@ -309,6 +312,7 @@ export function useChannel(channelId: string | null): UseChannelReturn {
                   streamingStatus: "COMPLETE",
                   type: "STREAMING",
                   thinkingPhase: undefined,
+                  thinkingTimeline: payload.thinkingTimeline,
                 }
               : m
           )
@@ -533,6 +537,12 @@ export function useChannel(channelId: string | null): UseChannelReturn {
     []
   );
 
+  // TASK-0012: count concurrently active streams
+  const activeStreamCount = useMemo(
+    () => messages.filter((m) => m.streamingStatus === "ACTIVE").length,
+    [messages]
+  );
+
   return {
     messages,
     sendMessage,
@@ -545,5 +555,6 @@ export function useChannel(channelId: string | null): UseChannelReturn {
     typingUsers,
     sendTyping,
     presenceMap,
+    activeStreamCount,
   };
 }

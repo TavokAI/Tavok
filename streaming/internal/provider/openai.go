@@ -15,7 +15,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -26,13 +25,19 @@ import (
 
 // OpenAI implements the Provider interface for OpenAI-compatible APIs.
 type OpenAI struct {
-	client *http.Client // reused across all Stream() calls (ISSUE-005)
+	transport Transport // TASK-0013: pluggable transport layer
 }
 
 func NewOpenAI() *OpenAI {
 	return &OpenAI{
-		client: NewStreamingHTTPClient(), // Shared tuned transport (DEC-0034)
+		transport: NewHTTPSSETransport(), // Default: HTTP SSE (DEC-0034)
 	}
+}
+
+// NewOpenAIWithTransport creates an OpenAI provider with a custom transport.
+// Useful for testing or future transport strategies (WebSocket, gRPC).
+func NewOpenAIWithTransport(t Transport) *OpenAI {
+	return &OpenAI{transport: t}
 }
 
 func (o *OpenAI) Name() string {
@@ -109,23 +114,23 @@ func (o *OpenAI) Stream(ctx context.Context, req StreamRequest, tokens chan<- To
 		httpReq.Header.Set("Authorization", "Bearer "+req.APIKey)
 	}
 
-	// Send request (reuse shared HTTP client — ISSUE-005)
-	resp, err := o.client.Do(httpReq)
-	if err != nil {
-		return nil, fmt.Errorf("http request: %w", err)
+	// TASK-0013: Apply provider-specific custom headers (e.g., OpenRouter HTTP-Referer, X-Title)
+	for k, v := range req.Headers {
+		httpReq.Header.Set(k, v)
 	}
-	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-		return nil, fmt.Errorf("provider returned %d: %s", resp.StatusCode, string(respBody))
+	// Open SSE stream via transport layer (TASK-0013)
+	sseBody, err := o.transport.OpenStream(ctx, httpReq)
+	if err != nil {
+		return nil, err
 	}
+	defer sseBody.Close()
 
 	// Parse SSE stream
 	var finalContent strings.Builder
 	tokenIndex := 0
 
-	err = sse.Parse(resp.Body, func(event sse.Event) {
+	err = sse.Parse(sseBody, func(event sse.Event) {
 		// OpenAI uses "data: [DONE]" to signal end
 		if strings.TrimSpace(event.Data) == "[DONE]" {
 			return

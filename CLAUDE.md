@@ -4,7 +4,7 @@
 
 Tavok is an open-source, self-hostable chat platform that looks and feels like Discord but is purpose-built for AI. The killer feature is native token streaming — AI agents stream responses word-by-word as first-class participants. Multiple agents can work simultaneously in the same channel.
 
-**Status:** V0 complete. V1 in progress — two parallel tracks: Agent wedge (thinking timeline, multi-stream, provider abstraction) + Chat completeness (edit/delete, mentions, unreads).
+**Status:** V1 complete. Agent streaming (thinking timeline, multi-stream, provider abstraction) and chat completeness (edit/delete, mentions, unreads) are shipped.
 
 ## Tech Stack
 

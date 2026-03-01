@@ -421,6 +421,40 @@ export function createServerChannelPatchHandler({
       }
     }
 
+    // TASK-0012: Validate botIds array for multi-bot assignment
+    if ("botIds" in body) {
+      if (!Array.isArray(body.botIds)) {
+        return NextResponse.json(
+          { error: "botIds must be an array of strings" },
+          { status: 400 }
+        );
+      }
+      // Validate all items are non-empty strings
+      for (const id of body.botIds) {
+        if (typeof id !== "string" || id.length === 0) {
+          return NextResponse.json(
+            { error: "botIds must be an array of strings" },
+            { status: 400 }
+          );
+        }
+      }
+      // Validate all bot IDs exist in the server
+      if (body.botIds.length > 0 && prismaClient.bot?.findMany) {
+        const validBots = await prismaClient.bot.findMany({
+          where: { id: { in: body.botIds }, serverId },
+          select: { id: true },
+        });
+        const validIds = new Set(validBots.map((b) => b.id));
+        const invalid = body.botIds.filter((id) => !validIds.has(id));
+        if (invalid.length > 0) {
+          return NextResponse.json(
+            { error: `Bots not found in this server: ${invalid.join(", ")}` },
+            { status: 400 }
+          );
+        }
+      }
+    }
+
     const channel = await prismaClient.channel.update({
       where: { id: channelId },
       data: updateData,

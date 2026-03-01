@@ -39,6 +39,7 @@ export function ChatPanel({ panel }: ChatPanelProps) {
     isConnected,
     typingUsers,
     sendTyping,
+    activeStreamCount,
   } = useChannel(panel.channelId);
 
   useEffect(() => {
@@ -349,6 +350,7 @@ export function ChatPanel({ panel }: ChatPanelProps) {
           hasMoreHistory={hasMoreHistory}
           onLoadHistory={loadHistory}
           onReactionsChange={updateReactions}
+          activeStreamCount={activeStreamCount}
         />
         <TypingIndicator typingUsers={typingUsers} />
         {!isConnected && (

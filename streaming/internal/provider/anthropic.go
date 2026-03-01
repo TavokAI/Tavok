@@ -10,7 +10,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -21,13 +20,19 @@ import (
 
 // Anthropic implements the Provider interface for the Anthropic Claude API.
 type Anthropic struct {
-	client *http.Client // reused across all Stream() calls (ISSUE-005)
+	transport Transport // TASK-0013: pluggable transport layer
 }
 
 func NewAnthropic() *Anthropic {
 	return &Anthropic{
-		client: NewStreamingHTTPClient(), // Shared tuned transport (DEC-0034)
+		transport: NewHTTPSSETransport(), // Default: HTTP SSE (DEC-0034)
 	}
+}
+
+// NewAnthropicWithTransport creates an Anthropic provider with a custom transport.
+// Useful for testing or future transport strategies (WebSocket, gRPC).
+func NewAnthropicWithTransport(t Transport) *Anthropic {
+	return &Anthropic{transport: t}
 }
 
 func (a *Anthropic) Name() string {
@@ -114,17 +119,17 @@ func (a *Anthropic) Stream(ctx context.Context, req StreamRequest, tokens chan<-
 	httpReq.Header.Set("x-api-key", req.APIKey)
 	httpReq.Header.Set("anthropic-version", "2023-06-01")
 
-	// Send request (reuse shared HTTP client — ISSUE-005)
-	resp, err := a.client.Do(httpReq)
-	if err != nil {
-		return nil, fmt.Errorf("http request: %w", err)
+	// TASK-0013: Apply provider-specific custom headers
+	for k, v := range req.Headers {
+		httpReq.Header.Set(k, v)
 	}
-	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-		return nil, fmt.Errorf("provider returned %d: %s", resp.StatusCode, string(respBody))
+	// Open SSE stream via transport layer (TASK-0013)
+	respBody, err := a.transport.OpenStream(ctx, httpReq)
+	if err != nil {
+		return nil, err
 	}
+	defer respBody.Close()
 
 	// Parse SSE stream
 	var finalContent strings.Builder
@@ -136,7 +141,7 @@ func (a *Anthropic) Stream(ctx context.Context, req StreamRequest, tokens chan<-
 	emptyTextDeltas := 0
 	var stopReason string
 
-	err = sse.Parse(resp.Body, func(event sse.Event) {
+	err = sse.Parse(respBody, func(event sse.Event) {
 		eventCounts[event.EventType]++
 
 		switch event.EventType {

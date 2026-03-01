@@ -17,6 +17,7 @@ interface Bot {
   maxTokens: number;
   isActive: boolean;
   triggerMode: string;
+  thinkingSteps: string[] | null;
 }
 
 interface ManageBotsModalProps {
@@ -51,6 +52,7 @@ export function ManageBotsModal({ isOpen, onClose }: ManageBotsModalProps) {
   const [temperature, setTemperature] = useState("0.7");
   const [maxTokens, setMaxTokens] = useState("4096");
   const [triggerMode, setTriggerMode] = useState("ALWAYS");
+  const [thinkingSteps, setThinkingSteps] = useState("");
 
   const fetchBots = useCallback(async () => {
     if (!currentServerId) return;
@@ -84,6 +86,7 @@ export function ManageBotsModal({ isOpen, onClose }: ManageBotsModalProps) {
     setTemperature("0.7");
     setMaxTokens("4096");
     setTriggerMode("ALWAYS");
+    setThinkingSteps("");
     setError("");
     setEditingBot(null);
   }
@@ -108,6 +111,7 @@ export function ManageBotsModal({ isOpen, onClose }: ManageBotsModalProps) {
     setTemperature(String(bot.temperature));
     setMaxTokens(String(bot.maxTokens));
     setTriggerMode(bot.triggerMode);
+    setThinkingSteps(bot.thinkingSteps ? bot.thinkingSteps.join(", ") : "");
     setShowForm(true);
   }
 
@@ -127,6 +131,9 @@ export function ManageBotsModal({ isOpen, onClose }: ManageBotsModalProps) {
       temperature: parseFloat(temperature),
       maxTokens: parseInt(maxTokens),
       triggerMode,
+      thinkingSteps: thinkingSteps.trim()
+        ? thinkingSteps.split(",").map((s: string) => s.trim()).filter(Boolean)
+        : undefined,
     };
 
     // Only include apiKey if provided (for edit, empty means "keep existing")
@@ -341,6 +348,13 @@ export function ManageBotsModal({ isOpen, onClose }: ManageBotsModalProps) {
               <option value="MENTION">Only when @mentioned</option>
             </select>
           </div>
+
+          <Input
+            label="Thinking Steps (comma-separated, optional)"
+            value={thinkingSteps}
+            onChange={(e) => setThinkingSteps(e.target.value)}
+            placeholder="Thinking, Writing"
+          />
 
           {error && (
             <p className="text-sm text-status-danger">{error}</p>

@@ -26,7 +26,7 @@ func TestOpenAIStreamSuccess(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	p := &OpenAI{client: srv.Client()}
+	p := &OpenAI{transport: &HTTPSSETransport{Client: srv.Client()}}
 	tokens := make(chan Token, 100)
 
 	result, err := p.Stream(context.Background(), StreamRequest{
@@ -53,7 +53,7 @@ func TestOpenAIStreamAPIError(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	p := &OpenAI{client: srv.Client()}
+	p := &OpenAI{transport: &HTTPSSETransport{Client: srv.Client()}}
 	tokens := make(chan Token, 100)
 
 	_, err := p.Stream(context.Background(), StreamRequest{
@@ -76,7 +76,7 @@ func TestOpenAIStreamRateLimit(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	p := &OpenAI{client: srv.Client()}
+	p := &OpenAI{transport: &HTTPSSETransport{Client: srv.Client()}}
 	tokens := make(chan Token, 100)
 
 	_, err := p.Stream(context.Background(), StreamRequest{
@@ -104,7 +104,7 @@ func TestOpenAIStreamMalformedJSON(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	p := &OpenAI{client: srv.Client()}
+	p := &OpenAI{transport: &HTTPSSETransport{Client: srv.Client()}}
 	tokens := make(chan Token, 100)
 
 	result, err := p.Stream(context.Background(), StreamRequest{
@@ -129,7 +129,7 @@ func TestOpenAIStreamEmptyResponse(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	p := &OpenAI{client: srv.Client()}
+	p := &OpenAI{transport: &HTTPSSETransport{Client: srv.Client()}}
 	tokens := make(chan Token, 100)
 
 	result, err := p.Stream(context.Background(), StreamRequest{
@@ -159,7 +159,7 @@ func TestOpenAIStreamEndpointAutoSuffix(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	p := &OpenAI{client: srv.Client()}
+	p := &OpenAI{transport: &HTTPSSETransport{Client: srv.Client()}}
 	tokens := make(chan Token, 100)
 
 	// Don't include /v1/chat/completions — should be auto-appended
@@ -182,7 +182,7 @@ func TestOpenAIStreamContextCancellation(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	p := &OpenAI{client: srv.Client()}
+	p := &OpenAI{transport: &HTTPSSETransport{Client: srv.Client()}}
 	tokens := make(chan Token, 100)
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
@@ -219,7 +219,7 @@ func TestAnthropicStreamSuccess(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	p := &Anthropic{client: srv.Client()}
+	p := &Anthropic{transport: &HTTPSSETransport{Client: srv.Client()}}
 	tokens := make(chan Token, 100)
 
 	result, err := p.Stream(context.Background(), StreamRequest{
@@ -248,7 +248,7 @@ func TestAnthropicStreamAPIError(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	p := &Anthropic{client: srv.Client()}
+	p := &Anthropic{transport: &HTTPSSETransport{Client: srv.Client()}}
 	tokens := make(chan Token, 100)
 
 	_, err := p.Stream(context.Background(), StreamRequest{
@@ -273,7 +273,7 @@ func TestAnthropicStreamErrorEvent(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	p := &Anthropic{client: srv.Client()}
+	p := &Anthropic{transport: &HTTPSSETransport{Client: srv.Client()}}
 	tokens := make(chan Token, 100)
 
 	_, err := p.Stream(context.Background(), StreamRequest{
@@ -300,7 +300,7 @@ func TestAnthropicStreamDefaultMaxTokens(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	p := &Anthropic{client: srv.Client()}
+	p := &Anthropic{transport: &HTTPSSETransport{Client: srv.Client()}}
 	tokens := make(chan Token, 100)
 
 	// MaxTokens=0 should default to 4096
@@ -330,7 +330,7 @@ func TestAnthropicStreamEndpointAutoSuffix(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	p := &Anthropic{client: srv.Client()}
+	p := &Anthropic{transport: &HTTPSSETransport{Client: srv.Client()}}
 	tokens := make(chan Token, 100)
 
 	p.Stream(context.Background(), StreamRequest{
@@ -340,4 +340,190 @@ func TestAnthropicStreamEndpointAutoSuffix(t *testing.T) {
 		MaxTokens:       1024,
 		ContextMessages: []StreamMessage{{Role: "user", Content: "hi"}},
 	}, tokens)
+}
+
+// --- TASK-0013: Transport Abstraction + Custom Headers Tests ---
+
+func TestTransportInterfaceOpenAI(t *testing.T) {
+	// Verify OpenAI provider uses the Transport interface correctly
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, "data: {\"choices\":[{\"delta\":{\"content\":\"ok\"}}]}\n\n")
+		fmt.Fprint(w, "data: [DONE]\n\n")
+	}))
+	defer srv.Close()
+
+	// Use NewOpenAIWithTransport constructor
+	transport := &HTTPSSETransport{Client: srv.Client()}
+	p := NewOpenAIWithTransport(transport)
+	tokens := make(chan Token, 100)
+
+	result, err := p.Stream(context.Background(), StreamRequest{
+		APIEndpoint: srv.URL + "/v1/chat/completions",
+		Model:       "gpt-4",
+	}, tokens)
+
+	if err != nil {
+		t.Fatalf("Stream() error = %v", err)
+	}
+	if result.FinalContent != "ok" {
+		t.Errorf("FinalContent = %q, want %q", result.FinalContent, "ok")
+	}
+}
+
+func TestTransportInterfaceAnthropic(t *testing.T) {
+	// Verify Anthropic provider uses the Transport interface correctly
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"text_delta\",\"text\":\"ok\"}}\n\n")
+		fmt.Fprint(w, "event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n")
+	}))
+	defer srv.Close()
+
+	// Use NewAnthropicWithTransport constructor
+	transport := &HTTPSSETransport{Client: srv.Client()}
+	p := NewAnthropicWithTransport(transport)
+	tokens := make(chan Token, 100)
+
+	result, err := p.Stream(context.Background(), StreamRequest{
+		APIEndpoint:     srv.URL + "/v1/messages",
+		APIKey:          "key",
+		Model:           "claude-3-haiku-20240307",
+		MaxTokens:       1024,
+		ContextMessages: []StreamMessage{{Role: "user", Content: "hi"}},
+	}, tokens)
+
+	if err != nil {
+		t.Fatalf("Stream() error = %v", err)
+	}
+	if result.FinalContent != "ok" {
+		t.Errorf("FinalContent = %q, want %q", result.FinalContent, "ok")
+	}
+}
+
+func TestCustomHeadersOpenAI(t *testing.T) {
+	// TASK-0013: Verify custom headers (e.g., OpenRouter) are passed through
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("HTTP-Referer") != "https://tavok.ai" {
+			t.Errorf("HTTP-Referer = %q, want %q", r.Header.Get("HTTP-Referer"), "https://tavok.ai")
+		}
+		if r.Header.Get("X-Title") != "Tavok" {
+			t.Errorf("X-Title = %q, want %q", r.Header.Get("X-Title"), "Tavok")
+		}
+
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, "data: {\"choices\":[{\"delta\":{\"content\":\"hello\"}}]}\n\n")
+		fmt.Fprint(w, "data: [DONE]\n\n")
+	}))
+	defer srv.Close()
+
+	p := &OpenAI{transport: &HTTPSSETransport{Client: srv.Client()}}
+	tokens := make(chan Token, 100)
+
+	result, err := p.Stream(context.Background(), StreamRequest{
+		APIEndpoint: srv.URL + "/v1/chat/completions",
+		APIKey:      "key",
+		Model:       "gpt-4",
+		Headers: map[string]string{
+			"HTTP-Referer": "https://tavok.ai",
+			"X-Title":      "Tavok",
+		},
+	}, tokens)
+
+	if err != nil {
+		t.Fatalf("Stream() error = %v", err)
+	}
+	if result.FinalContent != "hello" {
+		t.Errorf("FinalContent = %q, want %q", result.FinalContent, "hello")
+	}
+}
+
+func TestCustomHeadersAnthropic(t *testing.T) {
+	// TASK-0013: Verify custom headers are passed through for Anthropic too
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("X-Custom") != "test-value" {
+			t.Errorf("X-Custom = %q, want %q", r.Header.Get("X-Custom"), "test-value")
+		}
+		// Verify standard Anthropic headers are still set
+		if r.Header.Get("x-api-key") != "sk-ant" {
+			t.Errorf("x-api-key = %q, want %q", r.Header.Get("x-api-key"), "sk-ant")
+		}
+
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, "event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n")
+	}))
+	defer srv.Close()
+
+	p := &Anthropic{transport: &HTTPSSETransport{Client: srv.Client()}}
+	tokens := make(chan Token, 100)
+
+	p.Stream(context.Background(), StreamRequest{
+		APIEndpoint:     srv.URL + "/v1/messages",
+		APIKey:          "sk-ant",
+		Model:           "claude-3-haiku-20240307",
+		MaxTokens:       1024,
+		ContextMessages: []StreamMessage{{Role: "user", Content: "hi"}},
+		Headers: map[string]string{
+			"X-Custom": "test-value",
+		},
+	}, tokens)
+}
+
+func TestHTTPSSETransportErrorResponse(t *testing.T) {
+	// Verify transport returns proper error for non-200 responses
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+		w.Write([]byte(`{"error":"Invalid API key"}`))
+	}))
+	defer srv.Close()
+
+	transport := &HTTPSSETransport{Client: srv.Client()}
+	req, _ := http.NewRequest("POST", srv.URL, nil)
+
+	_, err := transport.OpenStream(context.Background(), req)
+	if err == nil {
+		t.Fatal("expected error for 401 response")
+	}
+	if !strings.Contains(err.Error(), "401") {
+		t.Errorf("error = %v, should contain 401", err)
+	}
+}
+
+func TestHTTPSSETransportSuccess(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("data: test\n\n"))
+	}))
+	defer srv.Close()
+
+	transport := &HTTPSSETransport{Client: srv.Client()}
+	req, _ := http.NewRequest("POST", srv.URL, nil)
+
+	body, err := transport.OpenStream(context.Background(), req)
+	if err != nil {
+		t.Fatalf("OpenStream() error = %v", err)
+	}
+	defer body.Close()
+
+	// Verify we got a readable body
+	buf := make([]byte, 100)
+	n, _ := body.Read(buf)
+	if n == 0 {
+		t.Error("expected to read data from body")
+	}
+}
+
+func TestNewHTTPSSETransportDefaults(t *testing.T) {
+	transport := NewHTTPSSETransport()
+	if transport == nil {
+		t.Fatal("NewHTTPSSETransport() returned nil")
+	}
+	if transport.Client == nil {
+		t.Fatal("Client is nil")
+	}
 }

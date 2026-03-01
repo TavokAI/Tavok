@@ -60,7 +60,7 @@ export async function PUT(
 
   const { messageId } = await params;
   const body = await request.json();
-  const { content, streamingStatus } = body;
+  const { content, streamingStatus, thinkingTimeline } = body;
 
   if (!content && content !== "" && !streamingStatus) {
     return NextResponse.json(
@@ -73,6 +73,7 @@ export async function PUT(
     const updateData: Record<string, unknown> = {};
     if (content !== undefined) updateData.content = content;
     if (streamingStatus) updateData.streamingStatus = streamingStatus;
+    if (thinkingTimeline) updateData.thinkingTimeline = thinkingTimeline; // TASK-0011
 
     const message = await prisma.message.update({
       where: { id: messageId },

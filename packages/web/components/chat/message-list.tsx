@@ -17,6 +17,8 @@ interface MessageListProps {
   onDeleteMessage?: (messageId: string) => void;
   /** TASK-0016: sequence of last message the user has read (for divider placement) */
   lastReadSeq?: string | null;
+  /** TASK-0012: number of concurrently active streams */
+  activeStreamCount?: number;
 }
 
 export function MessageList({
@@ -29,6 +31,7 @@ export function MessageList({
   onEditMessage,
   onDeleteMessage,
   lastReadSeq,
+  activeStreamCount = 0,
 }: MessageListProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const isAtBottomRef = useRef(true);
@@ -106,6 +109,16 @@ export function MessageList({
               Be the first to send a message!
             </p>
           </div>
+        </div>
+      )}
+
+      {/* TASK-0012: Active streams indicator for multi-bot channels */}
+      {activeStreamCount > 1 && (
+        <div className="sticky top-0 z-10 flex justify-center py-1.5">
+          <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium bg-accent-cyan/10 text-accent-cyan border border-accent-cyan/20">
+            <span className="w-1.5 h-1.5 rounded-full bg-accent-cyan animate-pulse" />
+            {activeStreamCount} agents responding
+          </span>
         </div>
       )}
 

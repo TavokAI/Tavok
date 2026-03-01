@@ -207,6 +207,132 @@ func TestFinalizeMessageWithRetryContextCancelled(t *testing.T) {
 	}
 }
 
+// --- TASK-0011: Thinking Timeline Tests ---
+
+func TestGetThinkingPhaseDefaults(t *testing.T) {
+	bot := &BotConfig{}
+	// No ThinkingSteps configured — should use defaults
+	if got := bot.GetThinkingPhase(0); got != "Thinking" {
+		t.Errorf("GetThinkingPhase(0) = %q, want %q", got, "Thinking")
+	}
+	if got := bot.GetThinkingPhase(1); got != "Writing" {
+		t.Errorf("GetThinkingPhase(1) = %q, want %q", got, "Writing")
+	}
+	// Out of range → returns last
+	if got := bot.GetThinkingPhase(5); got != "Writing" {
+		t.Errorf("GetThinkingPhase(5) = %q, want %q (last)", got, "Writing")
+	}
+}
+
+func TestGetThinkingPhaseCustom(t *testing.T) {
+	bot := &BotConfig{
+		ThinkingSteps: []string{"Planning", "Researching", "Drafting", "Reviewing"},
+	}
+	if got := bot.GetThinkingPhase(0); got != "Planning" {
+		t.Errorf("GetThinkingPhase(0) = %q, want %q", got, "Planning")
+	}
+	if got := bot.GetThinkingPhase(2); got != "Drafting" {
+		t.Errorf("GetThinkingPhase(2) = %q, want %q", got, "Drafting")
+	}
+	if got := bot.GetThinkingPhase(3); got != "Reviewing" {
+		t.Errorf("GetThinkingPhase(3) = %q, want %q", got, "Reviewing")
+	}
+	// Out of range → returns last
+	if got := bot.GetThinkingPhase(10); got != "Reviewing" {
+		t.Errorf("GetThinkingPhase(10) = %q, want %q (last)", got, "Reviewing")
+	}
+}
+
+func TestGetThinkingPhaseNegativeIndex(t *testing.T) {
+	bot := &BotConfig{ThinkingSteps: []string{"Alpha", "Beta"}}
+	if got := bot.GetThinkingPhase(-1); got != "Beta" {
+		t.Errorf("GetThinkingPhase(-1) = %q, want %q (last)", got, "Beta")
+	}
+}
+
+func TestGetBotWithThinkingSteps(t *testing.T) {
+	expected := BotConfig{
+		ID:            "bot-ts",
+		Name:          "TimelineBot",
+		LLMProvider:   "openai",
+		LLMModel:      "gpt-4",
+		APIEndpoint:   "https://api.openai.com",
+		APIKey:        "sk-key",
+		ThinkingSteps: []string{"Planning", "Coding", "Reviewing"},
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(expected)
+	}))
+	defer srv.Close()
+
+	loader := NewLoader(srv.URL, "secret")
+	bot, err := loader.GetBot("bot-ts")
+
+	if err != nil {
+		t.Fatalf("GetBot() error = %v", err)
+	}
+	if len(bot.ThinkingSteps) != 3 {
+		t.Fatalf("ThinkingSteps len = %d, want 3", len(bot.ThinkingSteps))
+	}
+	if bot.ThinkingSteps[0] != "Planning" {
+		t.Errorf("ThinkingSteps[0] = %q, want %q", bot.ThinkingSteps[0], "Planning")
+	}
+}
+
+func TestFinalizeMessageWithTimelineSuccess(t *testing.T) {
+	var capturedBody map[string]string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "PUT" {
+			t.Errorf("method = %q, want PUT", r.Method)
+		}
+		json.NewDecoder(r.Body).Decode(&capturedBody)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	loader := NewLoader(srv.URL, "secret")
+	timeline := `[{"phase":"Thinking","timestamp":"2026-03-01T12:00:00Z"},{"phase":"Writing","timestamp":"2026-03-01T12:00:01Z"}]`
+	err := loader.FinalizeMessageWithTimeline("msg-tl", "final content", "COMPLETE", timeline, nil)
+
+	if err != nil {
+		t.Fatalf("FinalizeMessageWithTimeline() error = %v", err)
+	}
+	if capturedBody["thinkingTimeline"] != timeline {
+		t.Errorf("thinkingTimeline = %q, want %q", capturedBody["thinkingTimeline"], timeline)
+	}
+	if capturedBody["content"] != "final content" {
+		t.Errorf("content = %q, want %q", capturedBody["content"], "final content")
+	}
+}
+
+func TestFinalizeMessageWithTimelineRetry(t *testing.T) {
+	var attempts atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempt := attempts.Add(1)
+		if attempt <= 1 {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte(`error`))
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	loader := NewLoader(srv.URL, "secret")
+	err := loader.FinalizeMessageWithTimelineCtx(
+		context.Background(), "msg-tl", "content", "COMPLETE", "[]", nil,
+	)
+
+	if err != nil {
+		t.Fatalf("FinalizeMessageWithTimeline retry error = %v", err)
+	}
+	if attempts.Load() != 2 {
+		t.Errorf("attempts = %d, want 2", attempts.Load())
+	}
+}
+
 func TestFinalizeMessageSetsHeaders(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Content-Type") != "application/json" {

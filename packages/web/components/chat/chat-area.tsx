@@ -55,6 +55,7 @@ export function ChatArea({
     typingUsers,
     sendTyping,
     presenceMap,
+    activeStreamCount,
   } = useChannel(channelId);
 
   // Delete modal state (TASK-0014)
@@ -125,6 +126,7 @@ export function ChatArea({
         onEditMessage={editMessage}
         onDeleteMessage={handleDeleteRequest}
         lastReadSeq={lastReadSeqRef.current}
+        activeStreamCount={activeStreamCount}
       />
       <TypingIndicator typingUsers={typingUsers} />
       <MessageInput

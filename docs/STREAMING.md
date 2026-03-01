@@ -73,6 +73,41 @@ The `Stream` method opens a connection to the LLM API, parses the response forma
 
 Unknown provider names fall back to OpenAI-compatible with a warning log.
 
+### Transport Layer (TASK-0013)
+
+The transport layer decouples HTTP connection mechanics from response format parsing.
+
+**Transport interface** (`streaming/internal/provider/transport.go`):
+
+```go
+type Transport interface {
+    OpenStream(ctx context.Context, req *http.Request) (io.ReadCloser, error)
+}
+```
+
+**HTTPSSETransport** is the default implementation used by all providers. It opens an HTTP POST connection and returns the SSE response body for parsing.
+
+Each provider is composed of:
+- **Transport**: How to connect (HTTP SSE today, WebSocket/gRPC in future)
+- **Format adapter**: How to parse the response (OpenAI vs Anthropic event formats)
+
+Providers accept custom transports via `NewOpenAIWithTransport(t)` and `NewAnthropicWithTransport(t)` for testing and extensibility.
+
+### Custom Headers
+
+`StreamRequest.Headers` supports provider-specific headers. Example for OpenRouter:
+
+```go
+StreamRequest{
+    Headers: map[string]string{
+        "HTTP-Referer": "https://tavok.ai",
+        "X-Title":      "Tavok",
+    },
+}
+```
+
+Headers are applied after standard provider headers, so they can override defaults if needed.
+
 ### Shared Infrastructure
 
 **HTTP Client** (`streaming/internal/provider/http.go`): All providers use `NewStreamingHTTPClient()` with tuned transport settings (DEC-0034): MaxConnsPerHost=200, MaxIdleConnsPerHost=20, IdleConnTimeout=120s, Timeout=5min.
@@ -87,9 +122,13 @@ Unknown provider names fall back to OpenAI-compatible with a warning log.
 
 **New API format** (e.g., Google Gemini):
 1. Create `streaming/internal/provider/gemini.go` implementing `Provider`
-2. Use `NewStreamingHTTPClient()` for the HTTP client
+2. Use `NewHTTPSSETransport()` for the transport (or implement a custom `Transport`)
 3. Implement format-specific request building, auth headers, and SSE event parsing
 4. Register in `NewRegistry()`
+
+**New transport** (e.g., WebSocket for OpenAI Realtime):
+1. Implement the `Transport` interface
+2. Use `NewOpenAIWithTransport(myTransport)` to inject it
 
 All providers produce the same output: `{messageId, token, index}`
 
@@ -157,13 +196,13 @@ Agents emit thinking state changes during execution. New protocol events (to be 
 
 Thinking states flow through the same pipeline as tokens: Go → Redis → Gateway → WebSocket → Client. States are persisted with the message for replay.
 
-### Provider Transport Strategies (DEC-0024, DEC-0036)
+### Provider Transport Strategies (DEC-0024, DEC-0036, TASK-0013)
 
-V1 extracts shared HTTP client configuration and keeps the Provider interface clean. All current providers use HTTP SSE transport. A separate Transport interface is deferred until a non-HTTP-SSE transport (WebSocket, gRPC) is needed — see DEC-0036.
+V1 implements the `Transport` interface, decoupling HTTP mechanics from format parsing. Both OpenAI and Anthropic providers now accept pluggable transports. Custom headers support enables OpenRouter integration.
 
-Current transport: **HTTP SSE** for all providers (OpenAI, Anthropic, Ollama, OpenRouter, custom).
+Current transport: **HTTPSSETransport** for all providers (OpenAI, Anthropic, Ollama, OpenRouter, custom).
 
-Future transports (when needed):
+Future transports (extension points ready):
 - **WebSocket**: OpenAI Realtime/Responses API
 - **gRPC**: Local model inference
 

@@ -185,6 +185,135 @@ func TestStreamRequestDeserializationEmpty(t *testing.T) {
 	}
 }
 
+// --- TASK-0012: Multi-Stream in One Channel Tests ---
+
+func TestMultipleBotsTrackedIndependently(t *testing.T) {
+	manager := &Manager{
+		logger:              silentLogger(),
+		active:              make(map[string]struct{}),
+		maxConcurrentStreams: 10,
+		semaphore:           make(chan struct{}, 10),
+	}
+
+	// Simulate 3 bots streaming concurrently in the same channel
+	// Each bot gets a unique messageId (per the multi-bot protocol)
+	botMessages := []string{"msg-bot1-ch1", "msg-bot2-ch1", "msg-bot3-ch1"}
+
+	for _, msgID := range botMessages {
+		if !manager.tryAcquireSlot() {
+			t.Fatalf("failed to acquire slot for %s", msgID)
+		}
+		manager.mu.Lock()
+		manager.active[msgID] = struct{}{}
+		manager.mu.Unlock()
+	}
+
+	if manager.ActiveCount() != 3 {
+		t.Fatalf("expected 3 active streams, got %d", manager.ActiveCount())
+	}
+
+	// First bot completes
+	manager.mu.Lock()
+	delete(manager.active, "msg-bot1-ch1")
+	manager.mu.Unlock()
+	manager.releaseSlot()
+
+	if manager.ActiveCount() != 2 {
+		t.Fatalf("expected 2 active streams after bot1 completes, got %d", manager.ActiveCount())
+	}
+
+	// Second bot errors — still tracked until removed
+	manager.mu.Lock()
+	delete(manager.active, "msg-bot2-ch1")
+	manager.mu.Unlock()
+	manager.releaseSlot()
+
+	if manager.ActiveCount() != 1 {
+		t.Fatalf("expected 1 active stream after bot2 errors, got %d", manager.ActiveCount())
+	}
+
+	// Third bot completes
+	manager.mu.Lock()
+	delete(manager.active, "msg-bot3-ch1")
+	manager.mu.Unlock()
+	manager.releaseSlot()
+
+	if manager.ActiveCount() != 0 {
+		t.Fatalf("expected 0 active streams after all complete, got %d", manager.ActiveCount())
+	}
+}
+
+func TestMultiStreamSemaphoreIsolation(t *testing.T) {
+	// With concurrency limit of 3, exactly 3 bots can stream simultaneously
+	manager := &Manager{
+		logger:              silentLogger(),
+		active:              make(map[string]struct{}),
+		maxConcurrentStreams: 3,
+		semaphore:           make(chan struct{}, 3),
+	}
+
+	// Acquire 3 slots (one per bot)
+	for i := 0; i < 3; i++ {
+		if !manager.tryAcquireSlot() {
+			t.Fatalf("expected slot %d to be acquired", i)
+		}
+	}
+
+	// 4th bot in same channel should be rejected (semaphore full)
+	if manager.tryAcquireSlot() {
+		t.Fatal("expected 4th concurrent stream to be rejected")
+	}
+
+	// Release one slot — 4th bot can now proceed
+	manager.releaseSlot()
+	if !manager.tryAcquireSlot() {
+		t.Fatal("expected slot to be available after release")
+	}
+}
+
+func TestMultiStreamRequestDeserialization(t *testing.T) {
+	// Verify two stream requests for the same channel but different bots
+	// can coexist without field collision
+	raw1 := `{
+		"channelId": "ch-1",
+		"messageId": "msg-bot1",
+		"botId": "bot-1",
+		"triggerMessageId": "trigger-1",
+		"contextMessages": [{"role": "user", "content": "hello"}]
+	}`
+	raw2 := `{
+		"channelId": "ch-1",
+		"messageId": "msg-bot2",
+		"botId": "bot-2",
+		"triggerMessageId": "trigger-1",
+		"contextMessages": [{"role": "user", "content": "hello"}]
+	}`
+
+	var req1, req2 streamRequest
+	if err := json.Unmarshal([]byte(raw1), &req1); err != nil {
+		t.Fatalf("unmarshal req1: %v", err)
+	}
+	if err := json.Unmarshal([]byte(raw2), &req2); err != nil {
+		t.Fatalf("unmarshal req2: %v", err)
+	}
+
+	// Same channel, same trigger
+	if req1.ChannelID != req2.ChannelID {
+		t.Errorf("ChannelIDs should match: %q != %q", req1.ChannelID, req2.ChannelID)
+	}
+	if req1.TriggerMsgID != req2.TriggerMsgID {
+		t.Errorf("TriggerMsgIDs should match: %q != %q", req1.TriggerMsgID, req2.TriggerMsgID)
+	}
+
+	// Different message IDs and bot IDs
+	if req1.MessageID == req2.MessageID {
+		t.Error("MessageIDs should differ for multi-bot")
+	}
+	if req1.BotID == req2.BotID {
+		t.Error("BotIDs should differ for multi-bot")
+	}
+}
+
 func TestActiveCountIsThreadSafe(t *testing.T) {
 	manager := &Manager{
 		logger:              silentLogger(),
