@@ -44,6 +44,7 @@ export async function GET(
             topic: true,
             position: true,
             defaultBotId: true,
+            channelBots: { select: { botId: true } },
           },
         },
         _count: { select: { members: true } },
@@ -59,7 +60,11 @@ export async function GET(
       name: server.name,
       iconUrl: server.iconUrl,
       ownerId: server.ownerId,
-      channels: server.channels,
+      channels: server.channels.map((ch) => ({
+        ...ch,
+        botIds: ch.channelBots.map((cb: { botId: string }) => cb.botId),
+        channelBots: undefined,
+      })),
       memberCount: server._count.members,
     });
   } catch (error) {

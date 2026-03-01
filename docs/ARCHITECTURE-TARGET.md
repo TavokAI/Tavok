@@ -203,7 +203,7 @@ Default: pgvector in existing PostgreSQL. Abstract interface allows swapping to 
 
 ## What NOT to Build
 
-See `docs/HiveChat.md` "What NOT To Build Yet" section, plus:
+See `docs/Tavok.md` "What NOT To Build Yet" section, plus:
 
 - LangChain/CrewAI as a dependency (we ARE the runtime)
 - Python anywhere in the stack

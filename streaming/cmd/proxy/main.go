@@ -1,4 +1,4 @@
-// HiveChat Streaming Proxy — Go service for LLM API streaming
+// Tavok Streaming Proxy — Go service for LLM API streaming
 //
 // This service:
 // - Listens for stream requests on Redis pub/sub
@@ -22,11 +22,11 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/hivechat/streaming/internal/config"
-	"github.com/hivechat/streaming/internal/gateway"
-	"github.com/hivechat/streaming/internal/health"
-	"github.com/hivechat/streaming/internal/provider"
-	"github.com/hivechat/streaming/internal/stream"
+	"github.com/TavokAI/Tavok/streaming/internal/config"
+	"github.com/TavokAI/Tavok/streaming/internal/gateway"
+	"github.com/TavokAI/Tavok/streaming/internal/health"
+	"github.com/TavokAI/Tavok/streaming/internal/provider"
+	"github.com/TavokAI/Tavok/streaming/internal/stream"
 	"github.com/redis/go-redis/v9"
 )
 

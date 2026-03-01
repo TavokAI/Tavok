@@ -101,7 +101,7 @@ export function usePanelState() {
   // Load from localStorage on mount
   useEffect(() => {
     try {
-      const saved = localStorage.getItem("hivechat-panels");
+      const saved = localStorage.getItem("tavok-panels");
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
@@ -146,7 +146,7 @@ export function usePanelState() {
   // Save to localStorage when panels change
   useEffect(() => {
     if (isLoaded) {
-      localStorage.setItem("hivechat-panels", JSON.stringify(panels));
+      localStorage.setItem("tavok-panels", JSON.stringify(panels));
     }
   }, [panels, isLoaded]);
 

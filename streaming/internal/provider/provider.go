@@ -17,14 +17,15 @@ type StreamMessage struct {
 
 // StreamRequest contains everything needed to start an LLM stream.
 type StreamRequest struct {
-	BotID           string          `json:"botId"`
-	Model           string          `json:"model"`
-	APIEndpoint     string          `json:"apiEndpoint"`
-	APIKey          string          `json:"apiKey"`
-	SystemPrompt    string          `json:"systemPrompt"`
-	Temperature     float64         `json:"temperature"`
-	MaxTokens       int             `json:"maxTokens"`
-	ContextMessages []StreamMessage `json:"contextMessages"`
+	BotID           string            `json:"botId"`
+	Model           string            `json:"model"`
+	APIEndpoint     string            `json:"apiEndpoint"`
+	APIKey          string            `json:"apiKey"`
+	SystemPrompt    string            `json:"systemPrompt"`
+	Temperature     float64           `json:"temperature"`
+	MaxTokens       int               `json:"maxTokens"`
+	ContextMessages []StreamMessage   `json:"contextMessages"`
+	Headers         map[string]string `json:"headers,omitempty"` // TASK-0013: provider-specific headers (e.g., OpenRouter HTTP-Referer)
 }
 
 // Token represents a single token received from the LLM.

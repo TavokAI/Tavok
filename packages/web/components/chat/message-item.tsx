@@ -1,12 +1,14 @@
 "use client";
 
-import { useMemo, useCallback } from "react";
+import { useMemo, useCallback, useState } from "react";
 import Image from "next/image";
 import { useChatContext } from "@/components/providers/chat-provider";
 import type { MessagePayload, ReactionData } from "@/lib/hooks/use-channel";
 import { MarkdownContent } from "./markdown-content";
 import { ReactionBar } from "./reaction-bar";
 import { FileAttachment, parseFileReferences } from "./file-attachment";
+import { MessageActions } from "./message-actions";
+import { EditMessageInput } from "./edit-message-input";
 import { passthroughImageLoader } from "@/lib/image-loader";
 import { formatTime } from "@/lib/format-time";
 
@@ -14,14 +16,24 @@ interface MessageItemProps {
   message: MessagePayload;
   isGrouped: boolean;
   onReactionsChange?: (messageId: string, reactions: ReactionData[]) => void;
+  currentUserId?: string;
+  canManageMessages?: boolean;
+  onEdit?: (messageId: string, content: string) => Promise<boolean>;
+  onDelete?: (messageId: string) => void;
 }
 
 export function MessageItem({
   message,
   isGrouped,
   onReactionsChange,
+  currentUserId,
+  canManageMessages,
+  onEdit,
+  onDelete,
 }: MessageItemProps) {
   const { members, bots } = useChatContext();
+  const [isEditing, setIsEditing] = useState(false);
+
   const mentionNames = useMemo(
     () => [...members.map((member) => member.displayName), ...bots.map((bot) => bot.name)],
     [members, bots]
@@ -38,13 +50,76 @@ export function MessageItem({
   );
 
   const isBot = message.authorType === "BOT";
-  
+  const isAuthor = currentUserId === message.authorId;
+
+  // Edit: only author of non-bot, non-deleted messages
+  const canEdit = isAuthor && !isBot && !message.isDeleted;
+  // Delete: author OR has MANAGE_MESSAGES, not already deleted
+  const canDelete = (isAuthor || !!canManageMessages) && !message.isDeleted;
+
+  const handleEditSave = useCallback(
+    async (content: string) => {
+      if (onEdit) {
+        const success = await onEdit(message.id, content);
+        if (success) setIsEditing(false);
+      }
+    },
+    [message.id, onEdit]
+  );
+
+  // Deleted message placeholder
+  if (message.isDeleted) {
+    if (isGrouped) {
+      return (
+        <div className="group flex gap-4 px-4 py-0.5 hover:bg-background-secondary/50 border-l-2 border-transparent">
+          <div className="w-10 flex-shrink-0" />
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-mono text-text-muted italic">[message deleted]</p>
+          </div>
+        </div>
+      );
+    }
+    return (
+      <div className="group mt-3 flex gap-4 px-4 py-2 hover:bg-background-secondary/50 border-l-2 border-transparent">
+        <div className="flex-shrink-0 pt-0.5">
+          <div className="flex h-10 w-10 items-center justify-center rounded-sm bg-background-secondary border border-border text-text-dim text-sm font-bold font-mono">
+            ?
+          </div>
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-baseline gap-2 mb-1">
+            <span className="text-sm font-bold font-mono text-text-muted">
+              {message.authorName}
+            </span>
+            <span className="text-[10px] text-text-muted font-mono">
+              {formatTime(message.createdAt)}
+            </span>
+          </div>
+          <p className="text-sm font-mono text-text-muted italic">[message deleted]</p>
+        </div>
+      </div>
+    );
+  }
+
   if (isGrouped) {
     return (
-      <div className={`group flex gap-4 px-4 py-0.5 hover:bg-background-secondary/50 ${!isBot ? 'border-l-2 border-transparent hover:border-brand/30 bg-transparent' : 'border-l-2 border-transparent'}`}>
+      <div className={`group relative flex gap-4 px-4 py-0.5 hover:bg-background-secondary/50 ${!isBot ? 'border-l-2 border-transparent hover:border-brand/30 bg-transparent' : 'border-l-2 border-transparent'}`}>
         <div className="w-10 flex-shrink-0" />
         <div className="min-w-0 flex-1">
-          <MarkdownContent content={text} mentionNames={mentionNames} />
+          {isEditing ? (
+            <EditMessageInput
+              initialContent={message.content}
+              onSave={handleEditSave}
+              onCancel={() => setIsEditing(false)}
+            />
+          ) : (
+            <>
+              <MarkdownContent content={text} mentionNames={mentionNames} />
+              {message.editedAt && (
+                <span className="text-[10px] text-text-muted font-mono ml-1">(edited)</span>
+              )}
+            </>
+          )}
           {files.map((file) => (
             <FileAttachment
               key={file.fileId}
@@ -59,12 +134,20 @@ export function MessageItem({
             onReactionsChange={handleReactionsChange}
           />
         </div>
+        {!isEditing && (
+          <MessageActions
+            canEdit={canEdit}
+            canDelete={canDelete}
+            onEdit={() => setIsEditing(true)}
+            onDelete={() => onDelete?.(message.id)}
+          />
+        )}
       </div>
     );
   }
 
   return (
-    <div className={`group mt-3 flex gap-4 px-4 py-2 hover:bg-background-secondary/50 ${!isBot ? 'border-l-2 border-brand bg-brand/5' : 'border-l-2 border-transparent'}`}>
+    <div className={`group relative mt-3 flex gap-4 px-4 py-2 hover:bg-background-secondary/50 ${!isBot ? 'border-l-2 border-brand bg-brand/5' : 'border-l-2 border-transparent'}`}>
       {/* Avatar */}
       <div className="flex-shrink-0 pt-0.5">
         {message.authorAvatarUrl ? (
@@ -99,10 +182,21 @@ export function MessageItem({
           <span className="text-[10px] text-text-muted font-mono">
             {formatTime(message.createdAt)}
           </span>
+          {message.editedAt && (
+            <span className="text-[10px] text-text-muted font-mono">(edited)</span>
+          )}
         </div>
-        <div className="text-sm font-mono text-text-primary leading-relaxed">
-          <MarkdownContent content={text} mentionNames={mentionNames} />
-        </div>
+        {isEditing ? (
+          <EditMessageInput
+            initialContent={message.content}
+            onSave={handleEditSave}
+            onCancel={() => setIsEditing(false)}
+          />
+        ) : (
+          <div className="text-sm font-mono text-text-primary leading-relaxed">
+            <MarkdownContent content={text} mentionNames={mentionNames} />
+          </div>
+        )}
         {files.map((file) => (
           <FileAttachment
             key={file.fileId}
@@ -117,6 +211,14 @@ export function MessageItem({
           onReactionsChange={handleReactionsChange}
         />
       </div>
+      {!isEditing && (
+        <MessageActions
+          canEdit={canEdit}
+          canDelete={canDelete}
+          onEdit={() => setIsEditing(true)}
+          onDelete={() => onDelete?.(message.id)}
+        />
+      )}
     </div>
   );
 }

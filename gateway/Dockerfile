@@ -45,7 +45,7 @@ RUN addgroup -S elixir && adduser -S elixir -G elixir
 USER elixir
 
 # Copy release from builder
-COPY --from=builder --chown=elixir:elixir /app/_build/prod/rel/hive_gateway ./
+COPY --from=builder --chown=elixir:elixir /app/_build/prod/rel/tavok_gateway ./
 
 ENV HOME=/app
 ENV MIX_ENV=prod
@@ -57,4 +57,4 @@ EXPOSE 4001
 HEALTHCHECK --interval=15s --timeout=5s --start-period=10s --retries=3 \
   CMD curl -sf http://localhost:4001/api/health || exit 1
 
-CMD ["bin/hive_gateway", "start"]
+CMD ["bin/tavok_gateway", "start"]

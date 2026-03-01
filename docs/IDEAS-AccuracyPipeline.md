@@ -1,9 +1,9 @@
 # IDEAS-AccuracyPipeline.md — Agent Quality & Accuracy Pipeline
 
-> **Status:** FUTURE — Parked until after HiveChat Phase 3
+> **Status:** FUTURE — Parked until after Tavok Phase 3
 > **Owner:** Nick / AnvilByte LLC
 > **Principle:** Cheap filters first, expensive judgment last. Same as QC in a machine shop.
-> **Runtime home:** HiveChat's Go proxy (token stream already flows through it) + Channel Charter system
+> **Runtime home:** Tavok's Go proxy (token stream already flows through it) + Channel Charter system
 
 ---
 
@@ -138,7 +138,7 @@ Result feeds into pipeline gate
 
 Specific variant worth exploring early: have Claude and Codex independently generate the same feature from the same spec, then diff the outputs. Not just review — actual parallel generation. Where they converge, high confidence. Where they diverge, that's where the interesting engineering decisions live. This is the "two shops make the same part, compare tolerances" approach.
 
-Could manifest in HiveChat as: user sends a message in a multi-agent channel, Claude bot and Codex bot both generate simultaneously (multi-stream), then a lightweight comparison agent highlights the differences. Human picks the best parts of each or flags the disagreements.
+Could manifest in Tavok as: user sends a message in a multi-agent channel, Claude bot and Codex bot both generate simultaneously (multi-stream), then a lightweight comparison agent highlights the differences. Human picks the best parts of each or flags the disagreements.
 
 ### Economics
 
@@ -147,9 +147,9 @@ Could manifest in HiveChat as: user sends a message in a multi-agent channel, Cl
 - Cheaper than one expensive model doing deep review
 - Way cheaper than shipping a bug to production
 
-### HiveChat Integration
+### Tavok Integration
 
-Each model's review posts as a message in a HiveChat channel. Human sees the reviewers disagree in real-time. Approves or rejects directly in chat. This IS a Channel Charter mode — "Code Review Sprint" with blind consensus enforced by the charter.
+Each model's review posts as a message in a Tavok channel. Human sees the reviewers disagree in real-time. Approves or rejects directly in chat. This IS a Channel Charter mode — "Code Review Sprint" with blind consensus enforced by the charter.
 
 ---
 
@@ -186,7 +186,7 @@ Side-channel to cheap model (Haiku / local):
 ### Why This Should Be First After the Tiered Monitor
 
 - Cheapest to implement (one Haiku call per N messages)
-- Most immediately useful in HiveChat (long channel sessions are the norm)
+- Most immediately useful in Tavok (long channel sessions are the norm)
 - Plugs directly into Channel Charter — the charter IS the spec you're diffing against
 - The Go proxy already has both the charter and the token stream
 
@@ -326,7 +326,7 @@ Go Proxy (session host)
     ├── Charter rules (turn management, guardrails)
     ├── Exit criteria evaluator
     │
-    └── Stream everything → Redis → Elixir → HiveChat channel
+    └── Stream everything → Redis → Elixir → Tavok channel
          (users watch the collaboration live)
 ```
 
@@ -372,12 +372,12 @@ The Channel Charter's mode presets map directly to these.
 
 ### Connection to A2A Protocol
 
-Google's Agent2Agent protocol has structured task lifecycles (submitted → working → completed) and Agent Cards for capability discovery. This persistent session pattern is the **runtime** for that protocol. HiveChat wouldn't just visualize agent collaboration — it would be the infrastructure that makes A2A-style task delegation actually work.
+Google's Agent2Agent protocol has structured task lifecycles (submitted → working → completed) and Agent Cards for capability discovery. This persistent session pattern is the **runtime** for that protocol. Tavok wouldn't just visualize agent collaboration — it would be the infrastructure that makes A2A-style task delegation actually work.
 
 ### What Makes This Different From Existing Orchestrators
 
 - **LangGraph / CrewAI:** Orchestrate same-provider agents with framework-specific state management. Tied to Python. No visualization.
-- **This:** Cross-provider (Claude + Codex), infrastructure-level (Go, not Python), with live visualization in HiveChat channels. The orchestration IS the product, not a library hidden behind an API.
+- **This:** Cross-provider (Claude + Codex), infrastructure-level (Go, not Python), with live visualization in Tavok channels. The orchestration IS the product, not a library hidden behind an API.
 
 ### Open Questions
 
@@ -407,13 +407,13 @@ Google's Agent2Agent protocol has structured task lifecycles (submitted → work
                                     local model    system                          provider
 ```
 
-All run through the Go proxy. All surface through HiveChat's thinking timeline and X-Ray panel. All are independently useful but compound into a full quality pipeline.
+All run through the Go proxy. All surface through Tavok's thinking timeline and X-Ray panel. All are independently useful but compound into a full quality pipeline.
 
 ---
 
-## Relationship to HiveChat Features
+## Relationship to Tavok Features
 
-| Idea | HiveChat Feature It Plugs Into |
+| Idea | Tavok Feature It Plugs Into |
 |------|-------------------------------|
 | Tiered Stream Monitor | Go proxy middleware on token stream |
 | Adversarial Validation | Channel Charter "Code Review Sprint" mode with multi-provider bots |

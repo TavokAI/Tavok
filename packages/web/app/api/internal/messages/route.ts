@@ -56,8 +56,8 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Build where clause
-    const where: Record<string, unknown> = { channelId };
+    // Build where clause — exclude soft-deleted messages (TASK-0014)
+    const where: Record<string, unknown> = { channelId, isDeleted: false };
 
     if (parsedAfterSequence !== null) {
       // Reconnection sync: messages with sequence > N
@@ -175,6 +175,8 @@ export async function GET(request: NextRequest) {
         streamingStatus: m.streamingStatus,
         sequence: serializeSequence(m.sequence),
         createdAt: m.createdAt.toISOString(),
+        editedAt: m.editedAt?.toISOString() || null,
+        thinkingTimeline: m.thinkingTimeline ? JSON.parse(m.thinkingTimeline) : undefined, // TASK-0011
         reactions,
       };
     });

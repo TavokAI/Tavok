@@ -1,9 +1,9 @@
-defmodule HiveGateway.MixProject do
+defmodule TavokGateway.MixProject do
   use Mix.Project
 
   def project do
     [
-      app: :hive_gateway,
+      app: :tavok_gateway,
       version: "0.1.0",
       elixir: "~> 1.17",
       start_permanent: Mix.env() == :prod,
@@ -15,7 +15,7 @@ defmodule HiveGateway.MixProject do
   def application do
     [
       extra_applications: [:logger, :runtime_tools],
-      mod: {HiveGateway.Application, []}
+      mod: {TavokGateway.Application, []}
     ]
   end
 
@@ -50,7 +50,7 @@ defmodule HiveGateway.MixProject do
 
   defp releases do
     [
-      hive_gateway: [
+      tavok_gateway: [
         applications: [runtime_tools: :permanent]
       ]
     ]

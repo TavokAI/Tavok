@@ -1,10 +1,10 @@
-# CLAUDE.md — AI Agent Entry Point for HiveChat
+# CLAUDE.md — AI Agent Entry Point for Tavok
 
 ## What is this project?
 
-HiveChat is an open-source, self-hostable chat platform that looks and feels like Discord but is purpose-built for AI. The killer feature is native token streaming — AI agents stream responses word-by-word as first-class participants. Multiple agents can work simultaneously in the same channel.
+Tavok is an open-source, self-hostable chat platform that looks and feels like Discord but is purpose-built for AI. The killer feature is native token streaming — AI agents stream responses word-by-word as first-class participants. Multiple agents can work simultaneously in the same channel.
 
-**Status:** V0 complete. V1 in progress — two parallel tracks: Agent wedge (thinking timeline, multi-stream, provider abstraction) + Chat completeness (edit/delete, mentions, unreads).
+**Status:** V1 complete. Agent streaming (thinking timeline, multi-stream, provider abstraction) and chat completeness (edit/delete, mentions, unreads) are shipped.
 
 ## Tech Stack
 
@@ -37,14 +37,14 @@ make down      # Stop
 3. `docs/ROADMAP.md` — master roadmap (two-track strategy, all sources synthesized)
 4. `docs/TASKS.md` — current work items (unified numbering)
 5. `docs/V1-IMPLEMENTATION.md` — detailed chat task specs (data models, APIs, file lists)
-6. `docs/HiveChat.md` — full product spec and vision
+6. `docs/Tavok.md` — full product spec and vision
 7. `docs/OPERATIONS.md` — workflow rules, validation, conventions
 8. `docs/DECISIONS.md` — architectural decision log (append-only, DEC-0001 through DEC-0026)
 
 ## Project Structure
 
 ```text
-Hive-Chat/
+Tavok/
 ├── docs/                     # All documentation
 ├── packages/
 │   ├── web/                  # Next.js frontend + API

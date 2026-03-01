@@ -19,6 +19,7 @@ export function ChannelSidebar() {
     currentServerName,
     channels,
     hasPermission,
+    unreadMap,
   } = useChatContext();
   const router = useRouter();
   const [showCreateChannel, setShowCreateChannel] = useState(false);
@@ -29,6 +30,7 @@ export function ChannelSidebar() {
     id: string;
     name: string;
     defaultBotId: string | null;
+    botIds?: string[];
   } | null>(null);
 
   const displayName = session?.user?.displayName || "User";
@@ -40,7 +42,7 @@ export function ChannelSidebar() {
         {/* Server name header */}
         <div className="flex h-12 items-center justify-between border-b border-background-tertiary px-4">
           <h2 className="truncate text-base font-bold text-text-primary">
-            {currentServerName || "HiveChat"}
+            {currentServerName || "Tavok"}
           </h2>
           {hasPermission(Permissions.CREATE_INVITE) && currentServerId && (
             <button
@@ -88,13 +90,18 @@ export function ChannelSidebar() {
           {channels.map((channel) => {
             const isActive = currentChannelId === channel.id;
             const hasBot = !!channel.defaultBotId;
+            const unread = unreadMap.get(channel.id);
+            const hasUnread = !isActive && !!unread?.hasUnread;
+            const mentionCount = unread?.mentionCount ?? 0;
             return (
               <div
                 key={channel.id}
                 className={`group flex w-full items-center gap-1.5 rounded px-2 py-1.5 transition ${
                   isActive
                     ? "bg-background-primary text-text-primary"
-                    : "text-text-secondary hover:bg-background-primary hover:text-text-primary"
+                    : hasUnread
+                      ? "text-text-primary hover:bg-background-primary"
+                      : "text-text-secondary hover:bg-background-primary hover:text-text-primary"
                 }`}
               >
                 <button
@@ -106,7 +113,9 @@ export function ChannelSidebar() {
                   className="flex min-w-0 flex-1 items-center gap-1.5"
                 >
                   <span className="text-lg text-text-muted">#</span>
-                  <span className="truncate text-sm">{channel.name}</span>
+                  <span className={`truncate text-sm ${hasUnread ? "font-semibold text-text-primary" : ""}`}>
+                    {channel.name}
+                  </span>
                   {hasBot && (
                     <span
                       className="flex-shrink-0 text-emerald-400"
@@ -123,6 +132,12 @@ export function ChannelSidebar() {
                     </span>
                   )}
                 </button>
+                {/* TASK-0016: Mention count badge */}
+                {mentionCount > 0 && !isActive && (
+                  <span className="flex h-4 min-w-[16px] flex-shrink-0 items-center justify-center rounded-full bg-status-error px-1 text-[10px] font-bold text-white">
+                    {mentionCount > 99 ? "99+" : mentionCount}
+                  </span>
+                )}
                 {hasPermission(Permissions.MANAGE_CHANNELS) && (
                   <button
                     onClick={(e) => {
@@ -131,6 +146,7 @@ export function ChannelSidebar() {
                         id: channel.id,
                         name: channel.name,
                         defaultBotId: channel.defaultBotId,
+                        botIds: channel.botIds,
                       });
                     }}
                     title="Channel settings"
@@ -262,6 +278,7 @@ export function ChannelSidebar() {
           channelId={channelSettingsTarget.id}
           channelName={channelSettingsTarget.name}
           currentDefaultBotId={channelSettingsTarget.defaultBotId}
+          currentBotIds={channelSettingsTarget.botIds}
         />
       )}
     </>

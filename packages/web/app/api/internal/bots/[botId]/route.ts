@@ -53,6 +53,7 @@ export async function GET(
       temperature: bot.temperature,
       maxTokens: bot.maxTokens,
       triggerMode: bot.triggerMode,
+      thinkingSteps: bot.thinkingSteps ? JSON.parse(bot.thinkingSteps) : [], // TASK-0011
     });
   } catch (error) {
     console.error("[Internal] Failed to get bot:", error);

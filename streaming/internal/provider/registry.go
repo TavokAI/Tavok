@@ -1,8 +1,11 @@
 // Package provider — Provider registry.
 //
 // Maps provider names to Provider implementations.
-// "anthropic" → Anthropic, everything else → OpenAI-compatible.
+// Known providers: "anthropic" → Anthropic, "openai"/"ollama"/"openrouter"/"custom" → OpenAI-compatible.
+// Unknown providers fall back to OpenAI-compatible with a warning log.
 package provider
+
+import "log/slog"
 
 // Registry holds provider instances keyed by name.
 type Registry struct {
@@ -11,6 +14,14 @@ type Registry struct {
 }
 
 // NewRegistry creates a registry with default providers.
+//
+// Provider mapping:
+//
+//	"anthropic"  → Anthropic (x-api-key auth, content_block_delta events)
+//	"openai"     → OpenAI (Bearer auth, choices[0].delta.content events)
+//	"ollama"     → OpenAI-compatible (local, typically no auth)
+//	"openrouter" → OpenAI-compatible (Bearer auth, model aggregator)
+//	"custom"     → OpenAI-compatible (user-provided endpoint)
 func NewRegistry() *Registry {
 	openai := NewOpenAI()
 	anthropic := NewAnthropic()
@@ -33,5 +44,8 @@ func (r *Registry) Get(name string) Provider {
 	if p, ok := r.providers[name]; ok {
 		return p
 	}
+	slog.Warn("Unknown provider, falling back to OpenAI-compatible",
+		"provider", name,
+	)
 	return r.fallback
 }

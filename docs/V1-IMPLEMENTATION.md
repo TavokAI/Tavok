@@ -270,7 +270,7 @@ New Phoenix Channel topic: `dm:{dmChannelId}`
 
 Events mirror `room:` channel: `new_message`, `typing`, `message_edit`, `message_delete`, `sync`, `history`.
 
-New module: `HiveGatewayWeb.DmChannel`
+New module: `TavokGatewayWeb.DmChannel`
 
 ### Implementation
 
@@ -647,7 +647,7 @@ packages/web/app/api/dms/route.ts
 packages/web/app/api/dms/[dmId]/messages/route.ts
 packages/web/app/api/dms/search/route.ts
 packages/web/app/api/internal/dms/messages/route.ts
-gateway/lib/hive_gateway_web/channels/dm_channel.ex
+gateway/lib/tavok_gateway_web/channels/dm_channel.ex
 
 # Wave 2
 packages/web/components/search/search-panel.tsx
@@ -711,9 +711,9 @@ packages/web/components/layout/channel-sidebar.tsx         — Launch (unread bo
 packages/web/components/layout/server-sidebar.tsx          — Launch (unread dots), Wave 1 (DM section)
 packages/web/components/layout/member-list.tsx             — Wave 1 (DM action)
 packages/web/app/(app)/layout.tsx                          — Wave 3 (notification bell), Deploy (mobile nav)
-gateway/lib/hive_gateway_web/channels/room_channel.ex      — Launch (edit/delete), Wave 3 (reactions)
-gateway/lib/hive_gateway_web/channels/user_socket.ex       — Wave 1 (DM channel auth)
-gateway/lib/hive_gateway/application.ex                    — Wave 1 (DM support)
+gateway/lib/tavok_gateway_web/channels/room_channel.ex      — Launch (edit/delete), Wave 3 (reactions)
+gateway/lib/tavok_gateway_web/channels/user_socket.ex       — Wave 1 (DM channel auth)
+gateway/lib/tavok_gateway/application.ex                    — Wave 1 (DM support)
 packages/shared/types/message.ts                           — Launch (editedAt, mentions), Wave 2 (attachments), Wave 3 (reactions)
 packages/shared/types/user.ts                              — Wave 2 (profile fields)
 docs/PROTOCOL.md                                          — every wave adds events/contracts

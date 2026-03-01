@@ -47,6 +47,7 @@ const config: Config = {
           dnd: "#ef4444",
           offline: "#666666",
           streaming: "#22d3ee",
+          error: "#ef4444",
         },
       },
       fontFamily: {

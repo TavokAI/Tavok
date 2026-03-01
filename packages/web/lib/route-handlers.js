@@ -6,6 +6,8 @@ import {
   parseNonNegativeSequence,
   serializeSequence,
 } from "./api-safety.js";
+import { parseMentionedUserIds } from "./mention-parser";
+import { generateId } from "./ulid";
 
 function isAuthorType(value) {
   return value === "USER" || value === "BOT" || value === "SYSTEM";
@@ -119,6 +121,80 @@ export function createInternalMessagesPostHandler({ prismaClient }) {
 
         return [createdMessage];
       });
+
+      // TASK-0015: Extract and persist @mentions for USER messages.
+      // Runs outside the transaction (non-blocking, best-effort).
+      if (authorType === "USER" && content.includes("@")) {
+        try {
+          // Fetch server members and bots via the channel's serverId
+          const channel = await prismaClient.channel.findUnique({
+            where: { id: channelId },
+            select: { serverId: true },
+          });
+
+          if (channel) {
+            const [serverMembers, serverBots] = await Promise.all([
+              prismaClient.member.findMany({
+                where: { serverId: channel.serverId },
+                select: {
+                  userId: true,
+                  user: { select: { displayName: true } },
+                },
+              }),
+              prismaClient.bot.findMany({
+                where: { serverId: channel.serverId, isActive: true },
+                select: { id: true, name: true },
+              }),
+            ]);
+
+            const memberTargets = serverMembers.map((m) => ({
+              id: m.userId,
+              name: m.user.displayName,
+            }));
+            const botTargets = serverBots.map((b) => ({
+              id: b.id,
+              name: b.name,
+            }));
+
+            const mentionedIds = parseMentionedUserIds(
+              content,
+              memberTargets,
+              botTargets
+            );
+
+            if (mentionedIds.length > 0) {
+              await prismaClient.messageMention.createMany({
+                data: mentionedIds.map((userId) => ({
+                  id: generateId(),
+                  messageId: id,
+                  userId,
+                })),
+                skipDuplicates: true,
+              });
+
+              // TASK-0016: Increment mentionCount for mentioned users (excluding author).
+              // Users who don't have a ChannelReadState yet: updateMany affects 0 rows — fine for V1.
+              const mentionedOthers = mentionedIds.filter(
+                (uid) => uid !== authorId
+              );
+              if (mentionedOthers.length > 0) {
+                await prismaClient.channelReadState.updateMany({
+                  where: {
+                    channelId,
+                    userId: { in: mentionedOthers },
+                  },
+                  data: {
+                    mentionCount: { increment: 1 },
+                  },
+                });
+              }
+            }
+          }
+        } catch (mentionError) {
+          // Non-fatal: log and continue — message is already persisted
+          console.error("[Mentions] Failed to persist mentions:", mentionError);
+        }
+      }
 
       let authorName = "Unknown";
       let authorAvatarUrl = null;
@@ -342,6 +418,40 @@ export function createServerChannelPatchHandler({
           { error: "topic must be a string or null" },
           { status: 400 }
         );
+      }
+    }
+
+    // TASK-0012: Validate botIds array for multi-bot assignment
+    if ("botIds" in body) {
+      if (!Array.isArray(body.botIds)) {
+        return NextResponse.json(
+          { error: "botIds must be an array of strings" },
+          { status: 400 }
+        );
+      }
+      // Validate all items are non-empty strings
+      for (const id of body.botIds) {
+        if (typeof id !== "string" || id.length === 0) {
+          return NextResponse.json(
+            { error: "botIds must be an array of strings" },
+            { status: 400 }
+          );
+        }
+      }
+      // Validate all bot IDs exist in the server
+      if (body.botIds.length > 0 && prismaClient.bot?.findMany) {
+        const validBots = await prismaClient.bot.findMany({
+          where: { id: { in: body.botIds }, serverId },
+          select: { id: true },
+        });
+        const validIds = new Set(validBots.map((b) => b.id));
+        const invalid = body.botIds.filter((id) => !validIds.has(id));
+        if (invalid.length > 0) {
+          return NextResponse.json(
+            { error: `Bots not found in this server: ${invalid.join(", ")}` },
+            { status: 400 }
+          );
+        }
       }
     }
 

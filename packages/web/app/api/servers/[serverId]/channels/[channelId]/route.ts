@@ -7,11 +7,13 @@ import {
 } from "@/lib/api-safety";
 import { checkMemberPermission } from "@/lib/check-member-permission";
 import { Permissions } from "@/lib/permissions";
+import { ulid } from "ulid";
 
 /**
  * PATCH /api/servers/{serverId}/channels/{channelId}
  *
- * Update channel settings (e.g., assign default bot).
+ * Update channel settings (assign bots, topic, etc.).
+ * Supports both `defaultBotId` (legacy single bot) and `botIds` (multi-bot, TASK-0012).
  * Requires MANAGE_CHANNELS permission.
  */
 export async function PATCH(
@@ -111,16 +113,58 @@ export async function PATCH(
     }
   }
 
+  // Handle botIds array (multi-bot assignment — TASK-0012)
+  if ("botIds" in body) {
+    const botIds = body.botIds;
+    if (!Array.isArray(botIds)) {
+      return NextResponse.json(
+        { error: "botIds must be an array of strings" },
+        { status: 400 }
+      );
+    }
+
+    // Validate all bot IDs exist in this server
+    if (botIds.length > 0) {
+      const validBots = await prisma.bot.findMany({
+        where: { id: { in: botIds as string[] }, serverId },
+        select: { id: true },
+      });
+      const validIds = new Set(validBots.map((b) => b.id));
+      const invalid = (botIds as string[]).filter((id) => !validIds.has(id));
+      if (invalid.length > 0) {
+        return NextResponse.json(
+          { error: `Bots not found in this server: ${invalid.join(", ")}` },
+          { status: 400 }
+        );
+      }
+    }
+
+    // Transaction: delete old ChannelBot entries → create new ones → update defaultBotId
+    await prisma.$transaction([
+      prisma.channelBot.deleteMany({ where: { channelId } }),
+      ...(botIds as string[]).map((botId: string) =>
+        prisma.channelBot.create({
+          data: { id: ulid(), channelId, botId },
+        })
+      ),
+      // Set first bot as defaultBotId for backward compat
+      prisma.channel.update({
+        where: { id: channelId },
+        data: { defaultBotId: botIds.length > 0 ? (botIds[0] as string) : null },
+      }),
+    ]);
+  }
+
   const channel = await prisma.channel.update({
     where: { id: channelId },
     data: updateData,
-    select: {
-      id: true,
-      name: true,
-      topic: true,
-      defaultBotId: true,
+    include: {
+      channelBots: { select: { botId: true } },
     },
   });
 
-  return NextResponse.json(channel);
+  return NextResponse.json({
+    ...channel,
+    botIds: channel.channelBots.map((cb) => cb.botId),
+  });
 }

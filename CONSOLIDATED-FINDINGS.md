@@ -1,4 +1,4 @@
-# CONSOLIDATED-FINDINGS.md — HiveChat Consolidation Sweep
+# CONSOLIDATED-FINDINGS.md — Tavok Consolidation Sweep
 
 > **STATUS: ALL 33 ISSUES RESOLVED** (2026-02-28)
 > See DEC-0027 in docs/DECISIONS.md for the decision record.
@@ -125,7 +125,7 @@
 - **Severity:** HIGH
 - **Service(s):** Gateway
 - **Found by:** Composer, Opus, Claude
-- **Description:** `gateway/lib/hive_gateway_web/channels/room_channel.ex` — When a bot is triggered, the channel process makes 3 sequential HTTP calls inline (fetch bot config, persist placeholder, fetch context messages), each with a 10-second timeout. During this time, **all message processing for that channel is blocked** — no other user's messages can be received, broadcast, or replied to.
+- **Description:** `gateway/lib/tavok_gateway_web/channels/room_channel.ex` — When a bot is triggered, the channel process makes 3 sequential HTTP calls inline (fetch bot config, persist placeholder, fetch context messages), each with a 10-second timeout. During this time, **all message processing for that channel is blocked** — no other user's messages can be received, broadcast, or replied to.
 - **Recommendation:** Spawn bot triggering into a `Task.Supervisor.async_nolink` so the channel process returns immediately. The task handles HTTP calls and publishes to Redis independently. This is consistent with DEC-0019 (Gateway is transport only — it should relay, not block).
 - **PROTOCOL.md impact:** No
 - **Risk if ignored:** Every bot trigger freezes the entire channel for up to 30 seconds. In a channel with active users, this creates visible message delays.
@@ -185,7 +185,7 @@
 - **Severity:** HIGH
 - **Service(s):** Gateway, Web
 - **Found by:** Codex, Claude (code scan)
-- **Description:** `gateway/lib/hive_gateway_web/channels/room_channel.ex` — `handle_in("new_message")` validates that content is a non-empty binary but has no maximum length check. A user can send a multi-megabyte message through the WebSocket, which gets persisted to PostgreSQL and broadcast to all channel members. The Web API (`route-handlers.js`) also has no content length validation.
+- **Description:** `gateway/lib/tavok_gateway_web/channels/room_channel.ex` — `handle_in("new_message")` validates that content is a non-empty binary but has no maximum length check. A user can send a multi-megabyte message through the WebSocket, which gets persisted to PostgreSQL and broadcast to all channel members. The Web API (`route-handlers.js`) also has no content length validation.
 - **Recommendation:** Add a 4000-character limit (matching Discord's limit) in the Gateway's `handle_in` before persistence. Also add the same limit in the Web API for defense-in-depth.
 - **PROTOCOL.md impact:** Yes — add `content` max length to MessagePayload constraints
 - **Risk if ignored:** A single user can flood a channel with arbitrarily large messages, causing database bloat, slow page loads, and excessive bandwidth for all channel members.
@@ -234,7 +234,7 @@
 - **Severity:** HIGH
 - **Service(s):** Gateway
 - **Found by:** Claude (code scan)
-- **Description:** `gateway/lib/hive_gateway_web/channels/user_socket.ex` lines 26-28. After JWT signature verification, `claims["sub"]`, `claims["username"]`, and `claims["displayName"]` are assigned to the socket without checking for `nil`. A validly-signed JWT missing these claims (e.g., an old token format, or a manual token creation) would set `nil` user_id on the socket, potentially causing crashes or unauthorized access in RoomChannel.
+- **Description:** `gateway/lib/tavok_gateway_web/channels/user_socket.ex` lines 26-28. After JWT signature verification, `claims["sub"]`, `claims["username"]`, and `claims["displayName"]` are assigned to the socket without checking for `nil`. A validly-signed JWT missing these claims (e.g., an old token format, or a manual token creation) would set `nil` user_id on the socket, potentially causing crashes or unauthorized access in RoomChannel.
 - **Recommendation:** After `Joken.verify`, validate that `claims["sub"]` is a non-empty string. Reject the connection if any required claim is missing.
 - **PROTOCOL.md impact:** No
 - **Risk if ignored:** A malformed but validly-signed JWT could produce a socket with nil user_id, causing undefined behavior in membership checks and message attribution.
@@ -346,7 +346,7 @@
 - **Severity:** MEDIUM
 - **Service(s):** Gateway
 - **Found by:** Opus, Claude
-- **Description:** `gateway/lib/hive_gateway/stream_listener.ex` lines 73-76. The `:reconnected` handler only logs. While `Redix.PubSub` documentation says it auto-resubscribes on reconnect, this behavior should be verified and not assumed. If auto-resubscription fails silently, all streaming stops with no error.
+- **Description:** `gateway/lib/tavok_gateway/stream_listener.ex` lines 73-76. The `:reconnected` handler only logs. While `Redix.PubSub` documentation says it auto-resubscribes on reconnect, this behavior should be verified and not assumed. If auto-resubscription fails silently, all streaming stops with no error.
 - **Recommendation:** Add explicit re-subscription in the reconnect handler as a safety measure. Log whether the re-subscription succeeds.
 - **PROTOCOL.md impact:** No
 - **Risk if ignored:** After a Redis blip, streaming may silently stop until the Gateway is restarted. The watchdog catches stuck streams but new streams won't trigger at all.
@@ -358,7 +358,7 @@
 - **Severity:** MEDIUM
 - **Service(s):** Gateway
 - **Found by:** Claude
-- **Description:** `gateway/lib/hive_gateway_web/channels/room_channel.ex` lines 425-445. The `next_sequence` function does GET → SET NX → INCR as three separate Redis commands. On the very first message in a channel, two concurrent messages can both see `nil` from GET, both try SET NX (one succeeds, one fails), and both proceed to INCR. Result: one message may get an unexpected sequence number. The Prisma unique constraint on `(channelId, sequence)` would catch a collision, but the error handling returns a 500 instead of retrying.
+- **Description:** `gateway/lib/tavok_gateway_web/channels/room_channel.ex` lines 425-445. The `next_sequence` function does GET → SET NX → INCR as three separate Redis commands. On the very first message in a channel, two concurrent messages can both see `nil` from GET, both try SET NX (one succeeds, one fails), and both proceed to INCR. Result: one message may get an unexpected sequence number. The Prisma unique constraint on `(channelId, sequence)` would catch a collision, but the error handling returns a 500 instead of retrying.
 - **Recommendation:** Replace the three-step seed with a single atomic operation. Use `INCR` directly (it creates the key with value 1 if it doesn't exist) — no need for the GET/SET NX dance at all.
 - **PROTOCOL.md impact:** No
 - **Risk if ignored:** Low probability race on the first message per channel. Would manifest as a 500 error on one of two simultaneous first messages.
@@ -448,7 +448,7 @@
 - **Severity:** LOW
 - **Service(s):** Gateway
 - **Found by:** Claude (code scan)
-- **Description:** `gateway/lib/hive_gateway_web/channels/room_channel.ex` — `parse_limit/1` accepts `value >= 0`, meaning `limit=0` returns `{:ok, 0}`. A Prisma query with `take: 0` returns nothing without error, which is confusing.
+- **Description:** `gateway/lib/tavok_gateway_web/channels/room_channel.ex` — `parse_limit/1` accepts `value >= 0`, meaning `limit=0` returns `{:ok, 0}`. A Prisma query with `take: 0` returns nothing without error, which is confusing.
 - **Recommendation:** Change to `value > 0`.
 - **PROTOCOL.md impact:** No
 - **Risk if ignored:** A client requesting `limit=0` gets an empty response instead of a validation error.

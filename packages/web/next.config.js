@@ -7,7 +7,7 @@ const nextConfig = {
   reactStrictMode: true,
 
   // Transpile the shared package
-  transpilePackages: ["@hivechat/shared"],
+  transpilePackages: ["@tavok/shared"],
 };
 
 module.exports = nextConfig;

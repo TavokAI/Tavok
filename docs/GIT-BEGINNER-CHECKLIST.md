@@ -1,10 +1,10 @@
 # Git + GitHub Beginner Checklist
 
-Use this for day-to-day work in HiveChat.
+Use this for day-to-day work in Tavok.
 
 ## One-time setup (already mostly done)
 
-1. Keep one working folder for this project: `C:/Users/njlec/Hive-Chat`
+1. Keep one working folder for this project: `C:/Users/njlec/Tavok`
 2. Keep this repo connected to GitHub (`origin` remote).
 3. Never commit `.env` or secret keys.
 

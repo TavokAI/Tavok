@@ -9,7 +9,7 @@
 
 **Date**: 2026-02-23
 **Status**: Accepted
-**Context**: HiveChat needs a product layer (UI, auth, DB), a real-time layer (WebSocket, presence, fan-out), and an AI streaming layer (LLM API calls, token parsing). These are fundamentally different workloads with different performance characteristics.
+**Context**: Tavok needs a product layer (UI, auth, DB), a real-time layer (WebSocket, presence, fan-out), and an AI streaming layer (LLM API calls, token parsing). These are fundamentally different workloads with different performance characteristics.
 **Decision**: Split into three services:
 - **Web** (TypeScript/Next.js): Product UI, auth, REST API, DB via Prisma
 - **Gateway** (Elixir/Phoenix): WebSocket connections, presence, typing, message fan-out
@@ -308,7 +308,7 @@ forever on ACTIVE.
 **Context**: V1 tools (web search, file ops, git, code execution) need an abstraction layer. The Model Context Protocol (MCP) is becoming an industry standard for tool integration. Options: custom tool interface, or design to match MCP patterns from day one.
 **Decision**: Design the Go proxy's tool interface to match MCP's `tools/list` and `tools/call` JSON-RPC patterns. Not a full MCP implementation, but structurally compatible.
 **Rationale**:
-- MCP hosting is a planned V1 post-launch feature (any MCP-compatible tool plugs into HiveChat)
+- MCP hosting is a planned V1 post-launch feature (any MCP-compatible tool plugs into Tavok)
 - Designing tool interfaces to match MCP patterns now makes MCP hosting a natural extension, not a retrofit
 - The JSON-RPC format is simple and well-specified
 - ~2 extra hours of design work that saves a refactor later
@@ -419,7 +419,7 @@ forever on ACTIVE.
 **Consequences**:
 - Messages are visible in real-time before they exist in the database
 - If Web API is down for 7+ seconds, messages appear in real-time but are absent from history on refresh (logged CRITICAL)
-- New module `HiveGateway.MessagePersistence` encapsulates retry logic
+- New module `TavokGateway.MessagePersistence` encapsulates retry logic
 - DEC-0011 (persist-first) is superseded — the reliability tradeoff is acceptable for the scale target
 
 ---
@@ -429,7 +429,7 @@ forever on ACTIVE.
 **Date**: 2026-02-28
 **Status**: Accepted
 **Context**: The Gateway makes HTTP calls to Next.js for bot config (per-message) and membership checks (per-join). At scale, the per-message bot config lookup is the largest source of unnecessary network I/O — 10-50ms per call, called for every message in every channel. No caching existed.
-**Decision**: Add a GenServer-owned ETS table (`HiveGateway.ConfigCache`) with TTL-based caching. Bot config cached per-channel (5 min TTL). Membership cached per-user+channel (15 min TTL). Negative results (no bot) cached to prevent repeated 404s. Errors NOT cached to allow retry. Raw ETS with `:public` read access — no external libraries.
+**Decision**: Add a GenServer-owned ETS table (`TavokGateway.ConfigCache`) with TTL-based caching. Bot config cached per-channel (5 min TTL). Membership cached per-user+channel (15 min TTL). Negative results (no bot) cached to prevent repeated 404s. Errors NOT cached to allow retry. Raw ETS with `:public` read access — no external libraries.
 **Rationale**:
 - ETS is the BEAM's native in-memory store — zero external dependencies, O(1) lookups
 - `:public` table with `read_concurrency: true` allows channel processes to read without going through the GenServer mailbox — zero contention on the hot path
@@ -439,7 +439,7 @@ forever on ACTIVE.
 - Caching nil (no bot) prevents channels without bots from generating useless 404 traffic
 - No external library — raw ETS is ~60 lines of code
 
-**Consequences**: New module `HiveGateway.ConfigCache` added to supervision tree. Bot config lookup drops from 10-50ms HTTP to <1us ETS read on cache hit. If the ConfigCache GenServer crashes, the supervisor restarts it with a fresh table. Bot config changes via UI may take up to 5 minutes to propagate unless explicit invalidation is called.
+**Consequences**: New module `TavokGateway.ConfigCache` added to supervision tree. Bot config lookup drops from 10-50ms HTTP to <1us ETS read on cache hit. If the ConfigCache GenServer crashes, the supervisor restarts it with a fresh table. Bot config changes via UI may take up to 5 minutes to propagate unless explicit invalidation is called.
 
 ---
 
@@ -463,7 +463,7 @@ Three broadcast patterns:
 - Custom Phoenix serializer: Would need to override the default serializer and maintain compatibility. Fragile across Phoenix upgrades.
 - Phoenix.Channel intercept + handle_out: Still serializes per-process, just adds a hook. Doesn't solve the core issue.
 
-**Consequences**: New module `HiveGateway.Broadcast` provides `broadcast_pre_serialized!/3`, `broadcast_from_pre_serialized!/3`, `endpoint_broadcast!/3`, and `endpoint_broadcast_raw!/3`. Wire format is byte-for-byte identical — no client changes needed. At 1000 subscribers, serialization drops from 1000x to 1x per broadcast. Stream tokens additionally save the decode step (zero-copy from Redis to WebSocket).
+**Consequences**: New module `TavokGateway.Broadcast` provides `broadcast_pre_serialized!/3`, `broadcast_from_pre_serialized!/3`, `endpoint_broadcast!/3`, and `endpoint_broadcast_raw!/3`. Wire format is byte-for-byte identical — no client changes needed. At 1000 subscribers, serialization drops from 1000x to 1x per broadcast. Stream tokens additionally save the decode step (zero-copy from Redis to WebSocket).
 
 ---
 
@@ -548,3 +548,111 @@ Cache hits still read ETS directly (no GenServer hop — same fast path as befor
 **Integration**: `RoomChannel.handle_in("new_message", ...)` calls `RateLimiter.check_and_increment(channel_id)` before any processing. Rate-limited messages get `{:error, %{reason: "rate_limited"}}` reply.
 
 **Consequences**: Caps channel throughput at 20 msgs/sec regardless of client count. Protects downstream systems (persistence, bot triggers, broadcasts). The 20/sec limit is generous for human conversation but prevents abuse. Counter reset every second is simple and predictable. Stats available via `RateLimiter.stats/0`.
+
+---
+
+## DEC-0036: Provider Abstraction — Shared HTTP Client, Deferred Transport Interface
+
+**Date**: 2026-03-01
+**Status**: Accepted
+**Relates to**: DEC-0024 (provider abstraction), DEC-0034 (connection pool tuning)
+
+**Context**: TASK-0013 calls for provider abstraction with transport strategies. Both Anthropic and OpenAI providers had identical HTTP client configuration (DEC-0034 settings) duplicated verbatim. A full Transport interface layer would be premature — only HTTP SSE transport exists today.
+
+**Decision**: Extract shared `NewStreamingHTTPClient()` helper in `streaming/internal/provider/http.go`. Keep the `Provider` interface unchanged (`Name()` + `Stream()`). Do NOT create a Transport interface for V1 — only one transport (HTTP SSE) exists, so an abstraction adds complexity with zero benefit. When a non-HTTP-SSE transport is needed (OpenAI WebSocket, gRPC), introduce the Transport interface then without changing the Provider interface.
+
+**Alternatives considered**:
+- Full Transport + Format adapter layering: Two separate registries, increased indirection. Premature for one transport.
+- Subpackage restructuring (`provider/anthropic/`, `provider/openai/`): Adds package overhead for 2 providers. Revisit when we have 5+.
+
+**Consequences**: Duplicated HTTP client config eliminated. Provider tests added. Registry logs warnings for unknown providers. Adding a new HTTP SSE provider requires only implementing the Provider interface. Adding a non-HTTP transport will require a future refactor.
+
+---
+
+## DEC-0037: Agent Thinking Timeline — Synthetic Lifecycle Phases
+
+**Date**: 2026-03-01
+**Status**: Accepted
+**Relates to**: TASK-0011
+
+**Context**: When a bot is streaming, users see a blinking cursor but no indication of what phase the agent is in. "Is it stuck?" anxiety kills trust. Competing products (Cursor, Windsurf, v0) show phase indicators like "Thinking → Searching → Writing" that make agents feel alive.
+
+**Decision**: For V1, thinking phases are **lifecycle-based events from Go manager.go**, not parsed from LLM output:
+- Stream starts → emit **"Thinking"** (bot config loaded, about to call LLM)
+- First token arrives → emit **"Writing"** (LLM is generating)
+- Stream completes/errors → frontend clears the phase
+
+The pipeline: Go `publishThinking()` → Redis `hive:stream:thinking:{channelId}:{messageId}` → Gateway `StreamListener` pattern subscribe → Phoenix broadcast `stream_thinking` → frontend `use-channel.ts` updates `thinkingPhase` on `MessagePayload` → `streaming-message.tsx` renders animated pill badge.
+
+**Zero provider changes.** Two events through the full pipeline. Future versions can parse extended thinking blocks from Claude/o1 for richer phases like "Reasoning → Planning → Writing".
+
+**Alternatives considered**:
+- Parse `thinking` content blocks from Anthropic extended thinking: Requires provider-specific SSE parsing changes and `anthropic-beta` header. Deferred — V1 is provider-agnostic lifecycle phases.
+- WebSocket direct from Go to frontend: Bypasses the Gateway transport boundary (violates DEC-0019).
+- Frontend-only timer heuristic: Fragile, no real signal from the server.
+
+**Consequences**: Users see "Thinking..." badge immediately when stream starts, transitions to "Writing..." when tokens flow. Makes agent response feel responsive even during LLM cold start latency (1-5 seconds). Adds one Redis pub/sub pattern and one WebSocket event. No database changes.
+
+---
+
+## DEC-0038: Multi-Stream via ChannelBot Join Table
+
+**Date**: 2026-03-01
+**Status**: Accepted
+**Relates to**: TASK-0012
+
+**Context**: Channels could only have one bot (`defaultBotId` on the Channel model). Users want multiple agents responding simultaneously in the same channel. The Go proxy, frontend, and Redis pub/sub are already multi-stream ready (per-messageId tracking, Map<messageId, string> buffer, per-messageId Redis channels). Only the data model, Gateway trigger logic, and UI needed changes.
+
+**Decision**: Add a `ChannelBot` join table (M:N relationship between Channel and Bot). Keep `defaultBotId` on Channel for backward compatibility. Gateway trigger logic iterates all assigned bots and evaluates trigger conditions independently. Each triggered bot gets its own messageId, sequence number, placeholder, and stream request.
+
+**Schema**:
+```prisma
+model ChannelBot {
+  id        String   @id @db.VarChar(26)
+  channelId String   @db.VarChar(26)
+  botId     String   @db.VarChar(26)
+  createdAt DateTime @default(now())
+  channel   Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  bot       Bot      @relation(fields: [botId], references: [id], onDelete: Cascade)
+  @@unique([channelId, botId])
+  @@index([channelId])
+}
+```
+
+**Migration**: Includes backfill SQL that populates ChannelBot from existing `defaultBotId` values, ensuring zero data loss on upgrade.
+
+**Backward compatibility**:
+- Gateway falls back to `get_channel_bot()` (single bot) if no ChannelBot entries exist
+- PATCH endpoint sets first bot in array as `defaultBotId` for services that still use it
+- Existing single-bot channels continue to work without any changes
+
+**What stayed untouched** (already multi-stream ready):
+- `streaming/internal/stream/manager.go` — per-messageId goroutines + 32-stream semaphore
+- `packages/web/lib/hooks/use-channel.ts` — `Map<messageId, string>` buffer + per-messageId events
+- Redis pub/sub channels — already per-messageId
+- Go proxy concurrency — no changes needed
+
+**Consequences**: New internal API endpoint `GET /api/internal/channels/{id}/bots`. New ETS cache key `{:bots, channel_id}` with request collapsing. Channel settings UI changes from single-select dropdown to checkbox list. Multiple bots can stream simultaneously in the same channel, each with independent thinking phases and completion states.
+
+---
+
+## DEC-0039 — Message Edit/Delete: Sync-first, authorization in Web API
+
+**Date**: 2026-03-01
+**Context**: TASK-0014 — Adding message edit and delete to Tavok.
+
+**Decision**: Edit and delete operations call the Next.js internal API **synchronously before broadcasting**, unlike the broadcast-first pattern used for new messages (DEC-0028). Authorization logic (ownership check, MANAGE_MESSAGES permission) lives entirely in the Web API, not the Gateway.
+
+**Why sync-first for edit/delete**:
+- New messages are fire-and-forget — a broadcast without persistence is still useful (low probability of failure, user retypes if needed).
+- Edit/delete have correctness requirements: a user must not see an edit they don't own succeed, and a delete of someone else's message must check permissions.
+- These operations are rare (1/100 vs new messages) — the extra latency of a synchronous round-trip is acceptable.
+
+**Why authorization in Web only**:
+- Permission checks require Prisma queries (Member → Roles → computeMemberPermissions). The Gateway has no database access.
+- Keeping auth in one service avoids the "two places to update" problem when permissions evolve.
+- The Gateway is a transport layer (DEC-0019) — it shouldn't know about permission bits.
+
+**Soft-delete pattern**: `isDeleted: Boolean @default(false)` on Message. Queries filter with `isDeleted: false`. Frontend shows `[message deleted]` placeholder. Hard-delete not supported in V1.
+
+**Consequences**: PATCH and DELETE internal API endpoints. `message_edit` and `message_delete` WebSocket events (client→server). `message_edited` and `message_deleted` broadcasts (server→client). `MANAGE_MESSAGES` permission bit (8) added. All documented in PROTOCOL.md v1.5.

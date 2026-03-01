@@ -1,14 +1,14 @@
 # STREAMING.md — Token Streaming Lifecycle Rules
 
-> This is the detailed reference for HiveChat's streaming system.
+> This is the detailed reference for Tavok's streaming system.
 > For the wire-level contracts, see `docs/PROTOCOL.md` §4.
-> For the product vision, see `docs/HiveChat.md`.
+> For the product vision, see `docs/Tavok.md`.
 
 ---
 
 ## Overview
 
-Token streaming is HiveChat's differentiator. When an AI agent responds in a channel, tokens flow smoothly word-by-word — not hacked together with message edits.
+Token streaming is Tavok's differentiator. When an AI agent responds in a channel, tokens flow smoothly word-by-word — not hacked together with message edits.
 
 The streaming system involves all three services:
 1. **Gateway** (Elixir): Detects trigger, creates placeholder message, broadcasts stream events
@@ -44,16 +44,91 @@ Summary:
 
 ---
 
-## Provider Normalization
+## Provider System
 
-The Go Proxy normalizes ALL provider responses into a common token format.
-The Gateway and client NEVER need to know which provider generated the tokens.
+### Provider Interface
 
-Supported providers:
-- **Anthropic** (Claude): SSE with `content_block_delta` events
-- **OpenAI** (GPT): SSE with `choices[0].delta.content`
-- **OpenAI-compatible** (Ollama, OpenRouter, LiteLLM): Same as OpenAI format
-- **Custom**: Any endpoint that returns OpenAI-compatible SSE
+All LLM providers implement a common interface (`streaming/internal/provider/provider.go`):
+
+```go
+type Provider interface {
+    Name() string
+    Stream(ctx context.Context, req StreamRequest, tokens chan<- Token) (*StreamResult, error)
+}
+```
+
+The `Stream` method opens a connection to the LLM API, parses the response format, and sends normalized `Token` values through the channel. The caller (stream manager) handles batching, Redis publishing, and lifecycle management.
+
+### Provider Registry
+
+`streaming/internal/provider/registry.go` maps provider names to implementations:
+
+| Provider Name | Implementation | API Format | Auth |
+|---------------|---------------|------------|------|
+| `anthropic` | Anthropic | `/v1/messages`, `content_block_delta` events | `x-api-key` header |
+| `openai` | OpenAI | `/v1/chat/completions`, `choices[0].delta.content` | `Bearer` token |
+| `ollama` | OpenAI (reused) | OpenAI-compatible format | None (local) |
+| `openrouter` | OpenAI (reused) | OpenAI-compatible format | `Bearer` token |
+| `custom` | OpenAI (reused) | OpenAI-compatible (assumed) | `Bearer` token (optional) |
+
+Unknown provider names fall back to OpenAI-compatible with a warning log.
+
+### Transport Layer (TASK-0013)
+
+The transport layer decouples HTTP connection mechanics from response format parsing.
+
+**Transport interface** (`streaming/internal/provider/transport.go`):
+
+```go
+type Transport interface {
+    OpenStream(ctx context.Context, req *http.Request) (io.ReadCloser, error)
+}
+```
+
+**HTTPSSETransport** is the default implementation used by all providers. It opens an HTTP POST connection and returns the SSE response body for parsing.
+
+Each provider is composed of:
+- **Transport**: How to connect (HTTP SSE today, WebSocket/gRPC in future)
+- **Format adapter**: How to parse the response (OpenAI vs Anthropic event formats)
+
+Providers accept custom transports via `NewOpenAIWithTransport(t)` and `NewAnthropicWithTransport(t)` for testing and extensibility.
+
+### Custom Headers
+
+`StreamRequest.Headers` supports provider-specific headers. Example for OpenRouter:
+
+```go
+StreamRequest{
+    Headers: map[string]string{
+        "HTTP-Referer": "https://tavok.ai",
+        "X-Title":      "Tavok",
+    },
+}
+```
+
+Headers are applied after standard provider headers, so they can override defaults if needed.
+
+### Shared Infrastructure
+
+**HTTP Client** (`streaming/internal/provider/http.go`): All providers use `NewStreamingHTTPClient()` with tuned transport settings (DEC-0034): MaxConnsPerHost=200, MaxIdleConnsPerHost=20, IdleConnTimeout=120s, Timeout=5min.
+
+**SSE Parser** (`streaming/internal/sse/parser.go`): Generic Server-Sent Events parser per WHATWG spec. Handles `event:` and `data:` fields, multi-line data, 1MB max buffer.
+
+### Adding a New Provider
+
+**OpenAI-compatible endpoint** (Ollama, vLLM, LiteLLM):
+1. Add entry to `NewRegistry()` in `registry.go`
+2. Add default endpoint/model to `PROVIDER_DEFAULTS` in `manage-bots-modal.tsx`
+
+**New API format** (e.g., Google Gemini):
+1. Create `streaming/internal/provider/gemini.go` implementing `Provider`
+2. Use `NewHTTPSSETransport()` for the transport (or implement a custom `Transport`)
+3. Implement format-specific request building, auth headers, and SSE event parsing
+4. Register in `NewRegistry()`
+
+**New transport** (e.g., WebSocket for OpenAI Realtime):
+1. Implement the `Transport` interface
+2. Use `NewOpenAIWithTransport(myTransport)` to inject it
 
 All providers produce the same output: `{messageId, token, index}`
 
@@ -121,20 +196,15 @@ Agents emit thinking state changes during execution. New protocol events (to be 
 
 Thinking states flow through the same pipeline as tokens: Go → Redis → Gateway → WebSocket → Client. States are persisted with the message for replay.
 
-### Provider Transport Strategies (DEC-0024)
+### Provider Transport Strategies (DEC-0024, DEC-0036, TASK-0013)
 
-V1 abstracts both API format AND transport per provider. The Go proxy's provider interface:
+V1 implements the `Transport` interface, decoupling HTTP mechanics from format parsing. Both OpenAI and Anthropic providers now accept pluggable transports. Custom headers support enables OpenRouter integration.
 
-```
-Stream(config ProviderConfig, messages []Message) → chan TokenEvent
-```
+Current transport: **HTTPSSETransport** for all providers (OpenAI, Anthropic, Ollama, OpenRouter, custom).
 
-Transport strategies:
-- **HTTP SSE**: OpenAI, Anthropic, OpenAI-compatible (Ollama, OpenRouter)
+Future transports (extension points ready):
 - **WebSocket**: OpenAI Realtime/Responses API
-- **gRPC**: Future local model transports
-
-The rest of the system sees only `TokenEvent` — it never knows which provider or transport delivered it. Adding a new provider means implementing a format adapter and a transport adapter.
+- **gRPC**: Local model inference
 
 ### Tool Execution Mid-Stream
 

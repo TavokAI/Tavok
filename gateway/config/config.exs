@@ -1,10 +1,10 @@
-# General configuration for HiveGateway
+# General configuration for TavokGateway
 import Config
 
-config :hive_gateway, HiveGatewayWeb.Endpoint,
+config :tavok_gateway, TavokGatewayWeb.Endpoint,
   url: [host: "localhost"],
-  render_errors: [formats: [json: HiveGatewayWeb.ErrorJSON]],
-  pubsub_server: HiveGateway.PubSub
+  render_errors: [formats: [json: TavokGatewayWeb.ErrorJSON]],
+  pubsub_server: TavokGateway.PubSub
 
 # JSON library
 config :phoenix, :json_library, Jason

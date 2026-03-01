@@ -15,7 +15,7 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "HiveChat",
+  title: "Tavok",
   description: "AI-native self-hostable chat platform",
 };
 

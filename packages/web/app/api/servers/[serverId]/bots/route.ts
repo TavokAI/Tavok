@@ -45,6 +45,7 @@ export async function GET(
       maxTokens: true,
       isActive: true,
       triggerMode: true,
+      thinkingSteps: true, // TASK-0011
       createdAt: true,
       // Never expose apiKeyEncrypted
     },
@@ -88,6 +89,7 @@ export async function POST(
     temperature = 0.7,
     maxTokens = 4096,
     triggerMode = "MENTION",
+    thinkingSteps,
   } = body;
 
   if (!name || !llmProvider || !llmModel || !apiEndpoint || !apiKey || !systemPrompt) {
@@ -114,6 +116,7 @@ export async function POST(
       maxTokens,
       isActive: true,
       triggerMode,
+      thinkingSteps: thinkingSteps ? JSON.stringify(thinkingSteps) : undefined, // TASK-0011
     },
   });
 
@@ -129,6 +132,7 @@ export async function POST(
       maxTokens: bot.maxTokens,
       isActive: bot.isActive,
       triggerMode: bot.triggerMode,
+      thinkingSteps: bot.thinkingSteps ? JSON.parse(bot.thinkingSteps) : null, // TASK-0011
     },
     { status: 201 }
   );

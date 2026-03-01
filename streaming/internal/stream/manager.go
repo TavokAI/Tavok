@@ -19,9 +19,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/hivechat/streaming/internal/config"
-	"github.com/hivechat/streaming/internal/gateway"
-	"github.com/hivechat/streaming/internal/provider"
+	"github.com/TavokAI/Tavok/streaming/internal/config"
+	"github.com/TavokAI/Tavok/streaming/internal/gateway"
+	"github.com/TavokAI/Tavok/streaming/internal/provider"
 )
 
 // streamRequest is the JSON payload from Redis hive:stream:request
@@ -174,6 +174,19 @@ func (m *Manager) handleStream(ctx context.Context, req streamRequest) {
 		"model", botConfig.LLMModel,
 	)
 
+	// Emit configurable thinking phase — bot config loaded, about to call LLM (TASK-0011)
+	thinkingPhase0 := botConfig.GetThinkingPhase(0)
+	m.publishThinking(ctx, req, thinkingPhase0)
+
+	// Accumulate thinking timeline for post-completion replay (TASK-0011)
+	type timelineEntry struct {
+		Phase     string `json:"phase"`
+		Timestamp string `json:"timestamp"`
+	}
+	thinkingTimeline := []timelineEntry{
+		{Phase: thinkingPhase0, Timestamp: time.Now().UTC().Format(time.RFC3339Nano)},
+	}
+
 	// 3. Build provider request
 	streamReq := provider.StreamRequest{
 		BotID:           req.BotID,
@@ -208,6 +221,7 @@ func (m *Manager) handleStream(ctx context.Context, req streamRequest) {
 	// Gateway and frontend require zero changes — they just see larger "token" strings.
 	var lastContent string
 	tokenCount := 0
+	firstTokenSeen := false // Tracks first token for "Writing" phase (TASK-0011)
 	tokenTimeout := 30 * time.Second
 
 	const batchMaxTokens = 10
@@ -253,6 +267,17 @@ func (m *Manager) handleStream(ctx context.Context, req streamRequest) {
 				flushBatch()
 				streamDone = true
 				break
+			}
+
+			// Emit configurable "Writing" phase on first token (TASK-0011)
+			if !firstTokenSeen {
+				firstTokenSeen = true
+				writingPhase := botConfig.GetThinkingPhase(1)
+				m.publishThinking(ctx, req, writingPhase)
+				thinkingTimeline = append(thinkingTimeline, timelineEntry{
+					Phase:     writingPhase,
+					Timestamp: time.Now().UTC().Format(time.RFC3339Nano),
+				})
 			}
 
 			// Reset the per-token timeout timer
@@ -327,13 +352,28 @@ func (m *Manager) handleStream(ctx context.Context, req streamRequest) {
 		tokenCount = pr.result.TokenCount
 	}
 
+	// Guard against empty responses — if the LLM returned no content, persist a
+	// visible placeholder instead of empty string. Empty content in the DB cascades
+	// into broken context for future requests. (ISSUE-027)
+	if strings.TrimSpace(finalContent) == "" {
+		m.logger.Warn("Stream completed with empty content — using placeholder",
+			"messageId", req.MessageID,
+			"durationMs", durationMs,
+		)
+		finalContent = "*[No response generated]*"
+	}
+
+	// Serialize thinking timeline for persistence (TASK-0011)
+	timelineJSON, _ := json.Marshal(thinkingTimeline)
+
 	statusPayload, _ := json.Marshal(map[string]interface{}{
-		"messageId":    req.MessageID,
-		"status":       "complete",
-		"finalContent": finalContent,
-		"error":        nil,
-		"tokenCount":   tokenCount,
-		"durationMs":   durationMs,
+		"messageId":        req.MessageID,
+		"status":           "complete",
+		"finalContent":     finalContent,
+		"error":            nil,
+		"tokenCount":       tokenCount,
+		"durationMs":       durationMs,
+		"thinkingTimeline": thinkingTimeline,
 	})
 
 	if err := m.gwClient.PublishStatus(ctx, req.ChannelID, req.MessageID, string(statusPayload)); err != nil {
@@ -349,8 +389,8 @@ func (m *Manager) handleStream(ctx context.Context, req streamRequest) {
 		)
 	}
 
-	// 8. Persist final message content (with retry for transient web outages — DEC-0018)
-	if err := m.loader.FinalizeMessageWithRetry(req.MessageID, finalContent, "COMPLETE", m.logger); err != nil {
+	// 8. Persist final message content with thinking timeline (with retry — DEC-0018, TASK-0011)
+	if err := m.loader.FinalizeMessageWithTimeline(req.MessageID, finalContent, "COMPLETE", string(timelineJSON), m.logger); err != nil {
 		m.logger.Error("FinalizeMessage exhausted retries — DB may be ACTIVE, watchdog will recover",
 			"messageId", req.MessageID,
 			"error", err,
@@ -400,6 +440,24 @@ func (m *Manager) publishError(ctx context.Context, req streamRequest, partialCo
 	if err := m.loader.FinalizeMessageWithRetry(req.MessageID, content, "ERROR", m.logger); err != nil {
 		m.logger.Error("FinalizeMessage (error path) exhausted retries — DB may be ACTIVE, watchdog will recover",
 			"messageId", req.MessageID,
+			"error", err,
+		)
+	}
+}
+
+// publishThinking emits a thinking phase change to Redis.
+// Phase labels are configurable via bot's ThinkingSteps (default: ["Thinking","Writing"]).
+// The frontend clears the phase on stream_complete/stream_error. (TASK-0011, DEC-0037)
+func (m *Manager) publishThinking(ctx context.Context, req streamRequest, phase string) {
+	payload, _ := json.Marshal(map[string]interface{}{
+		"messageId": req.MessageID,
+		"phase":     phase,
+		"timestamp": time.Now().UTC().Format(time.RFC3339Nano),
+	})
+	if err := m.gwClient.PublishThinking(ctx, req.ChannelID, req.MessageID, string(payload)); err != nil {
+		m.logger.Error("Failed to publish thinking phase",
+			"messageId", req.MessageID,
+			"phase", phase,
 			"error", err,
 		)
 	}
