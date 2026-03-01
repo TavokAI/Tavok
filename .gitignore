@@ -58,3 +58,25 @@ coverage/
 # === Misc ===
 *.tsbuildinfo
 uploads/
+
+# === Dev tooling directories ===
+.agents/
+.claude/
+.openhands/
+.pi/
+.playwright-mcp/
+.cursor/
+
+# === Test artifacts ===
+cookies.txt
+test_*.png
+test_*.py
+
+# === Build artifacts ===
+build-log.txt
+
+# === PowerShell dev scripts ===
+scripts/*.ps1
+
+# === Windows artifacts ===
+*;C/

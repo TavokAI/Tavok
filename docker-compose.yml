@@ -125,7 +125,8 @@ services:
       context: ./streaming
       dockerfile: Dockerfile
     restart: unless-stopped
-    # Port 4002 is internal only — not exposed to host
+    ports:
+      - "${STREAMING_PORT:-4002}:4002"
     environment:
       STREAMING_PORT: "4002"
       STREAMING_REDIS_URL: redis://:${REDIS_PASSWORD:-tavok-redis-dev}@redis:6379

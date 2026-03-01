@@ -211,7 +211,7 @@ Shipped baseline attachments in V0: Attachment model, upload/download API, paper
 
 ## TASK-0011: Agent Thinking Timeline ⭐
 
-**Status**: TODO
+**Status**: DONE
 **Priority**: P0 — THE Differentiator
 **Track**: A (Agent)
 **Assignee**: Builder
@@ -238,7 +238,7 @@ Simplest V1: bot config includes a `thinkingSteps` array, and the proxy emits st
 
 ## TASK-0012: Multi-Stream in One Channel ⭐
 
-**Status**: TODO
+**Status**: DONE
 **Priority**: P0 — THE Differentiator
 **Track**: A (Agent)
 **Assignee**: Builder
@@ -260,7 +260,7 @@ Multiple agents streaming simultaneously in the same channel. The visual proof t
 
 ## TASK-0013: Provider Abstraction with Transport Strategies
 
-**Status**: TODO
+**Status**: DONE
 **Priority**: P0 — Core Infrastructure
 **Track**: A (Agent)
 **Assignee**: Builder
@@ -709,9 +709,9 @@ Expandable "X-Ray" panel on any agent message showing execution details. Lite ve
 | Task | Wave | Track | Priority | Description | Status |
 |------|------|-------|----------|-------------|--------|
 | 0001-0010 | V0 | — | — | Foundation through Reactions + Uploads | ✅ DONE |
-| **0011** | **Launch** | **Agent** | **P0** | **Agent Thinking Timeline** ⭐ | TODO |
-| **0012** | **Launch** | **Agent** | **P0** | **Multi-Stream in One Channel** ⭐ | TODO |
-| **0013** | **Launch** | **Agent** | **P0** | **Provider Abstraction + Transport** | TODO |
+| **0011** | **Launch** | **Agent** | **P0** | **Agent Thinking Timeline** ⭐ | DONE |
+| **0012** | **Launch** | **Agent** | **P0** | **Multi-Stream in One Channel** ⭐ | DONE |
+| **0013** | **Launch** | **Agent** | **P0** | **Provider Abstraction + Transport** | DONE |
 | **0014** | **Launch** | **Chat** | **P0** | **Message Edit & Delete** | DONE |
 | **0015** | **Launch** | **Chat** | **P1** | **@Mentions with Autocomplete** | DONE |
 | **0016** | **Launch** | **Chat** | **P0** | **Unread Indicators** | DONE |
