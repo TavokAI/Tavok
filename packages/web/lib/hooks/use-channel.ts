@@ -471,6 +471,24 @@ export function useChannel(channelId: string | null): UseChannelReturn {
         addMessages([{ ...payload, reactions: payload.reactions || [] }]);
       });
 
+      // ---- Reaction events (TASK-0030) ----
+      // Real-time reaction broadcast from other users
+      channel.on("reaction_update", (raw: unknown) => {
+        if (!mounted) return;
+        const payload = raw as {
+          messageId: string;
+          reactions: ReactionData[];
+        };
+
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === payload.messageId
+              ? { ...m, reactions: payload.reactions || [] }
+              : m
+          )
+        );
+      });
+
       // ---- Charter status events (TASK-0020) ----
       channel.on("charter_status", (raw: unknown) => {
         if (!mounted) return;
