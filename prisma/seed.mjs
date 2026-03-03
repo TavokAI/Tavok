@@ -747,20 +747,25 @@ async function main() {
   console.log("  ✓ Invite: code DEMO2026");
 
   // -----------------------------------------------------------------------
-  // 13. Write seed IDs for test scripts
+  // 13. Write seed IDs for test scripts (non-fatal — Docker container
+  //     may not have write access to /app/prisma/)
   // -----------------------------------------------------------------------
-  const fs = await import("node:fs");
-  const seedIds = {
-    serverId: server.id,
-    generalChannelId: generalChannel.id,
-    researchChannelId: researchChannel.id,
-    devChannelId: devChannel.id,
-  };
-  fs.writeFileSync(
-    path.join(__dirname, ".seed-ids.json"),
-    JSON.stringify(seedIds, null, 2)
-  );
-  console.log("  ✓ Wrote prisma/.seed-ids.json");
+  try {
+    const fs = await import("node:fs");
+    const seedIds = {
+      serverId: server.id,
+      generalChannelId: generalChannel.id,
+      researchChannelId: researchChannel.id,
+      devChannelId: devChannel.id,
+    };
+    fs.writeFileSync(
+      path.join(__dirname, ".seed-ids.json"),
+      JSON.stringify(seedIds, null, 2)
+    );
+    console.log("  ✓ Wrote prisma/.seed-ids.json");
+  } catch {
+    console.log("  ⚠ Could not write prisma/.seed-ids.json (read-only filesystem, skipping)");
+  }
 
   // -----------------------------------------------------------------------
   // Summary
