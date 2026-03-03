@@ -22,43 +22,6 @@ agent.run(server_id="YOUR_SERVER_ID", channel_ids=["YOUR_CHANNEL_ID"])
 
 ---
 
-## Full-Capacity Demo Pack
-
-The repo includes a complete landing-page media pack generated from one deterministic demo timeline.
-
-### Hero Loop
-
-![Tavok full-capacity hero](assets/demos/exports/hero_full-capacity_1600w_v1.gif)
-
-### Product Video
-
-- MP4: [video_full-capacity_1080p_v1.mp4](assets/demos/exports/video_full-capacity_1080p_v1.mp4)
-- WebM: [video_full-capacity_1080p_v1.webm](assets/demos/exports/video_full-capacity_1080p_v1.webm)
-
-### Feature Micro-Demos
-
-| Capability | Demo |
-|---|---|
-| Multi-stream in one channel | ![Multi-stream](assets/demos/exports/feature_multistream_1200w_v1.gif) |
-| Thinking timeline | ![Thinking timeline](assets/demos/exports/feature_thinking-timeline_1200w_v1.gif) |
-| Typed message cards | ![Typed messages](assets/demos/exports/feature_typed-messages_1200w_v1.gif) |
-| Charter controls | ![Charter controls](assets/demos/exports/feature_charter-controls_1200w_v1.gif) |
-| Outcome quality | ![Outcome quality](assets/demos/exports/feature_outcome-quality_1200w_v1.gif) |
-| SDK velocity | ![SDK velocity](assets/demos/exports/feature_sdk-velocity_1200w_v1.gif) |
-
-### Screenshot Pack
-
-- [Scene orientation](assets/demos/screenshots/shot_scene-a-orientation_2x_v1.png)
-- [Multi-agent trigger](assets/demos/screenshots/shot_scene-b-trigger_2x_v1.png)
-- [Streaming in progress](assets/demos/screenshots/shot_scene-c-streaming_2x_v1.png)
-- [Typed cards](assets/demos/screenshots/shot_scene-d-typed-cards_2x_v1.png)
-- [Charter controls](assets/demos/screenshots/shot_scene-e-controls_2x_v1.png)
-- [Outcome quality](assets/demos/screenshots/shot_scene-f-outcome_2x_v1.png)
-- [SDK flow](assets/demos/screenshots/shot_scene-g-sdk_2x_v1.png)
-- [Multi-agent highlight](assets/demos/screenshots/shot_feature-multi-agent_2x_v1.png)
-
----
-
 ## Get Started in 60 Seconds
 
 ```bash
