@@ -24,6 +24,7 @@ export const authOptions: NextAuthOptions = {
       },
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) {
+          console.log("[AUTH] authorize: missing email or password");
           return null;
         }
 
@@ -32,14 +33,17 @@ export const authOptions: NextAuthOptions = {
         });
 
         if (!user) {
+          console.log(`[AUTH] authorize: no user found for ${credentials.email}`);
           return null;
         }
 
         const isValid = await bcrypt.compare(credentials.password, user.password);
         if (!isValid) {
+          console.log(`[AUTH] authorize: invalid password for ${credentials.email} (hash length: ${user.password.length})`);
           return null;
         }
 
+        console.log(`[AUTH] authorize: success for ${credentials.email}`);
         return {
           id: user.id,
           email: user.email,

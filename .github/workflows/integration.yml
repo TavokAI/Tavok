@@ -56,7 +56,37 @@ jobs:
           done
 
       - name: Seed database
-        run: docker compose exec -T web npx prisma db seed
+        run: |
+          # The prisma.seed config lives in packages/web/package.json, not the root.
+          # Run from /app/packages/web so Prisma finds the seed command.
+          docker compose exec -T -w /app/packages/web web npx prisma db seed
+
+      - name: Verify seed data and auth
+        run: |
+          echo "=== Checking seeded users in database ==="
+          docker compose exec -T db psql -U tavok -d tavok -c \
+            "SELECT email, username, length(password) as pw_hash_len FROM \"User\" WHERE email IN ('demo@tavok.ai','alice@tavok.ai','bob@tavok.ai')"
+
+          echo ""
+          echo "=== Testing curl-based NextAuth login ==="
+          COOKIE_JAR=$(mktemp)
+
+          # Get CSRF token + cookie
+          CSRF_RESPONSE=$(curl -s -c "$COOKIE_JAR" http://localhost:3000/api/auth/csrf)
+          CSRF_TOKEN=$(echo "$CSRF_RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin)['csrfToken'])" 2>/dev/null || echo "PARSE_FAILED")
+          echo "CSRF token (first 20 chars): ${CSRF_TOKEN:0:20}..."
+
+          # Authenticate with seeded user
+          AUTH_RESPONSE=$(curl -s -b "$COOKIE_JAR" -c "$COOKIE_JAR" \
+            -X POST http://localhost:3000/api/auth/callback/credentials \
+            -d "email=demo@tavok.ai&password=DemoPass123!&csrfToken=$CSRF_TOKEN&json=true")
+          echo "Auth response: $AUTH_RESPONSE"
+
+          # Check if session cookie was set
+          echo ""
+          echo "=== Cookies after auth ==="
+          cat "$COOKIE_JAR"
+          rm -f "$COOKIE_JAR"
 
       - name: Run regression harness
         run: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/regression-harness.ps1

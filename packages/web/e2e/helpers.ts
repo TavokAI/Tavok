@@ -2,27 +2,87 @@ import type { Page } from "@playwright/test";
 import { expect } from "@playwright/test";
 
 /**
- * Log in via the credentials form.
+ * Log in using Playwright's API request context, which shares cookies
+ * with the browser context.
  *
- * In Docker/CI the signIn() redirect may not fire because the
- * window.location.assign navigation never completes (page load
- * blocks on WebSocket/SSR in production mode). This helper detects
- * that case and navigates manually after verifying no error appeared.
+ * This bypasses the client-side `signIn()` from next-auth/react entirely,
+ * replicating the same HTTP calls that the regression harness uses
+ * (GET /api/auth/csrf → POST /api/auth/callback/credentials).
+ *
+ * Falls back to form-based login if the API approach fails.
  */
 export async function login(
   page: Page,
   email: string,
   password: string,
 ): Promise<void> {
+  // ── Strategy 1: API-based auth via page.request ───────────────────
+  // page.request shares the cookie jar with the browser context,
+  // so the session cookie set here will be sent by the browser.
+  try {
+    // Step 1: Get CSRF token (also sets the CSRF cookie)
+    const csrfRes = await page.request.get("/api/auth/csrf");
+    const csrfData = await csrfRes.json();
+    const csrfToken: string = csrfData.csrfToken;
+
+    if (!csrfToken) {
+      throw new Error("No CSRF token returned from /api/auth/csrf");
+    }
+
+    // Step 2: Authenticate via NextAuth callback
+    const authRes = await page.request.post(
+      "/api/auth/callback/credentials",
+      {
+        form: {
+          email,
+          password,
+          csrfToken,
+          json: "true",
+        },
+      },
+    );
+
+    // NextAuth returns { url: "..." } with json:true.
+    // If the URL contains "error", auth failed.
+    const authData = await authRes.json().catch(() => null);
+
+    if (authData?.url?.includes("error")) {
+      throw new Error(
+        `API auth returned error URL: ${authData.url}`,
+      );
+    }
+
+    // Step 3: Navigate to the app (session cookie is in the shared jar)
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+
+    // If we landed on /login, the session cookie wasn't accepted
+    if (!page.url().includes("/login")) {
+      // Success — wait for app to render
+      await expect(
+        page.getByRole("button", { name: "SERVERS" }),
+      ).toBeVisible({ timeout: 15_000 });
+      return;
+    }
+
+    // Fall through to Strategy 2
+    console.log(
+      `[login] API auth set cookie but redirected to /login for ${email}, trying form login`,
+    );
+  } catch (apiError) {
+    console.log(
+      `[login] API auth failed for ${email}: ${apiError}, trying form login`,
+    );
+  }
+
+  // ── Strategy 2: Form-based login ──────────────────────────────────
   await page.goto("/login");
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill(password);
   await page.getByRole("button", { name: /log in/i }).click();
 
-  // Give signIn() time to complete the API call
+  // Give signIn() time to complete
   await page.waitForTimeout(3000);
 
-  // Check current state
   const currentUrl = page.url();
   if (currentUrl.includes("/login")) {
     // Check for error message — if present, login actually failed
@@ -35,20 +95,16 @@ export async function login(
       throw new Error(`Login failed for ${email}: invalid credentials`);
     }
 
-    // No error visible = signIn succeeded but redirect didn't fire.
-    // Navigate directly — the session cookie should already be set
-    // by the signIn API response.
+    // No error = signIn succeeded but redirect didn't fire.
     await page.goto("/", { waitUntil: "domcontentloaded" });
   }
 
-  // If we got redirected back to /login, the cookie wasn't set
   if (page.url().includes("/login")) {
     throw new Error(
       `Login failed for ${email}: session cookie not persisted (redirected back to /login)`,
     );
   }
 
-  // Wait for the app layout to render
   await expect(
     page.getByRole("button", { name: "SERVERS" }),
   ).toBeVisible({ timeout: 15_000 });
