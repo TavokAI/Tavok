@@ -47,7 +47,7 @@ export async function GET() {
     });
 
     const dms = participations
-      .map((p) => {
+      .map((p: typeof participations[number]) => {
         const otherParticipant = p.dm.participants[0];
         const lastMessage = p.dm.messages[0] || null;
 
@@ -67,7 +67,7 @@ export async function GET() {
         };
       })
       // Sort by most recent message/activity
-      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+      .sort((a: { updatedAt: string }, b: { updatedAt: string }) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
 
     return NextResponse.json({ dms });
   } catch (error) {

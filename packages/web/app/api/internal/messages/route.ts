@@ -97,8 +97,8 @@ export async function GET(request: NextRequest) {
     const userAuthorIds = [
       ...new Set(
         messages
-          .filter((m) => m.authorType === "USER")
-          .map((m) => m.authorId)
+          .filter((m: typeof messages[number]) => m.authorType === "USER")
+          .map((m: typeof messages[number]) => m.authorId)
       ),
     ];
     const userMap = new Map<string, { displayName: string; avatarUrl: string | null }>();
@@ -115,8 +115,8 @@ export async function GET(request: NextRequest) {
     const botAuthorIds = [
       ...new Set(
         messages
-          .filter((m) => m.authorType === "BOT")
-          .map((m) => m.authorId)
+          .filter((m: typeof messages[number]) => m.authorType === "BOT")
+          .map((m: typeof messages[number]) => m.authorId)
       ),
     ];
     const botMap = new Map<string, { name: string; avatarUrl: string | null }>();
@@ -131,7 +131,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Map to MessagePayload shape
-    const payload = messages.map((m) => {
+    const payload = messages.map((m: typeof messages[number]) => {
       let authorName = "Unknown";
       let authorAvatarUrl: string | null = null;
 

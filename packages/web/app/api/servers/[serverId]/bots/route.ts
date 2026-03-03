@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db";
 import { encrypt } from "@/lib/encryption";
 import { ulid } from "ulid";
 import crypto from "crypto";
+import { Prisma } from "@prisma/client";
 import { checkMemberPermission } from "@/lib/check-member-permission";
 import { Permissions } from "@/lib/permissions";
 

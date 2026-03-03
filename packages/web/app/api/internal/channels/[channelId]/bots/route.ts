@@ -32,18 +32,18 @@ export async function GET(
     if (channelBots.length > 0) {
       // Load agent registrations for connectionMethod lookup (DEC-0043)
       const activeBotIds = channelBots
-        .filter((cb) => cb.bot.isActive)
-        .map((cb) => cb.bot.id);
+        .filter((cb: typeof channelBots[number]) => cb.bot.isActive)
+        .map((cb: typeof channelBots[number]) => cb.bot.id);
       const agentRegs = await prisma.agentRegistration.findMany({
         where: { botId: { in: activeBotIds } },
         select: { botId: true, connectionMethod: true },
       });
-      const regMap = new Map(agentRegs.map((r) => [r.botId, r.connectionMethod]));
+      const regMap = new Map(agentRegs.map((r: typeof agentRegs[number]) => [r.botId, r.connectionMethod]));
 
       // Return all active bots with decrypted keys
       const bots = channelBots
-        .filter((cb) => cb.bot.isActive)
-        .map((cb) => {
+        .filter((cb: typeof channelBots[number]) => cb.bot.isActive)
+        .map((cb: typeof channelBots[number]) => {
           let apiKey = "";
           try {
             apiKey = decrypt(cb.bot.apiKeyEncrypted);

@@ -29,6 +29,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Generate Prisma client
+        run: pnpm --filter web prisma generate
+
       - name: Run Vitest
         run: pnpm --filter web test
 
@@ -81,6 +84,9 @@ jobs:
         run: cd gateway && MIX_ENV=test mix compile --warnings-as-errors
 
       - name: Run ExUnit tests
+        env:
+          JWT_SECRET: ci-test-jwt-secret
+          INTERNAL_API_SECRET: ci-test-internal-secret
         run: cd gateway && mix test --trace
 
   lint:

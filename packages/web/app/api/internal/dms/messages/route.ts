@@ -121,7 +121,7 @@ export async function GET(request: NextRequest) {
       messages.reverse();
     }
 
-    const payload = messages.map((m) => ({
+    const payload = messages.map((m: typeof messages[number]) => ({
       id: m.id,
       dmId: m.dmId,
       authorId: m.authorId,

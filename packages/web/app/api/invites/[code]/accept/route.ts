@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { generateId } from "@/lib/ulid";
 
@@ -61,7 +62,7 @@ export async function POST(
   // 2. Create member
   // 3. Assign @everyone role
   // All succeed or all roll back. (ISSUE-011)
-  const result = await prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     // Conditional update: only increment if (maxUses IS NULL OR uses < maxUses)
     const updated = await tx.invite.updateMany({
       where: {

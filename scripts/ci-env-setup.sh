@@ -12,12 +12,13 @@ if [ ! -f "$ENV_FILE" ]; then
 fi
 
 # Generate deterministic but valid secrets for CI
-NEXTAUTH_SECRET=$(openssl rand -base64 32)
-JWT_SECRET=$(openssl rand -base64 32)
-INTERNAL_API_SECRET=$(openssl rand -base64 32)
-SECRET_KEY_BASE=$(openssl rand -base64 64)
-ENCRYPTION_KEY=$(openssl rand -hex 32)
-REDIS_PASSWORD=$(openssl rand -base64 16 | tr -d '=+/' | head -c 20)
+# tr -d '\n' ensures no newlines in base64 output (which breaks sed)
+NEXTAUTH_SECRET=$(openssl rand -base64 32 | tr -d '\n')
+JWT_SECRET=$(openssl rand -base64 32 | tr -d '\n')
+INTERNAL_API_SECRET=$(openssl rand -base64 32 | tr -d '\n')
+SECRET_KEY_BASE=$(openssl rand -base64 64 | tr -d '\n')
+ENCRYPTION_KEY=$(openssl rand -hex 32 | tr -d '\n')
+REDIS_PASSWORD=$(openssl rand -base64 16 | tr -d '=+/\n' | head -c 20)
 
 # Replace CHANGE-ME values
 sed -i "s|^NEXTAUTH_SECRET=.*|NEXTAUTH_SECRET=$NEXTAUTH_SECRET|" "$ENV_FILE"
