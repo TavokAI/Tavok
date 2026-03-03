@@ -2,56 +2,30 @@ import type { Page } from "@playwright/test";
 import { expect } from "@playwright/test";
 
 /**
- * Log in via NextAuth API (bypasses form → more reliable in CI).
- * Uses page.evaluate to run fetch() in the browser context, ensuring
- * cookies are handled correctly by the browser's cookie jar.
+ * Log in via the credentials form and wait for the app to load.
+ * Uses the form UI (not API) to match real user flows. Handles
+ * Docker/CI environments where page load may be slow by using
+ * domcontentloaded instead of the default 'load' wait condition.
  */
 export async function login(
   page: Page,
   email: string,
   password: string,
 ): Promise<void> {
-  // Navigate to login page first to establish the page origin
   await page.goto("/login");
+  await page.getByLabel("Email").fill(email);
+  await page.getByLabel("Password").fill(password);
+  await page.getByRole("button", { name: /log in/i }).click();
 
-  // Run the login flow inside the browser context so cookies are
-  // handled by the browser's native cookie jar (not Playwright's API client).
-  const loginResult = await page.evaluate(
-    async ({ email, password }) => {
-      // 1. Get CSRF token
-      const csrfRes = await fetch("/api/auth/csrf");
-      const { csrfToken } = await csrfRes.json();
+  // Wait for URL to change from /login. Use domcontentloaded instead
+  // of load since the app page may hold the load event for WebSocket
+  // or data fetching that takes time in Docker environments.
+  await page.waitForURL((url) => !url.pathname.includes("/login"), {
+    timeout: 30_000,
+    waitUntil: "domcontentloaded",
+  });
 
-      // 2. Sign in via credentials callback
-      const signInRes = await fetch("/api/auth/callback/credentials", {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams({
-          csrfToken,
-          email,
-          password,
-          json: "true",
-        }),
-        redirect: "follow",
-      });
-
-      return {
-        status: signInRes.status,
-        ok: signInRes.ok,
-        url: signInRes.url,
-      };
-    },
-    { email, password },
-  );
-
-  if (!loginResult.ok && loginResult.status !== 200) {
-    throw new Error(
-      `Login API failed for ${email}: status ${loginResult.status}`,
-    );
-  }
-
-  // 3. Navigate to app — browser now has the session cookie
-  await page.goto("/");
+  // Wait for the app layout to render
   await expect(
     page.getByRole("button", { name: "SERVERS" }),
   ).toBeVisible({ timeout: 15_000 });
