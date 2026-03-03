@@ -49,6 +49,9 @@ export async function GET(
         author: {
           select: { id: true, displayName: true, avatarUrl: true, username: true },
         },
+        reactions: {
+          select: { emoji: true, userId: true },
+        },
       },
       orderBy: { id: "desc" },
       take: limit + 1,
@@ -62,21 +65,36 @@ export async function GET(
     // Reverse to chronological order
     messages.reverse();
 
-    const payload = messages.map((m) => ({
-      id: m.id,
-      dmId: m.dmId,
-      authorId: m.authorId,
-      authorType: "USER",
-      authorName: m.author.displayName,
-      authorAvatarUrl: m.author.avatarUrl,
-      content: m.content,
-      type: "STANDARD",
-      streamingStatus: null,
-      sequence: serializeSequence(m.sequence),
-      createdAt: m.createdAt.toISOString(),
-      editedAt: m.editedAt?.toISOString() || null,
-      reactions: [],
-    }));
+    const payload = messages.map((m) => {
+      // Aggregate reactions: [{emoji, count, userIds}] (TASK-0030)
+      const reactionMap = new Map<string, string[]>();
+      for (const r of m.reactions) {
+        const existing = reactionMap.get(r.emoji) || [];
+        existing.push(r.userId);
+        reactionMap.set(r.emoji, existing);
+      }
+      const reactions = Array.from(reactionMap.entries()).map(([emoji, userIds]) => ({
+        emoji,
+        count: userIds.length,
+        userIds,
+      }));
+
+      return {
+        id: m.id,
+        dmId: m.dmId,
+        authorId: m.authorId,
+        authorType: "USER",
+        authorName: m.author.displayName,
+        authorAvatarUrl: m.author.avatarUrl,
+        content: m.content,
+        type: "STANDARD",
+        streamingStatus: null,
+        sequence: serializeSequence(m.sequence),
+        createdAt: m.createdAt.toISOString(),
+        editedAt: m.editedAt?.toISOString() || null,
+        reactions,
+      };
+    });
 
     return NextResponse.json({ messages: payload, hasMore });
   } catch (error) {

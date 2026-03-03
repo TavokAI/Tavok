@@ -79,8 +79,8 @@ test_*.py
 # === Build artifacts ===
 build-log.txt
 
-# === PowerShell dev scripts ===
-scripts/**/*.ps1
+# === PowerShell dev scripts (harness scripts tracked for CI) ===
+# scripts/**/*.ps1
 
 # === Demo assets (large binaries — use Git LFS or host externally) ===
 assets/demos/

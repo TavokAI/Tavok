@@ -1034,3 +1034,62 @@ model AgentRegistration {
 - Polling-based status: WebSocket events are already in place. Polling would be slower and more complex.
 
 **Consequences**: Channels gain structured multi-agent collaboration without changing existing stream request format. HUMAN_IN_THE_LOOP default ensures full backward compatibility.
+
+## DEC-0051 — ETS Message Buffer for Reconnection Sync
+
+**Date**: 2026-03-02
+**Status**: Accepted
+**Context**: Stress harness S-11 failure — sync_on_join queries the DB for missed messages, but broadcast-first architecture (DEC-0028) means recently sent messages may not be persisted yet. Clients reconnecting within the async-persistence window miss messages that were broadcast but not yet in the DB.
+
+**Decision**: Add an ETS-backed MessageBuffer GenServer that caches broadcast messages for 60 seconds. On sync_on_join, merge buffer entries with DB query results, deduplicating by message ID.
+
+**Architecture**:
+1. ETS table `:hive_message_buffer` — same pattern as RateLimiter and ConfigCache
+2. `buffer_message/2` called immediately after `broadcast_pre_serialized!` in room_channel
+3. `get_messages_after/2` called in sync_on_join before DB query
+4. Merge: union by message_id, buffer wins on conflict (fresher shape)
+5. Periodic sweep every 30s removes entries older than 60s
+
+**Alternatives rejected**:
+- Persist-first (revert DEC-0028): Would add ~50ms latency to every message send
+- Wait for persistence before sync: Would add variable delay (1-7s) to reconnection
+- Redis-backed buffer: Adds network hop; ETS is local, faster, and sufficient
+
+**Consequences**: Reconnection sync is accurate within 60 seconds of message send. Memory overhead is bounded (60s of messages × ~1KB each). Same operational pattern as existing ETS caches.
+
+## DEC-0052 — Persistence Error Classification: Permanent vs Retryable
+
+**Date**: 2026-03-02
+**Status**: Accepted
+**Context**: Stress harness F-04 failure — when web is stopped, message persistence retries for 7s (1s + 2s + 4s). If web restarts within that window, the retry succeeds and a "phantom" message gets persisted (message sent during downtime that should not exist).
+
+**Decision**: Classify persistence errors into permanent (service unreachable) and retryable (transient failure). Connection refused, connection closed, connection reset, and NXDOMAIN are permanent — fail immediately without retry. Timeouts and 5xx HTTP errors are retryable.
+
+**Rationale**: If the TCP connection is refused, the service is definitively not running. Retrying will not help and only delays failure recognition. For 5xx errors, the service was reachable and may recover on retry. This distinction prevents phantom messages during planned or unplanned web downtime.
+
+**Consequences**: Messages sent during web downtime fail immediately instead of potentially succeeding on retry. This is the correct behavior — the message was already broadcast to connected clients, and if the client reconnects later, they can request sync.
+
+---
+
+## DEC-0053 — Token History + Checkpoints for Stream Rewind
+
+**Date**: 2026-03-02
+**Status**: Accepted
+**Context**: Completed streaming messages are static — once the final content is persisted, the token-by-token arrival sequence is lost. Users have no way to replay how a response was generated, scrub through it, or resume from a known-good point if the stream errors.
+
+**Decision**: Persist token history and checkpoints on the Message model. Token history is a compact `[{o: contentOffset, t: relativeMs}]` array recorded during token batching. Checkpoints are emitted at semantically meaningful points (thinking phase transitions, tool call boundaries). Both are included in the finalization payload and stored as JSON text.
+
+**Rationale**:
+- Token history enables scrub-slider replay at original timing (1x) or accelerated (2x)
+- Compact format: `{o, t}` stores only offset + timing, not token text (which is already in content). A 5000-char response with ~200 batches ≈ 4KB — negligible storage overhead
+- Checkpoints at tool boundaries and phase transitions are semantically meaningful — users can jump to "after tool: web_search" rather than guessing
+- Resume creates a NEW message (not mutating the errored one) — preserves history integrity and reuses existing streaming flow
+- Redis pub/sub channel `hive:stream:checkpoint:*` follows existing patterns (thinking, tool_call, tool_result)
+
+**Alternatives rejected**:
+- Store individual tokens: Would multiply storage by 100x and complicate retrieval
+- Client-side recording: Tokens are ephemeral in the WebSocket stream — a reconnect loses all data
+- Time-bucketed sampling: Loses precision at interesting moments (tool calls, phase changes)
+- Mutate errored messages for resume: Would corrupt history and complicate undo
+
+**Consequences**: Two new optional fields on Message (tokenHistory, checkpoints). New Redis pub/sub channel and Gateway listener. Frontend gains RewindSlider and CheckpointResume components. Resume endpoint creates new messages with partial context.

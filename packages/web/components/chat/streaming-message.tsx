@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback } from "react";
 import Image from "next/image";
 import { useChatContext } from "@/components/providers/chat-provider";
 import type { MessagePayload, ReactionData } from "@/lib/hooks/use-channel";
@@ -9,6 +9,8 @@ import { ReactionBar } from "./reaction-bar";
 import { FileAttachment, parseFileReferences } from "./file-attachment";
 import { MessageActions } from "./message-actions";
 import { MessageMetadata } from "./MessageMetadata";
+import { RewindSlider } from "./rewind-slider";
+import { CheckpointResume } from "./checkpoint-resume";
 import { passthroughImageLoader } from "@/lib/image-loader";
 import { formatTime } from "@/lib/format-time";
 
@@ -16,6 +18,7 @@ interface StreamingMessageProps {
   message: MessagePayload;
   isGrouped: boolean;
   onReactionsChange?: (messageId: string, reactions: ReactionData[]) => void;
+  onResumeStream?: (messageId: string, checkpointIndex: number, botId: string) => void;
   currentUserId?: string;
   canManageMessages?: boolean;
   onDelete?: (messageId: string) => void;
@@ -33,9 +36,11 @@ export function StreamingMessage({
   message,
   isGrouped,
   onReactionsChange,
+  onResumeStream,
   canManageMessages,
   onDelete,
 }: StreamingMessageProps) {
+  const [showRewind, setShowRewind] = useState(false);
   const { members, bots } = useChatContext();
   const mentionNames = useMemo(
     () => [...members.map((member) => member.displayName), ...bots.map((bot) => bot.name)],
@@ -117,12 +122,47 @@ export function StreamingMessage({
               fileId={file.fileId}
               filename={file.filename}
               mimeType={file.mimeType}
+              width={file.width}
+              height={file.height}
             />
           ))}
           {isError && (
             <p className="text-xs text-status-dnd mt-1 font-mono">
               [SYSTEM: Stream ended with an error]
             </p>
+          )}
+          {/* Stream rewind slider (TASK-0021) */}
+          {isComplete && message.tokenHistory && message.tokenHistory.length > 0 && showRewind && (
+            <RewindSlider
+              content={message.content || ""}
+              tokenHistory={message.tokenHistory}
+              checkpoints={message.checkpoints}
+              mentionNames={mentionNames}
+              onClose={() => setShowRewind(false)}
+            />
+          )}
+          {/* Rewind toggle button (TASK-0021) */}
+          {isComplete && message.tokenHistory && message.tokenHistory.length > 0 && !showRewind && (
+            <button
+              onClick={() => setShowRewind(true)}
+              className="mt-1 text-[10px] px-1.5 py-0.5 rounded bg-background-tertiary text-text-muted hover:text-accent hover:bg-accent/10 transition flex items-center gap-1"
+              title="Rewind stream"
+            >
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <polygon points="19,20 9,12 19,4" />
+                <line x1="5" y1="19" x2="5" y2="5" />
+              </svg>
+              Rewind
+            </button>
+          )}
+          {/* Checkpoint resume (TASK-0021) */}
+          {isError && message.checkpoints && message.checkpoints.length > 0 && (
+            <CheckpointResume
+              messageId={message.id}
+              channelId={message.channelId}
+              checkpoints={message.checkpoints}
+              onResume={onResumeStream}
+            />
           )}
           {hasTimeline && (
             <div className="flex items-center gap-1 mt-1.5">
@@ -225,12 +265,47 @@ export function StreamingMessage({
             fileId={file.fileId}
             filename={file.filename}
             mimeType={file.mimeType}
+            width={file.width}
+            height={file.height}
           />
         ))}
         {isError && (
           <p className="text-xs text-status-dnd mt-1 font-mono">
             [SYSTEM: Stream ended with an error]
           </p>
+        )}
+        {/* Stream rewind slider (TASK-0021) */}
+        {isComplete && message.tokenHistory && message.tokenHistory.length > 0 && showRewind && (
+          <RewindSlider
+            content={message.content || ""}
+            tokenHistory={message.tokenHistory}
+            checkpoints={message.checkpoints}
+            mentionNames={mentionNames}
+            onClose={() => setShowRewind(false)}
+          />
+        )}
+        {/* Rewind toggle button (TASK-0021) */}
+        {isComplete && message.tokenHistory && message.tokenHistory.length > 0 && !showRewind && (
+          <button
+            onClick={() => setShowRewind(true)}
+            className="mt-1 text-[10px] px-1.5 py-0.5 rounded bg-background-tertiary text-text-muted hover:text-accent hover:bg-accent/10 transition flex items-center gap-1"
+            title="Rewind stream"
+          >
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <polygon points="19,20 9,12 19,4" />
+              <line x1="5" y1="19" x2="5" y2="5" />
+            </svg>
+            Rewind
+          </button>
+        )}
+        {/* Checkpoint resume (TASK-0021) */}
+        {isError && message.checkpoints && message.checkpoints.length > 0 && (
+          <CheckpointResume
+            messageId={message.id}
+            channelId={message.channelId}
+            checkpoints={message.checkpoints}
+            onResume={onResumeStream}
+          />
         )}
         {hasTimeline && (
           <div className="flex items-center gap-1 mt-1.5">

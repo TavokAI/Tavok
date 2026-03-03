@@ -243,6 +243,22 @@ export function useDmChannel(dmId: string | null): UseDmChannelReturn {
         );
       });
 
+      // Listen for reaction updates (TASK-0030)
+      channel.on("reaction_update", (raw: unknown) => {
+        if (!mounted) return;
+        const payload = raw as {
+          messageId: string;
+          reactions: Array<{ emoji: string; count: number; userIds: string[] }>;
+        };
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === payload.messageId
+              ? { ...m, reactions: payload.reactions || [] }
+              : m
+          )
+        );
+      });
+
       channel
         .join()
         .receive("ok", () => {

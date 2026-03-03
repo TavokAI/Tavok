@@ -3,7 +3,7 @@
 
 .PHONY: help dev up down logs logs-web logs-gateway logs-stream \
         db-migrate db-studio db-seed clean health build regression-harness \
-        test-web test-sdk test-all demo
+        test-web test-gateway test-streaming test-unit test-sdk test-e2e test-load test-all demo
 
 # Default target
 help: ## Show this help
@@ -33,14 +33,38 @@ build: ## Build all Docker images without starting
 # TESTS
 # ============================================================
 
-test-web: ## Run web unit tests (vitest — 174 tests)
+test-web: ## Run web unit tests (Vitest)
 	cd packages/web && npx vitest run
+
+test-gateway: ## Run Elixir gateway unit tests (ExUnit)
+	cd gateway && mix test --trace
+
+test-streaming: ## Run Go streaming proxy unit tests
+	cd streaming && go test ./... -v -count=1
+
+test-unit: ## Run all unit tests (web + gateway + streaming)
+	@echo "=== Web (Vitest) ==="
+	cd packages/web && npx vitest run
+	@echo ""
+	@echo "=== Gateway (ExUnit) ==="
+	cd gateway && mix test
+	@echo ""
+	@echo "=== Streaming (Go) ==="
+	cd streaming && go test ./... -v -count=1
+
+test-e2e: ## Run Playwright E2E tests (requires Docker services running)
+	cd packages/web && npx playwright test
 
 test-sdk: ## Run Python SDK E2E test (requires Docker services running)
 	python scripts/test-sdk.py
 
-test-all: ## Run all tests (web unit + SDK E2E)
-	cd packages/web && npx vitest run
+test-load: ## Run k6 load tests (requires Docker services running + k6 installed)
+	k6 run tests/load/k6-messaging.js
+	k6 run tests/load/k6-typing-storm.js
+
+test-all: ## Run all tests (unit + E2E + SDK)
+	$(MAKE) test-unit
+	$(MAKE) test-e2e
 	python scripts/test-sdk.py
 
 # ============================================================
@@ -54,8 +78,8 @@ demo: ## Start demo agents (requires TAVOK_SERVER_ID and TAVOK_CHANNEL_ID)
 # REGRESSION HARNESS
 # ============================================================
 
-regression-harness: ## Run scripted regression checks for K-001, K-002, K-003, K-005
-	powershell -NoProfile -ExecutionPolicy Bypass -File scripts/regression-harness.ps1 -StartServicesIfDown
+regression-harness: ## Run full regression harness (K-001 through K-022, 130+ assertions)
+	pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/regression-harness.ps1 -StartServicesIfDown
 
 # ============================================================
 # LOGS

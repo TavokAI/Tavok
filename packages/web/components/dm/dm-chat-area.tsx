@@ -8,6 +8,8 @@ import { MessageInput } from "@/components/chat/message-input";
 import { MarkdownContent } from "@/components/chat/markdown-content";
 import { EditMessageInput } from "@/components/chat/edit-message-input";
 import { DeleteMessageModal } from "@/components/modals/delete-message-modal";
+import { ReactionBar } from "@/components/chat/reaction-bar";
+import type { ReactionData } from "@/lib/hooks/use-channel";
 import { formatTime } from "@/lib/format-time";
 
 interface DmChatAreaProps {
@@ -66,6 +68,7 @@ export function DmChatArea({ dmId, otherUserName }: DmChatAreaProps) {
         currentUserId={currentUserId}
         onEditMessage={editMessage}
         onDeleteMessage={handleDeleteRequest}
+        dmId={dmId}
       />
 
       {/* Typing indicator */}
@@ -143,6 +146,7 @@ function DmMessageList({
   currentUserId,
   onEditMessage,
   onDeleteMessage,
+  dmId,
 }: {
   messages: DmMessagePayload[];
   hasMoreHistory: boolean;
@@ -150,6 +154,7 @@ function DmMessageList({
   currentUserId?: string;
   onEditMessage?: (messageId: string, content: string) => Promise<boolean>;
   onDeleteMessage?: (messageId: string) => void;
+  dmId: string;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const isAtBottomRef = useRef(true);
@@ -248,6 +253,7 @@ function DmMessageList({
             isOwnMessage={message.authorId === currentUserId}
             onEdit={onEditMessage}
             onDelete={onDeleteMessage}
+            dmId={dmId}
           />
         );
       })}
@@ -263,15 +269,23 @@ function DmMessageItem({
   isOwnMessage,
   onEdit,
   onDelete,
+  dmId,
 }: {
   message: DmMessagePayload;
   isGrouped: boolean;
   isOwnMessage: boolean;
   onEdit?: (messageId: string, content: string) => Promise<boolean>;
   onDelete?: (messageId: string) => void;
+  dmId: string;
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const [isHovering, setIsHovering] = useState(false);
+  const [reactions, setReactions] = useState<ReactionData[]>(message.reactions || []);
+
+  // Sync reactions from real-time updates
+  useEffect(() => {
+    setReactions(message.reactions || []);
+  }, [message.reactions]);
 
   const handleEditSave = useCallback(
     async (content: string) => {
@@ -311,6 +325,14 @@ function DmMessageItem({
         {message.editedAt && !isEditing && (
           <span className="text-[10px] text-text-dim ml-1">(edited)</span>
         )}
+
+        {/* Reactions (TASK-0030) */}
+        <ReactionBar
+          messageId={message.id}
+          reactions={reactions}
+          onReactionsChange={setReactions}
+          apiBasePath={`/api/dms/${dmId}/messages`}
+        />
 
         {/* Actions */}
         {isHovering && !isEditing && isOwnMessage && (
@@ -371,6 +393,14 @@ function DmMessageItem({
             <MarkdownContent content={message.content} mentionNames={[]} />
           </div>
         )}
+
+        {/* Reactions (TASK-0030) */}
+        <ReactionBar
+          messageId={message.id}
+          reactions={reactions}
+          onReactionsChange={setReactions}
+          apiBasePath={`/api/dms/${dmId}/messages`}
+        />
       </div>
 
       {/* Actions */}

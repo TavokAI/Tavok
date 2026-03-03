@@ -1,9 +1,36 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import {
   createInternalMessagesPostHandler,
   createServerBotPatchHandler,
   createServerChannelPatchHandler,
 } from "../route-handlers.js";
+
+// ---------- Mocks for the PUT finalization handler (TASK-0021) ----------
+// vi.hoisted ensures these are available when vi.mock factories run.
+// The factory-based imports from route-handlers.js use dependency injection,
+// so they are not affected by these module-level mocks.
+
+const { mockPrismaForRoute } = vi.hoisted(() => {
+  return {
+    mockPrismaForRoute: {
+      message: {
+        update: vi.fn(),
+      },
+    },
+  };
+});
+
+vi.mock("@/lib/db", () => ({ prisma: mockPrismaForRoute }));
+vi.mock("@/lib/internal-auth", () => ({
+  validateInternalSecret: vi.fn((req: any) => {
+    return req.headers.get("x-internal-secret") === "test-secret";
+  }),
+}));
+vi.mock("@/lib/permissions", () => ({
+  computeMemberPermissions: vi.fn(),
+  hasPermission: vi.fn(),
+  Permissions: { MANAGE_MESSAGES: 1 },
+}));
 
 function makeRequest({
   secret = "test-secret",
@@ -567,5 +594,250 @@ describe("createServerChannelPatchHandler", () => {
       { params: Promise.resolve({ serverId: "s1", channelId: "c1" }) }
     );
     expect(res.status).toBe(200);
+  });
+});
+
+// ===========================================================
+// PUT /api/internal/messages/{messageId} — finalization handler
+// Tests for tokenHistory, checkpoints, and general finalization
+// (TASK-0021: Stream rewind & checkpoint resume)
+// ===========================================================
+
+// Lazy-import the PUT handler after vi.mock calls have taken effect
+let PUT: any;
+
+describe("PUT /api/internal/messages/{messageId} — finalization", () => {
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    // Dynamic import so vi.mock for @/lib/db and @/lib/internal-auth apply
+    const mod = await import(
+      "@/app/api/internal/messages/[messageId]/route"
+    );
+    PUT = mod.PUT;
+
+    mockPrismaForRoute.message.update.mockResolvedValue({
+      id: "msg-1",
+      content: "final content",
+      streamingStatus: "COMPLETE",
+    });
+  });
+
+  function makePutRequest({
+    secret = "test-secret",
+    body = {} as any,
+  } = {}) {
+    return new Request(
+      "http://localhost/api/internal/messages/msg-1",
+      {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          "x-internal-secret": secret,
+        },
+        body: JSON.stringify(body),
+      }
+    ) as any;
+  }
+
+  const routeCtx = {
+    params: Promise.resolve({ messageId: "msg-1" }),
+  };
+
+  it("returns 401 for wrong internal secret", async () => {
+    const res = await PUT(
+      makePutRequest({ secret: "wrong" }),
+      routeCtx
+    );
+    expect(res.status).toBe(401);
+  });
+
+  it("returns 400 when neither content nor streamingStatus is provided", async () => {
+    const res = await PUT(
+      makePutRequest({ body: {} }),
+      routeCtx
+    );
+    expect(res.status).toBe(400);
+    const json = await res.json();
+    expect(json.error).toContain("Must provide content or streamingStatus");
+  });
+
+  it("persists tokenHistory when included in the finalize payload", async () => {
+    const tokenHistory = [
+      { t: 0, tokens: 50 },
+      { t: 1000, tokens: 150 },
+      { t: 2000, tokens: 300 },
+    ];
+
+    const res = await PUT(
+      makePutRequest({
+        body: {
+          content: "final answer",
+          streamingStatus: "COMPLETE",
+          tokenHistory,
+        },
+      }),
+      routeCtx
+    );
+    expect(res.status).toBe(200);
+
+    // Verify prisma.message.update was called with tokenHistory
+    expect(mockPrismaForRoute.message.update).toHaveBeenCalledTimes(1);
+    const updateArgs = mockPrismaForRoute.message.update.mock.calls[0][0];
+    expect(updateArgs.where.id).toBe("msg-1");
+    expect(updateArgs.data.tokenHistory).toEqual(tokenHistory);
+  });
+
+  it("persists checkpoints when included in the finalize payload", async () => {
+    const checkpoints = [
+      { offset: 0, label: "start" },
+      { offset: 500, label: "midpoint" },
+    ];
+
+    const res = await PUT(
+      makePutRequest({
+        body: {
+          content: "completed response",
+          streamingStatus: "COMPLETE",
+          checkpoints,
+        },
+      }),
+      routeCtx
+    );
+    expect(res.status).toBe(200);
+
+    const updateArgs = mockPrismaForRoute.message.update.mock.calls[0][0];
+    expect(updateArgs.data.checkpoints).toEqual(checkpoints);
+  });
+
+  it("persists both tokenHistory and checkpoints together", async () => {
+    const tokenHistory = [{ t: 0, tokens: 100 }];
+    const checkpoints = [{ offset: 0, label: "start" }];
+
+    const res = await PUT(
+      makePutRequest({
+        body: {
+          content: "done",
+          streamingStatus: "COMPLETE",
+          tokenHistory,
+          checkpoints,
+        },
+      }),
+      routeCtx
+    );
+    expect(res.status).toBe(200);
+
+    const updateArgs = mockPrismaForRoute.message.update.mock.calls[0][0];
+    expect(updateArgs.data.tokenHistory).toEqual(tokenHistory);
+    expect(updateArgs.data.checkpoints).toEqual(checkpoints);
+  });
+
+  it("omits tokenHistory from update when not provided", async () => {
+    const res = await PUT(
+      makePutRequest({
+        body: {
+          content: "no rewind data",
+          streamingStatus: "COMPLETE",
+        },
+      }),
+      routeCtx
+    );
+    expect(res.status).toBe(200);
+
+    const updateArgs = mockPrismaForRoute.message.update.mock.calls[0][0];
+    expect(updateArgs.data).not.toHaveProperty("tokenHistory");
+    expect(updateArgs.data).not.toHaveProperty("checkpoints");
+  });
+
+  it("accepts content update without streamingStatus", async () => {
+    const res = await PUT(
+      makePutRequest({ body: { content: "updated text" } }),
+      routeCtx
+    );
+    expect(res.status).toBe(200);
+
+    const updateArgs = mockPrismaForRoute.message.update.mock.calls[0][0];
+    expect(updateArgs.data.content).toBe("updated text");
+  });
+
+  it("accepts streamingStatus update without content", async () => {
+    const res = await PUT(
+      makePutRequest({ body: { streamingStatus: "ERROR" } }),
+      routeCtx
+    );
+    expect(res.status).toBe(200);
+
+    const updateArgs = mockPrismaForRoute.message.update.mock.calls[0][0];
+    expect(updateArgs.data.streamingStatus).toBe("ERROR");
+  });
+
+  it("persists thinkingTimeline when included", async () => {
+    const thinkingTimeline = [
+      { phase: "thinking", startMs: 0, endMs: 500 },
+      { phase: "writing", startMs: 500, endMs: 2000 },
+    ];
+
+    const res = await PUT(
+      makePutRequest({
+        body: {
+          content: "response",
+          streamingStatus: "COMPLETE",
+          thinkingTimeline,
+        },
+      }),
+      routeCtx
+    );
+    expect(res.status).toBe(200);
+
+    const updateArgs = mockPrismaForRoute.message.update.mock.calls[0][0];
+    expect(updateArgs.data.thinkingTimeline).toEqual(thinkingTimeline);
+  });
+
+  it("persists metadata when included", async () => {
+    const metadata = { model: "gpt-4", tokensUsed: 512 };
+
+    const res = await PUT(
+      makePutRequest({
+        body: {
+          content: "response",
+          streamingStatus: "COMPLETE",
+          metadata,
+        },
+      }),
+      routeCtx
+    );
+    expect(res.status).toBe(200);
+
+    const updateArgs = mockPrismaForRoute.message.update.mock.calls[0][0];
+    expect(updateArgs.data.metadata).toEqual(metadata);
+  });
+
+  it("returns 500 when prisma update throws", async () => {
+    mockPrismaForRoute.message.update.mockRejectedValue(
+      new Error("Connection lost")
+    );
+
+    const res = await PUT(
+      makePutRequest({
+        body: { content: "text", streamingStatus: "COMPLETE" },
+      }),
+      routeCtx
+    );
+    expect(res.status).toBe(500);
+    const json = await res.json();
+    expect(json.error).toContain("Failed to update message");
+  });
+
+  it("allows empty string content with streamingStatus", async () => {
+    const res = await PUT(
+      makePutRequest({
+        body: { content: "", streamingStatus: "ERROR" },
+      }),
+      routeCtx
+    );
+    expect(res.status).toBe(200);
+
+    const updateArgs = mockPrismaForRoute.message.update.mock.calls[0][0];
+    expect(updateArgs.data.content).toBe("");
+    expect(updateArgs.data.streamingStatus).toBe("ERROR");
   });
 });

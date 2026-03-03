@@ -27,12 +27,15 @@ interface ReactionBarProps {
   messageId: string;
   reactions: ReactionData[];
   onReactionsChange: (reactions: ReactionData[]) => void;
+  /** Override API base path for DM reactions. Default: "/api/messages" (TASK-0030) */
+  apiBasePath?: string;
 }
 
 export function ReactionBar({
   messageId,
   reactions,
   onReactionsChange,
+  apiBasePath = "/api/messages",
 }: ReactionBarProps) {
   const { data: session } = useSession();
   const [showPicker, setShowPicker] = useState(false);
@@ -84,7 +87,7 @@ export function ReactionBar({
 
       try {
         const method = hasReacted ? "DELETE" : "POST";
-        const res = await fetch(`/api/messages/${messageId}/reactions`, {
+        const res = await fetch(`${apiBasePath}/${messageId}/reactions`, {
           method,
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ emoji }),
@@ -103,7 +106,7 @@ export function ReactionBar({
         setShowPicker(false);
       }
     },
-    [currentUserId, loading, messageId, onReactionsChange, reactions]
+    [currentUserId, loading, messageId, onReactionsChange, reactions, apiBasePath]
   );
 
   return (

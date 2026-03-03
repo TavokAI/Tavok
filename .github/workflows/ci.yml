@@ -1,0 +1,106 @@
+name: CI — Unit Tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-web:
+    name: Web (Vitest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run Vitest
+        run: pnpm --filter web test
+
+      - name: Run coverage
+        run: pnpm --filter web test:coverage
+
+      - name: Type check
+        run: pnpm --filter web typecheck
+
+  test-streaming:
+    name: Streaming Proxy (Go)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+          cache-dependency-path: streaming/go.sum
+
+      - name: Run Go tests
+        run: cd streaming && go test ./... -v -count=1 -race
+
+  test-gateway:
+    name: Gateway (ExUnit)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: '27'
+          elixir-version: '1.17'
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            gateway/deps
+            gateway/_build
+          key: mix-${{ runner.os }}-${{ hashFiles('gateway/mix.lock') }}
+          restore-keys: |
+            mix-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: cd gateway && mix deps.get
+
+      - name: Compile
+        run: cd gateway && MIX_ENV=test mix compile --warnings-as-errors
+
+      - name: Run ExUnit tests
+        run: cd gateway && mix test --trace
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: ESLint
+        run: pnpm --filter web lint

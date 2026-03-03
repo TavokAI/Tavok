@@ -77,3 +77,4 @@ Different transports have different latency characteristics:
 | Date | Test | Result | Notes |
 |------|------|--------|-------|
 | 2026-02-26 | V0 break-test | Pass | All CRITICAL/HIGH issues resolved. Streaming pipeline validated. |
+| 2026-03-02 | Stress harness v2 | Pass | Fixed: L-01/L-02 (payload assertions), L-06 (rate limit assertions), S-11 (ETS message buffer DEC-0051), F-01 (Redis retry), F-04 (error classification DEC-0052), M-01 (measurement methodology). |

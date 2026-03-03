@@ -1,0 +1,90 @@
+name: Integration — Regression Harness
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:  # Allow manual trigger
+
+concurrency:
+  group: integration-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  regression:
+    name: Regression Harness (Docker Compose)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Generate .env for CI
+        run: |
+          cp .env.example .env
+          chmod +x scripts/ci-env-setup.sh
+          ./scripts/ci-env-setup.sh
+
+      - name: Build and start all services
+        run: docker compose up --build -d
+
+      - name: Wait for services to be healthy
+        run: |
+          echo "Waiting for services..."
+          for i in $(seq 1 90); do
+            if curl -sf http://localhost:3000/api/health > /dev/null 2>&1 && \
+               curl -sf http://localhost:4001/api/health > /dev/null 2>&1 && \
+               curl -sf http://localhost:4002/health > /dev/null 2>&1; then
+              echo "All services healthy after ${i}s"
+              break
+            fi
+            if [ "$i" -eq 90 ]; then
+              echo "Services failed to start within 90s"
+              docker compose ps
+              docker compose logs --tail=50
+              exit 1
+            fi
+            sleep 1
+          done
+
+      - name: Seed database
+        run: docker compose exec -T web npx prisma db seed
+
+      - name: Run regression harness
+        run: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/regression-harness.ps1
+
+      - name: Install Playwright browsers
+        run: cd packages/web && npx playwright install chromium --with-deps
+
+      - name: Run Playwright E2E tests
+        run: cd packages/web && npx playwright test --reporter=list
+
+      - name: Upload Playwright traces on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces
+          path: packages/web/test-results/
+          retention-days: 7
+
+      - name: Collect service logs on failure
+        if: failure()
+        run: |
+          mkdir -p /tmp/ci-logs
+          docker compose logs web > /tmp/ci-logs/web.log 2>&1
+          docker compose logs gateway > /tmp/ci-logs/gateway.log 2>&1
+          docker compose logs streaming > /tmp/ci-logs/streaming.log 2>&1
+          docker compose logs db > /tmp/ci-logs/db.log 2>&1
+          docker compose logs redis > /tmp/ci-logs/redis.log 2>&1
+          docker compose ps > /tmp/ci-logs/ps.txt 2>&1
+
+      - name: Upload logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: service-logs
+          path: /tmp/ci-logs/
+          retention-days: 7
+
+      - name: Teardown
+        if: always()
+        run: docker compose down -v

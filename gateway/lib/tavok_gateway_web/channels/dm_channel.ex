@@ -117,6 +117,18 @@ defmodule TavokGatewayWeb.DmChannel do
     {:noreply, socket}
   end
 
+  # Catch-all for async task results (from Task.Supervisor.async_nolink in persist)
+  @impl true
+  def handle_info({ref, _result}, socket) when is_reference(ref) do
+    Process.demonitor(ref, [:flush])
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_info({:DOWN, _ref, :process, _pid, _reason}, socket) do
+    {:noreply, socket}
+  end
+
   @impl true
   def terminate(_reason, socket) do
     Logger.info("DM channel left: user=#{socket.assigns.user_id} dm=#{socket.assigns[:dm_id]}")

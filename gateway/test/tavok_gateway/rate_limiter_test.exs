@@ -4,9 +4,22 @@ defmodule TavokGateway.RateLimiterTest do
   alias TavokGateway.RateLimiter
 
   setup do
-    # Start the RateLimiter GenServer for each test
-    {:ok, pid} = RateLimiter.start_link([])
-    on_exit(fn -> GenServer.stop(pid, :normal) end)
+    # Start or reuse the RateLimiter GenServer
+    pid =
+      case RateLimiter.start_link([]) do
+        {:ok, pid} -> pid
+        {:error, {:already_started, pid}} -> pid
+      end
+
+    # Reset counters before each test to ensure isolation
+    send(pid, :reset)
+    Process.sleep(10)
+
+    on_exit(fn ->
+      # Reset after test too
+      if Process.alive?(pid), do: send(pid, :reset)
+    end)
+
     :ok
   end
 

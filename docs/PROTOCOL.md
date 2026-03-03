@@ -1,8 +1,8 @@
 # PROTOCOL.md — Tavok Cross-Service Message Contracts
 
-> **Version**: Protocol v3.3
+> **Version**: Protocol v3.5
 > **Status**: Active
-> **Last updated**: 2026-03-01
+> **Last updated**: 2026-03-02
 
 This document is the single source of truth for every message that crosses a service boundary.
 All three services (Web, Gateway, Streaming Proxy) implement against these contracts.
@@ -110,8 +110,10 @@ On failure: socket connection is rejected.
 | `stream_thinking` | [StreamThinkingPayload](#streamthinkingpayload) | Agent thinking phase changed (TASK-0011) |
 | `stream_tool_call` | [StreamToolCallPayload](#streamtoolcallpayload) | Agent requested tool execution (TASK-0018) |
 | `stream_tool_result` | [StreamToolResultPayload](#streamtoolresultpayload) | Tool execution completed (TASK-0018) |
+| `stream_checkpoint` | [StreamCheckpointPayload](#streamcheckpointpayload) | Checkpoint emitted during streaming (TASK-0021) |
 | `message_edited` | [MessageEditedPayload](#messageeditedpayload) | Message content was edited (TASK-0014) |
 | `message_deleted` | [MessageDeletedPayload](#messagedeletedpayload) | Message was soft-deleted (TASK-0014) |
+| `reaction_update` | [ReactionUpdatePayload](#reactionupdatepayload) | Reaction added/removed on a message (TASK-0030) |
 | `typed_message` | [TypedMessagePayload](#typedmessagepayload) | Structured typed message from agent (TASK-0039) |
 | `user_typing` | [TypingPayload](#typingpayload) | Another user is typing |
 | `presence_state` | Phoenix.Presence state map | Full presence state (sent to joiner only) |
@@ -142,7 +144,9 @@ On failure: socket connection is rejected.
   "sequence": "42",          // per-channel sequence number (BigInt-safe decimal string)
   "createdAt": "2026-02-23T12:00:00.000Z",
   "editedAt": null,          // ISO 8601 string or null (TASK-0014)
-  "metadata": null           // object or null — agent execution metadata (TASK-0039)
+  "metadata": null,          // object or null — agent execution metadata (TASK-0039)
+  "tokenHistory": null,      // [{o: number, t: number}] or null — stream rewind data (TASK-0021)
+  "checkpoints": null        // [{index, label, contentOffset, timestamp}] or null — checkpoint resume data (TASK-0021)
 }
 ```
 
@@ -238,6 +242,25 @@ Published when the LLM requests a tool execution. The Go Proxy detects `stop_rea
 ```
 
 Published after tool execution completes. The Go Proxy then feeds the tool result back into the LLM context and starts a new provider iteration. The tool execution loop is capped at 10 iterations to prevent infinite loops. (TASK-0018, DEC-0048)
+
+#### StreamCheckpointPayload
+
+```json
+{
+  "messageId": "01HXY...",
+  "index": 0,
+  "label": "After tool: current_time",
+  "contentOffset": 245,
+  "timestamp": "2026-03-01T12:00:02.000Z"
+}
+```
+
+Published at semantically meaningful points during streaming: thinking phase transitions and tool call boundaries. Checkpoints enable two features:
+
+1. **Stream Rewind** — After completion, the client can replay token history and jump to checkpoint positions on the scrub slider. Token history (`[{o: contentOffset, t: relativeMs}]`) and checkpoints are persisted on the Message record.
+2. **Checkpoint Resume** — On stream error, the user can select a checkpoint and a different bot/model to resume generation from that point. Resume creates a new message with context up to the checkpoint's `contentOffset`.
+
+The Go Proxy accumulates all checkpoints and includes them in the `PUT /api/internal/messages/{messageId}` finalization payload alongside `tokenHistory`. (TASK-0021, DEC-0053)
 
 #### TypedMessagePush
 
@@ -389,6 +412,20 @@ Broadcast to all clients in channel when a message is edited. The Gateway calls 
 
 Broadcast to all clients in channel when a message is soft-deleted. The author can delete own messages. Users with `MANAGE_MESSAGES` permission (bit 8) can delete any message. The internal API validates authorization; Gateway only broadcasts on success.
 
+#### ReactionUpdatePayload
+
+```json
+{
+  "messageId": "01HXY...",
+  "reactions": [
+    { "emoji": "👍", "count": 2, "userIds": ["01HXY...", "01HXZ..."] },
+    { "emoji": "❤️", "count": 1, "userIds": ["01HXY..."] }
+  ]
+}
+```
+
+Broadcast to all clients in the channel (room or DM) when a reaction is added or removed. The `reactions` array is the full aggregated state — clients replace their local reactions for the given `messageId`. For room channels, broadcast via the room reaction API (`/api/messages/{messageId}/reactions`). For DM channels, broadcast via the DM reaction API (`/api/dms/{dmId}/messages/{messageId}/reactions`). Both APIs broadcast to their respective channel topic (`room:{channelId}` or `dm:{dmId}`). (TASK-0030)
+
 ---
 
 ## 2. Redis Pub/Sub Events
@@ -406,6 +443,7 @@ All Redis messages are JSON-encoded strings.
 | `hive:stream:thinking:{channelId}:{messageId}` | Go Proxy | Gateway | Agent thinking phase change (TASK-0011) |
 | `hive:stream:tool_call:{channelId}:{messageId}` | Go Proxy | Gateway | Tool call requested by LLM (TASK-0018) |
 | `hive:stream:tool_result:{channelId}:{messageId}` | Go Proxy | Gateway | Tool execution result (TASK-0018) |
+| `hive:stream:checkpoint:{channelId}:{messageId}` | Go Proxy | Gateway | Stream checkpoint for rewind/resume (TASK-0021) |
 
 ### Stream Request Payload
 
@@ -828,7 +866,41 @@ The `thinkingTimeline` field is optional. If provided, it is a JSON string conta
 
 The `metadata` field is optional (TASK-0039). If provided, it is a JSON object containing agent execution info (model, provider, tokensIn, tokensOut, latencyMs, costUsd). Stored in Message.metadata for frontend display.
 
+The `tokenHistory` field is optional (TASK-0021). If provided, it is a JSON string containing an array of `{o: contentOffset, t: relativeMs}` objects. Each entry marks where a token batch ends in the final content and when it arrived. Stored in Message.tokenHistory for stream rewind replay.
+
+The `checkpoints` field is optional (TASK-0021). If provided, it is a JSON string containing an array of `{index, label, contentOffset, timestamp}` objects. Stored in Message.checkpoints for checkpoint resume.
+
 **Response:** `200 OK` with updated message fields (`id`, `content`, `streamingStatus`).
+
+#### POST /api/internal/stream/resume
+
+Resume a streaming message from a checkpoint. Creates a new STREAMING message with content up to the checkpoint's offset, ready for continuation by a different bot/model. (TASK-0021)
+
+**Request body:**
+
+```json
+{
+  "channelId": "01HXY...",
+  "originalMessageId": "01HXY...",
+  "checkpointIndex": 2,
+  "botId": "01HXY...",
+  "userId": "01HXY..."
+}
+```
+
+**Response:** `201 Created`
+
+```json
+{
+  "messageId": "01HXY...",
+  "channelId": "01HXY...",
+  "botId": "01HXY...",
+  "botName": "GPT-4",
+  "content": "partial content up to checkpoint..."
+}
+```
+
+**Errors:** `400` (missing fields), `404` (original message not found or no checkpoints), `500` (creation failure)
 
 #### GET /api/internal/messages/{messageId}
 
@@ -1363,6 +1435,7 @@ Topic pattern: `dm:{dmChannelId}`
 | `typing` | `{ userId, username, displayName }` |
 | `message_edited` | `{ messageId, content, editedAt }` |
 | `message_deleted` | `{ messageId, deletedBy }` |
+| `reaction_update` | `{ messageId, reactions: [{emoji, count, userIds}] }` — DM reaction added/removed (TASK-0030) |
 | `sync_messages` | `{ messages: MessagePayload[] }` |
 | `presence_state` | Phoenix Presence state map |
 
@@ -1424,6 +1497,30 @@ DM message history with cursor pagination.
 
 Query: `before?`, `limit?` (default 50, max 100)
 Response: `{ messages: DirectMessage[], hasMore: boolean }`
+
+#### GET /api/dms/{dmId}/messages/{messageId}/reactions
+
+Get aggregated reactions for a DM message.
+
+Response: `{ reactions: [{emoji, count, userIds, hasReacted}] }`
+
+#### POST /api/dms/{dmId}/messages/{messageId}/reactions
+
+Add a reaction to a DM message (TASK-0030).
+
+Body: `{ emoji: string }`
+Response: `{ reactions: [{emoji, count, userIds}] }`
+
+Broadcasts `reaction_update` to `dm:{dmId}`.
+
+#### DELETE /api/dms/{dmId}/messages/{messageId}/reactions
+
+Remove a reaction from a DM message (TASK-0030).
+
+Body: `{ emoji: string }`
+Response: `{ reactions: [{emoji, count, userIds}] }`
+
+Broadcasts `reaction_update` to `dm:{dmId}`.
 
 ### 8f. Redis Keys
 
@@ -1560,3 +1657,5 @@ After loading bot config, the Go proxy:
 | 2026-03-01 | v3.1 | Add MCP-compatible tool interface — stream_tool_call/stream_tool_result events, tool execution loop in Go proxy, enabledTools on Bot, built-in current_time and web_search tools (TASK-0018, DEC-0048) |
 | 2026-03-01 | v3.2 | Add §8 Direct Messages — dm:{dmChannelId} topic, DmChannel module, internal DM APIs, client DM APIs, separate Prisma models (DirectMessageChannel, DmParticipant, DirectMessage), frontend DM hooks and components (TASK-0019, DEC-0049) |
 | 2026-03-01 | v3.3 | Add §9 Channel Charter / Swarm Modes — 7 swarm modes, charter session lifecycle, Go-enforced turn order, charter injection into system prompt, charter_status WebSocket events, frontend swarm settings + live header (TASK-0020, DEC-0050) |
+| 2026-03-02 | v3.4 | Add stream_checkpoint event, StreamCheckpointPayload, hive:stream:checkpoint Redis channel, tokenHistory + checkpoints on MessagePayload, POST /api/internal/stream/resume endpoint (TASK-0021, DEC-0053) |
+| 2026-03-02 | v3.5 | Add reaction_update event for room and DM channels, ReactionUpdatePayload schema, DM reaction CRUD endpoints (GET/POST/DELETE /api/dms/{dmId}/messages/{messageId}/reactions), DmReaction model (TASK-0030) |

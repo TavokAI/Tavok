@@ -20,6 +20,7 @@ defmodule TavokGatewayWeb.RoomChannel do
   alias TavokGateway.Broadcast
   alias TavokGateway.StreamWatchdog
   alias TavokGateway.MessagePersistence
+  alias TavokGateway.MessageBuffer
   alias TavokGateway.ConfigCache
   alias TavokGateway.RateLimiter
   alias TavokGatewayWeb.Presence
@@ -135,17 +136,63 @@ defmodule TavokGatewayWeb.RoomChannel do
   def handle_info({:sync_on_join, last_sequence}, socket) do
     case parse_sequence(last_sequence) do
       {:ok, parsed_last_sequence} ->
-        case WebClient.get_messages(%{
-               channelId: socket.assigns.channel_id,
-               afterSequence: parsed_last_sequence,
-               limit: 100
-             }) do
-          {:ok, body} ->
-            push(socket, "sync_response", body)
+        # 1. Get buffered messages (covers async-persistence gap, DEC-0051)
+        buffered =
+          MessageBuffer.get_messages_after(
+            socket.assigns.channel_id,
+            parsed_last_sequence
+          )
 
-          {:error, _reason} ->
-            push(socket, "sync_response", %{"messages" => [], "hasMore" => false})
-        end
+        # 2. Get DB messages (covers messages older than buffer TTL)
+        db_messages =
+          case WebClient.get_messages(%{
+                 channelId: socket.assigns.channel_id,
+                 afterSequence: parsed_last_sequence,
+                 limit: 100
+               }) do
+            {:ok, %{"messages" => msgs}} -> msgs
+            {:ok, _} -> []
+            {:error, _reason} -> []
+          end
+
+        # 3. Merge: union by message ID, buffer wins on conflict (fresher data)
+        db_map =
+          Map.new(db_messages, fn m ->
+            id = Map.get(m, "id") || Map.get(m, :id)
+            {id, m}
+          end)
+
+        buffer_map =
+          Map.new(buffered, fn m ->
+            id = Map.get(m, :id) || Map.get(m, "id")
+
+            # Convert atom-key map to string-key map for consistent shape
+            string_map =
+              for {k, v} <- m, into: %{} do
+                {to_string(k), v}
+              end
+
+            {id, string_map}
+          end)
+
+        merged_map = Map.merge(db_map, buffer_map)
+
+        merged_messages =
+          merged_map
+          |> Map.values()
+          |> Enum.sort_by(fn m ->
+            seq = Map.get(m, "sequence") || Map.get(m, :sequence) || "0"
+
+            case Integer.parse(to_string(seq)) do
+              {n, ""} -> n
+              _ -> 0
+            end
+          end)
+
+        push(socket, "sync_response", %{
+          "messages" => merged_messages,
+          "hasMore" => false
+        })
 
       {:error, _} ->
         push(socket, "sync_response", %{
@@ -256,6 +303,9 @@ defmodule TavokGatewayWeb.RoomChannel do
 
         Broadcast.broadcast_pre_serialized!(socket, "message_new", message_payload)
 
+        # 3b. Buffer for reconnection sync gap (DEC-0051)
+        MessageBuffer.buffer_message(channel_id, message_payload)
+
         # 4. Check for bot trigger (async — don't delay the reply)
         send(self(), {:check_bot_trigger, message_id, content})
 
@@ -293,10 +343,10 @@ defmodule TavokGatewayWeb.RoomChannel do
   def handle_in("typing", _payload, socket) do
     # Server-side typing throttle: cap at 1 broadcast per @typing_throttle_ms per user.
     # At 1000 users, this prevents 50 typists × 10 keystrokes/sec = 500k frames/sec.
-    now = System.monotonic_time(:millisecond)
-    last = socket.assigns[:last_typing_at] || 0
+    now = System.system_time(:millisecond)
+    last = socket.assigns[:last_typing_at]
 
-    if now - last >= @typing_throttle_ms do
+    if is_nil(last) or now - last >= @typing_throttle_ms do
       Broadcast.broadcast_from_pre_serialized!(socket, "user_typing", %{
         userId: socket.assigns.user_id,
         username: socket.assigns.username,
@@ -367,13 +417,46 @@ defmodule TavokGatewayWeb.RoomChannel do
         query_params =
           if before, do: Map.put(query_params, :before, before), else: query_params
 
-        case WebClient.get_messages(query_params) do
-          {:ok, body} ->
-            push(socket, "history_response", body)
+        db_messages =
+          case WebClient.get_messages(query_params) do
+            {:ok, %{"messages" => msgs}} -> msgs
+            {:ok, body} when is_map(body) -> Map.get(body, "messages", [])
+            {:error, _reason} -> []
+          end
 
-          {:error, _reason} ->
-            push(socket, "history_response", %{"messages" => [], "hasMore" => false})
-        end
+        # Merge with ETS buffer for recently broadcast messages (DEC-0051)
+        # History doesn't use afterSequence, so get all buffered messages
+        buffered = MessageBuffer.get_messages_after(socket.assigns.channel_id, 0)
+
+        buffer_map =
+          Map.new(buffered, fn m ->
+            id = Map.get(m, :id) || Map.get(m, "id")
+            string_map = for {k, v} <- m, into: %{}, do: {to_string(k), v}
+            {id, string_map}
+          end)
+
+        db_map =
+          Map.new(db_messages, fn m ->
+            id = Map.get(m, "id") || Map.get(m, :id)
+            {id, m}
+          end)
+
+        merged =
+          Map.merge(db_map, buffer_map)
+          |> Map.values()
+          |> Enum.sort_by(fn m ->
+            seq = Map.get(m, "sequence") || Map.get(m, :sequence) || "0"
+            case Integer.parse(to_string(seq)) do
+              {n, ""} -> n
+              _ -> 0
+            end
+          end)
+          |> Enum.take(-limit)
+
+        push(socket, "history_response", %{
+          "messages" => merged,
+          "hasMore" => length(merged) >= limit
+        })
 
         {:noreply, socket}
     end
@@ -1031,6 +1114,10 @@ defmodule TavokGatewayWeb.RoomChannel do
     end
   end
 
+  # Max retries and base delay for Redis commands during transient disconnections (F-01).
+  @redis_retry_attempts 3
+  @redis_retry_base_ms 100
+
   defp next_sequence(channel_id) do
     # Redis INCR is atomic and creates the key with value 1 if it doesn't exist.
     # No need for GET → SET NX → INCR dance which has a race condition on the
@@ -1040,9 +1127,12 @@ defmodule TavokGatewayWeb.RoomChannel do
     # after a Redis restart), we first try INCR. If the key was missing, Redis
     # creates it at 1 — but the DB may already have higher sequences. We detect
     # this case and seed properly.
+    #
+    # All Redis commands use redis_with_retry/1 to survive brief Redix
+    # reconnection windows after Redis restarts (F-01).
     key = "hive:channel:#{channel_id}:seq"
 
-    case Redix.command(:redix, ["INCR", key]) do
+    case redis_with_retry(["INCR", key]) do
       {:ok, 1} ->
         # Key was just created — check if DB has higher sequences and seed if needed
         case channel_seed_sequence(channel_id) do
@@ -1052,9 +1142,9 @@ defmodule TavokGatewayWeb.RoomChannel do
 
           {:ok, seed} when seed >= 1 ->
             # DB has existing messages — set Redis to seed value and increment
-            case Redix.command(:redix, ["SET", key, Integer.to_string(seed)]) do
+            case redis_with_retry(["SET", key, Integer.to_string(seed)]) do
               {:ok, _} ->
-                case Redix.command(:redix, ["INCR", key]) do
+                case redis_with_retry(["INCR", key]) do
                   {:ok, sequence} -> {:ok, sequence}
                   error -> error
                 end
@@ -1069,6 +1159,30 @@ defmodule TavokGatewayWeb.RoomChannel do
 
       {:ok, sequence} ->
         {:ok, sequence}
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  # Retry Redis commands with exponential backoff during transient disconnections.
+  # Covers the Redix reconnection window after Redis restarts (F-01).
+  # Max wait: 100 + 200 + 400 = 700ms — well under user-perceptible threshold.
+  defp redis_with_retry(command, attempt \\ 0) do
+    case Redix.command(:redix, command) do
+      {:ok, result} ->
+        {:ok, result}
+
+      {:error, reason} when attempt < @redis_retry_attempts ->
+        delay = @redis_retry_base_ms * Integer.pow(2, attempt)
+
+        Logger.warning(
+          "Redis command failed, retrying: command=#{inspect(command)} " <>
+            "attempt=#{attempt}/#{@redis_retry_attempts} delay=#{delay}ms error=#{inspect(reason)}"
+        )
+
+        Process.sleep(delay)
+        redis_with_retry(command, attempt + 1)
 
       {:error, reason} ->
         {:error, reason}

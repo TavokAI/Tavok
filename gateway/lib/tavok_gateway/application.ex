@@ -29,6 +29,9 @@ defmodule TavokGateway.Application do
       # Config cache — ETS-backed cache for bot config and membership (DEC-0029)
       TavokGateway.ConfigCache,
 
+      # Message buffer — ETS-backed recent message cache for sync gap (DEC-0051)
+      TavokGateway.MessageBuffer,
+
       # Rate limiter — per-channel message rate limiting (DEC-0035)
       TavokGateway.RateLimiter,
 

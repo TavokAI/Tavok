@@ -126,6 +126,8 @@ export function MessageItem({
               fileId={file.fileId}
               filename={file.filename}
               mimeType={file.mimeType}
+              width={file.width}
+              height={file.height}
             />
           ))}
           <ReactionBar

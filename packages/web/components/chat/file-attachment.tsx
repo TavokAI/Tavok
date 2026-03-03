@@ -8,14 +8,20 @@ interface FileAttachmentProps {
   fileId: string;
   filename: string;
   mimeType: string;
+  width?: number; // TASK-0025: actual image width
+  height?: number; // TASK-0025: actual image height
 }
 
-export function FileAttachment({ fileId, filename, mimeType }: FileAttachmentProps) {
+export function FileAttachment({ fileId, filename, mimeType, width, height }: FileAttachmentProps) {
   const [imageError, setImageError] = useState(false);
   const url = `/api/uploads/${fileId}`;
   const isImage = mimeType.startsWith("image/") && !imageError;
 
   if (isImage) {
+    // Use actual dimensions if available, fallback to 640x480 for backward compat
+    const imgWidth = width || 640;
+    const imgHeight = height || 480;
+
     return (
       <div className="mt-2 max-w-md">
         <a href={url} target="_blank" rel="noopener noreferrer">
@@ -24,8 +30,8 @@ export function FileAttachment({ fileId, filename, mimeType }: FileAttachmentPro
             alt={filename}
             loader={passthroughImageLoader}
             unoptimized
-            width={640}
-            height={480}
+            width={imgWidth}
+            height={imgHeight}
             onError={() => setImageError(true)}
             className="max-h-80 rounded-lg border border-background-tertiary object-contain cursor-pointer transition hover:opacity-90"
           />
@@ -73,17 +79,37 @@ function getFileIcon(mimeType: string): string {
   return "[FILE]";
 }
 
+/**
+ * Parse file references from message content.
+ * Format: [file:{fileId}:{filename}:{mimeType}] (v1)
+ * Extended: [file:{fileId}:{filename}:{mimeType}:{WxH}] (v2, TASK-0025)
+ *
+ * WxH is optional for backward compatibility.
+ */
 export function parseFileReferences(content: string): {
   text: string;
-  files: { fileId: string; filename: string; mimeType: string }[];
+  files: { fileId: string; filename: string; mimeType: string; width?: number; height?: number }[];
 } {
-  const fileRegex = /\[file:([^:\]]+):([^:\]]+):([^\]]+)\]/g;
-  const files: { fileId: string; filename: string; mimeType: string }[] = [];
+  // Extended regex: optional 5th field for dimensions (WxH)
+  const fileRegex = /\[file:([^:\]]+):([^:\]]+):([^:\]]+)(?::(\d+x\d+))?\]/g;
+  const files: { fileId: string; filename: string; mimeType: string; width?: number; height?: number }[] = [];
 
   const withoutRefs = content.replace(
     fileRegex,
-    (_, fileId: string, filename: string, mimeType: string) => {
-      files.push({ fileId, filename, mimeType });
+    (_, fileId: string, filename: string, mimeType: string, dimensions?: string) => {
+      const file: { fileId: string; filename: string; mimeType: string; width?: number; height?: number } = {
+        fileId,
+        filename,
+        mimeType,
+      };
+      if (dimensions) {
+        const [w, h] = dimensions.split("x").map(Number);
+        if (w > 0 && h > 0) {
+          file.width = w;
+          file.height = h;
+        }
+      }
+      files.push(file);
       return "";
     }
   );

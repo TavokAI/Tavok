@@ -17,5 +17,6 @@ defmodule TavokGatewayWeb.Router do
     pipe_through :api
 
     post "/broadcast", BroadcastController, :create
+    delete "/cache", CacheController, :invalidate
   end
 end

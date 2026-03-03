@@ -60,7 +60,7 @@ export async function PUT(
 
   const { messageId } = await params;
   const body = await request.json();
-  const { content, streamingStatus, thinkingTimeline, metadata } = body;
+  const { content, streamingStatus, thinkingTimeline, metadata, tokenHistory, checkpoints } = body;
 
   if (!content && content !== "" && !streamingStatus) {
     return NextResponse.json(
@@ -75,6 +75,8 @@ export async function PUT(
     if (streamingStatus) updateData.streamingStatus = streamingStatus;
     if (thinkingTimeline) updateData.thinkingTimeline = thinkingTimeline; // TASK-0011
     if (metadata) updateData.metadata = metadata; // TASK-0039: Agent execution metadata
+    if (tokenHistory) updateData.tokenHistory = tokenHistory; // TASK-0021: Stream rewind data
+    if (checkpoints) updateData.checkpoints = checkpoints; // TASK-0021: Checkpoint resume data
 
     const message = await prisma.message.update({
       where: { id: messageId },

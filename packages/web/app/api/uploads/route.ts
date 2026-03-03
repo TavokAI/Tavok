@@ -5,6 +5,7 @@ import { join } from "path";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { generateId } from "@/lib/ulid";
+import { getImageDimensions } from "@/lib/image-dimensions";
 
 const UPLOADS_DIR = process.env.UPLOADS_DIR || "/app/uploads";
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
@@ -69,6 +70,11 @@ export async function POST(request: NextRequest) {
     const buffer = Buffer.from(await file.arrayBuffer());
     await writeFile(fullPath, buffer);
 
+    // Extract image dimensions if applicable (TASK-0025)
+    const dimensions = file.type.startsWith("image/")
+      ? getImageDimensions(buffer, file.type)
+      : null;
+
     const attachment = await prisma.attachment.create({
       data: {
         id: fileId,
@@ -77,12 +83,15 @@ export async function POST(request: NextRequest) {
         mimeType: file.type,
         size: file.size,
         storagePath,
+        ...(dimensions ? { width: dimensions.width, height: dimensions.height } : {}),
       },
       select: {
         id: true,
         filename: true,
         mimeType: true,
         size: true,
+        width: true,
+        height: true,
       },
     });
 
@@ -93,6 +102,8 @@ export async function POST(request: NextRequest) {
         filename: attachment.filename,
         mimeType: attachment.mimeType,
         size: attachment.size,
+        width: attachment.width,
+        height: attachment.height,
       },
       { status: 201 }
     );

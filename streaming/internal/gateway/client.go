@@ -94,6 +94,14 @@ func (c *Client) PublishToolResult(ctx context.Context, channelID, messageID, pa
 	return c.rdb.Publish(ctx, topic, payload).Err()
 }
 
+// PublishCheckpoint publishes a stream checkpoint event to Redis. (TASK-0021)
+// The Gateway subscribes to hive:stream:checkpoint:* pattern and broadcasts
+// as stream_checkpoint events to room:{channelId} for rewind UI.
+func (c *Client) PublishCheckpoint(ctx context.Context, channelID, messageID, payload string) error {
+	topic := "hive:stream:checkpoint:" + channelID + ":" + messageID
+	return c.rdb.Publish(ctx, topic, payload).Err()
+}
+
 // PublishCharterStatus publishes a charter status update to Redis. (TASK-0020)
 // The Gateway subscribes to hive:stream:charter_status:* pattern and broadcasts
 // as charter_status events to room:{channelId} for live header updates.

@@ -83,6 +83,7 @@ model User {
   readStates     ChannelReadState[]
   dmParticipants DmParticipant[]
   directMessages DirectMessage[]  @relation("DirectMessageAuthor")
+  dmReactions    DmReaction[]
 }
 
 model Server {
@@ -152,6 +153,8 @@ model Message {
   sequence        BigInt // per-channel sequence number (assigned via Redis INCR)
   metadata        Json?         // Agent execution metadata: {model, provider, tokensIn, tokensOut, latencyMs, ...} (TASK-0039)
   thinkingTimeline String?       @db.Text // JSON array of {phase, timestamp} for thinking timeline replay (TASK-0011)
+  tokenHistory    String?       @db.Text // JSON array of {o: contentOffset, t: relativeMs} for stream rewind (TASK-0021)
+  checkpoints     String?       @db.Text // JSON array of {index, label, contentOffset, timestamp} for checkpoint resume (TASK-0021)
   editedAt        DateTime?                // null if never edited (TASK-0014)
   isDeleted       Boolean       @default(false)  // soft delete (TASK-0014)
   createdAt       DateTime      @default(now())
@@ -193,6 +196,8 @@ model Attachment {
   mimeType    String
   size        Int // bytes
   storagePath String // path on disk relative to uploads dir
+  width       Int? // image width in pixels (null for non-images) (TASK-0025)
+  height      Int? // image height in pixels (null for non-images) (TASK-0025)
   createdAt   DateTime @default(now())
 
   // Relations
@@ -455,11 +460,27 @@ model DirectMessage {
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
-  dm     DirectMessageChannel @relation(fields: [dmId], references: [id], onDelete: Cascade)
-  author User                 @relation("DirectMessageAuthor", fields: [authorId], references: [id])
+  dm        DirectMessageChannel @relation(fields: [dmId], references: [id], onDelete: Cascade)
+  author    User                 @relation("DirectMessageAuthor", fields: [authorId], references: [id])
+  reactions DmReaction[]
 
   @@index([dmId, sequence])
   @@index([dmId, id])
+}
+
+// DM reaction — emoji reactions on direct messages. (TASK-0030)
+// Mirrors Reaction model but scoped to DirectMessage, not Message.
+model DmReaction {
+  id            String   @id @db.VarChar(26)
+  dmMessageId   String   @db.VarChar(26)
+  userId        String   @db.VarChar(26)
+  emoji         String   @db.VarChar(32) // Unicode emoji or shortcode
+  createdAt     DateTime @default(now())
+
+  dmMessage DirectMessage @relation(fields: [dmMessageId], references: [id], onDelete: Cascade)
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([dmMessageId, userId, emoji])
 }
 
 // ============================================================

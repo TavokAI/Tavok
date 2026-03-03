@@ -40,6 +40,8 @@ export interface MessagePayload {
   thinkingPhase?: string;
   thinkingTimeline?: Array<{ phase: string; timestamp: string }>; // TASK-0011
   metadata?: Record<string, unknown> | null; // Agent execution metadata: model, tokens, latency (TASK-0039)
+  tokenHistory?: Array<{ o: number; t: number }>; // TASK-0021: Stream rewind data [{o: contentOffset, t: relativeMs}]
+  checkpoints?: Array<{ index: number; label: string; contentOffset: number; timestamp: string }>; // TASK-0021
   toolCalls?: ToolCallData[]; // TASK-0018: active tool calls
   toolResults?: ToolResultData[]; // TASK-0018: completed tool results
   sequence: string;
@@ -492,6 +494,38 @@ export function useChannel(channelId: string | null): UseChannelReturn {
           prev.map((m) =>
             m.id === payload.messageId
               ? { ...m, reactions: payload.reactions || [] }
+              : m
+          )
+        );
+      });
+
+      // ---- Checkpoint events (TASK-0021) ----
+      // Real-time checkpoint markers during streaming for rewind UI
+      channel.on("stream_checkpoint", (raw: unknown) => {
+        if (!mounted) return;
+        const payload = raw as {
+          messageId: string;
+          index: number;
+          label: string;
+          contentOffset: number;
+          timestamp: string;
+        };
+
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === payload.messageId
+              ? {
+                  ...m,
+                  checkpoints: [
+                    ...(m.checkpoints || []),
+                    {
+                      index: payload.index,
+                      label: payload.label,
+                      contentOffset: payload.contentOffset,
+                      timestamp: payload.timestamp,
+                    },
+                  ],
+                }
               : m
           )
         );

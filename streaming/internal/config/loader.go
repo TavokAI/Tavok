@@ -165,12 +165,76 @@ func (l *Loader) FinalizeMessageWithTimelineCtx(ctx context.Context, messageID, 
 }
 
 func (l *Loader) finalizeWithTimeline(ctx context.Context, messageID, content, streamingStatus, thinkingTimeline string) error {
+	return l.finalizeWithFullData(ctx, messageID, content, streamingStatus, thinkingTimeline, "", "")
+}
+
+// FinalizeMessageFull updates a streaming message with all metadata including
+// token history and checkpoints for stream rewind. (TASK-0021)
+func (l *Loader) FinalizeMessageFull(messageID, content, streamingStatus, thinkingTimeline, tokenHistory, checkpoints string, logger *slog.Logger) error {
+	return l.FinalizeMessageFullCtx(context.Background(), messageID, content, streamingStatus, thinkingTimeline, tokenHistory, checkpoints, logger)
+}
+
+// FinalizeMessageFullCtx is the context-aware version of FinalizeMessageFull with retry logic.
+func (l *Loader) FinalizeMessageFullCtx(ctx context.Context, messageID, content, streamingStatus, thinkingTimeline, tokenHistory, checkpoints string, logger *slog.Logger) error {
+	const maxRetries = 3
+	backoffs := []time.Duration{1 * time.Second, 2 * time.Second, 4 * time.Second}
+
+	if logger == nil {
+		logger = slog.Default()
+	}
+
+	var lastErr error
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		if attempt > 0 {
+			wait := backoffs[attempt-1]
+			logger.Warn("Retrying FinalizeMessage (full)",
+				"messageId", messageID,
+				"attempt", attempt,
+				"backoff", wait.String(),
+				"lastError", lastErr.Error(),
+			)
+			select {
+			case <-time.After(wait):
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		}
+
+		lastErr = l.finalizeWithFullData(ctx, messageID, content, streamingStatus, thinkingTimeline, tokenHistory, checkpoints)
+		if lastErr == nil {
+			if attempt > 0 {
+				logger.Info("FinalizeMessage (full) succeeded on retry",
+					"messageId", messageID,
+					"attempt", attempt,
+				)
+			}
+			return nil
+		}
+	}
+
+	logger.Error("FinalizeMessage (full) failed after all retries",
+		"messageId", messageID,
+		"status", streamingStatus,
+		"attempts", maxRetries+1,
+		"lastError", lastErr.Error(),
+	)
+	return lastErr
+}
+
+// finalizeWithFullData sends the finalize PUT with all optional fields. (TASK-0021)
+func (l *Loader) finalizeWithFullData(ctx context.Context, messageID, content, streamingStatus, thinkingTimeline, tokenHistory, checkpoints string) error {
 	url := fmt.Sprintf("%s/api/internal/messages/%s", l.webURL, messageID)
 
 	body := map[string]string{
 		"content":          content,
 		"streamingStatus":  streamingStatus,
 		"thinkingTimeline": thinkingTimeline,
+	}
+	if tokenHistory != "" && tokenHistory != "null" {
+		body["tokenHistory"] = tokenHistory
+	}
+	if checkpoints != "" && checkpoints != "null" {
+		body["checkpoints"] = checkpoints
 	}
 
 	bodyJSON, err := json.Marshal(body)

@@ -47,11 +47,15 @@ defmodule TavokGateway.StreamListener do
         {:ok, _ref_tool_result} =
           Redix.PubSub.psubscribe(pubsub, "hive:stream:tool_result:*", self())
 
+        # TASK-0021: Checkpoint events for stream rewind
+        {:ok, _ref_checkpoint} =
+          Redix.PubSub.psubscribe(pubsub, "hive:stream:checkpoint:*", self())
+
         # TASK-0020: Charter status events
         {:ok, _ref_charter} =
           Redix.PubSub.psubscribe(pubsub, "hive:stream:charter_status:*", self())
 
-        Logger.info("[StreamListener] Started — listening for stream tokens, status, thinking, tool_call, tool_result, charter_status")
+        Logger.info("[StreamListener] Started — listening for stream tokens, status, thinking, tool_call, tool_result, checkpoint, charter_status")
         {:ok, %{pubsub: pubsub}}
 
       {:error, reason} ->
@@ -106,6 +110,10 @@ defmodule TavokGateway.StreamListener do
 
     {:ok, _ref_tool_result} =
       Redix.PubSub.psubscribe(state.pubsub, "hive:stream:tool_result:*", self())
+
+    # TASK-0021: Re-subscribe to checkpoint events
+    {:ok, _ref_checkpoint} =
+      Redix.PubSub.psubscribe(state.pubsub, "hive:stream:checkpoint:*", self())
 
     # TASK-0020: Re-subscribe to charter status events
     {:ok, _ref_charter} =
@@ -194,6 +202,17 @@ defmodule TavokGateway.StreamListener do
 
       _ ->
         Logger.error("[StreamListener] Invalid tool_result channel format: hive:stream:tool_result:#{rest}")
+    end
+  end
+
+  # TASK-0021: Checkpoint events — broadcast to room for rewind UI
+  defp handle_stream_message("hive:stream:checkpoint:" <> rest, payload) do
+    case String.split(rest, ":", parts: 2) do
+      [channel_id, _message_id] ->
+        Broadcast.endpoint_broadcast_raw!("room:#{channel_id}", "stream_checkpoint", payload)
+
+      _ ->
+        Logger.error("[StreamListener] Invalid checkpoint channel format: hive:stream:checkpoint:#{rest}")
     end
   end
 

@@ -36,6 +36,21 @@ type timelineEntry struct {
 	Timestamp string `json:"timestamp"`
 }
 
+// tokenHistoryEntry records a token batch boundary for stream rewind. (TASK-0021)
+// O = content offset (end position in final content), T = relative ms from stream start.
+type tokenHistoryEntry struct {
+	O int   `json:"o"`
+	T int64 `json:"t"`
+}
+
+// checkpointEntry records a stream checkpoint for resume. (TASK-0021)
+type checkpointEntry struct {
+	Index         int    `json:"index"`
+	Label         string `json:"label"`
+	ContentOffset int    `json:"contentOffset"`
+	Timestamp     string `json:"timestamp"`
+}
+
 // streamRequest is the JSON payload from Redis hive:stream:request
 type streamRequest struct {
 	ChannelID       string                   `json:"channelId"`
@@ -297,6 +312,11 @@ func (m *Manager) handleStream(ctx context.Context, req streamRequest) {
 	totalTokenCount := 0
 	firstTokenEverSeen := false
 
+	// Token history + checkpoints for stream rewind (TASK-0021)
+	var tokenHistory []tokenHistoryEntry
+	var checkpoints []checkpointEntry
+	checkpointIndex := 0
+
 	// 5. Tool execution loop (TASK-0018)
 	// The loop runs once for simple streams (no tool calls).
 	// When the LLM returns stop_reason "tool_use", we execute the tools,
@@ -314,12 +334,23 @@ func (m *Manager) handleStream(ctx context.Context, req streamRequest) {
 				Phase:     toolPhase,
 				Timestamp: time.Now().UTC().Format(time.RFC3339Nano),
 			})
+
+			// Emit checkpoint at tool iteration start (TASK-0021)
+			cp := checkpointEntry{
+				Index:         checkpointIndex,
+				Label:         fmt.Sprintf("Tool iteration %d", iteration),
+				ContentOffset: allContent.Len(),
+				Timestamp:     time.Now().UTC().Format(time.RFC3339Nano),
+			}
+			checkpoints = append(checkpoints, cp)
+			m.publishCheckpoint(ctx, req, cp)
+			checkpointIndex++
 		}
 
 		// Run one provider iteration
 		iterContent, iterTokens, pr, timedOut := m.runProviderIteration(
 			streamCtx, ctx, req, streamReq, botConfig,
-			&firstTokenEverSeen, &thinkingTimeline, startTime,
+			&firstTokenEverSeen, &thinkingTimeline, &tokenHistory, startTime,
 		)
 
 		if timedOut {
@@ -350,6 +381,17 @@ func (m *Manager) handleStream(ctx context.Context, req streamRequest) {
 
 			// Execute tools and get results
 			toolResults := m.executeTools(streamCtx, ctx, req, pr.result.ToolCalls)
+
+			// Emit checkpoint after tool execution (TASK-0021)
+			cp := checkpointEntry{
+				Index:         checkpointIndex,
+				Label:         fmt.Sprintf("After tool: %s", pr.result.ToolCalls[0].Name),
+				ContentOffset: allContent.Len(),
+				Timestamp:     time.Now().UTC().Format(time.RFC3339Nano),
+			}
+			checkpoints = append(checkpoints, cp)
+			m.publishCheckpoint(ctx, req, cp)
+			checkpointIndex++
 
 			// Append tool call context for the next iteration.
 			// Build assistant tool_use message + user tool_result message
@@ -382,8 +424,10 @@ func (m *Manager) handleStream(ctx context.Context, req streamRequest) {
 		finalContent = "*[No response generated]*"
 	}
 
-	// Serialize thinking timeline for persistence (TASK-0011)
+	// Serialize thinking timeline, token history, and checkpoints for persistence (TASK-0011, TASK-0021)
 	timelineJSON, _ := json.Marshal(thinkingTimeline)
+	tokenHistoryJSON, _ := json.Marshal(tokenHistory)
+	checkpointsJSON, _ := json.Marshal(checkpoints)
 
 	statusPayload, _ := json.Marshal(map[string]interface{}{
 		"messageId":        req.MessageID,
@@ -393,6 +437,8 @@ func (m *Manager) handleStream(ctx context.Context, req streamRequest) {
 		"tokenCount":       totalTokenCount,
 		"durationMs":       durationMs,
 		"thinkingTimeline": thinkingTimeline,
+		"tokenHistory":     tokenHistory,
+		"checkpoints":      checkpoints,
 	})
 
 	if err := m.gwClient.PublishStatus(ctx, req.ChannelID, req.MessageID, string(statusPayload)); err != nil {
@@ -408,8 +454,8 @@ func (m *Manager) handleStream(ctx context.Context, req streamRequest) {
 		)
 	}
 
-	// 7. Persist final message content with thinking timeline (with retry — DEC-0018, TASK-0011)
-	if err := m.loader.FinalizeMessageWithTimeline(req.MessageID, finalContent, "COMPLETE", string(timelineJSON), m.logger); err != nil {
+	// 7. Persist final message content with thinking timeline, token history, and checkpoints (with retry — DEC-0018, TASK-0011, TASK-0021)
+	if err := m.loader.FinalizeMessageFull(req.MessageID, finalContent, "COMPLETE", string(timelineJSON), string(tokenHistoryJSON), string(checkpointsJSON), m.logger); err != nil {
 		m.logger.Error("FinalizeMessage exhausted retries — DB may be ACTIVE, watchdog will recover",
 			"messageId", req.MessageID,
 			"error", err,
@@ -456,6 +502,7 @@ func (m *Manager) runProviderIteration(
 	botConfig *config.BotConfig,
 	firstTokenEverSeen *bool,
 	thinkingTimeline *[]timelineEntry,
+	tokenHistory *[]tokenHistoryEntry,
 	startTime time.Time,
 ) (string, int, providerResult, bool) {
 	tokens := make(chan provider.Token, 100)
@@ -497,6 +544,11 @@ func (m *Manager) runProviderIteration(
 				"error", err,
 			)
 		}
+		// Record token boundary for stream rewind (TASK-0021)
+		*tokenHistory = append(*tokenHistory, tokenHistoryEntry{
+			O: len(lastContent),
+			T: time.Since(startTime).Milliseconds(),
+		})
 		batchBuf.Reset()
 		batchCount = 0
 	}
@@ -721,6 +773,24 @@ func (m *Manager) publishThinking(ctx context.Context, req streamRequest, phase 
 		m.logger.Error("Failed to publish thinking phase",
 			"messageId", req.MessageID,
 			"phase", phase,
+			"error", err,
+		)
+	}
+}
+
+// publishCheckpoint emits a checkpoint event to Redis for rewind UI. (TASK-0021)
+func (m *Manager) publishCheckpoint(ctx context.Context, req streamRequest, cp checkpointEntry) {
+	payload, _ := json.Marshal(map[string]interface{}{
+		"messageId":     req.MessageID,
+		"index":         cp.Index,
+		"label":         cp.Label,
+		"contentOffset": cp.ContentOffset,
+		"timestamp":     cp.Timestamp,
+	})
+	if err := m.gwClient.PublishCheckpoint(ctx, req.ChannelID, req.MessageID, string(payload)); err != nil {
+		m.logger.Error("Failed to publish checkpoint",
+			"messageId", req.MessageID,
+			"checkpointIndex", cp.Index,
 			"error", err,
 		)
 	}
