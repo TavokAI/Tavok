@@ -45,6 +45,9 @@ jobs:
       - name: Lint web
         run: pnpm --filter web lint
 
+      - name: Install Elixir dependencies
+        run: cd gateway && mix deps.get
+
       - name: Check Elixir formatting
         run: cd gateway && mix format --check-formatted
 
