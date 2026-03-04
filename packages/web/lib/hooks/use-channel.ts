@@ -762,7 +762,7 @@ export function useChannel(channelId: string | null): UseChannelReturn {
       setBotTriggerHint(null);
       channelRef.current.push("new_message", { content: trimmed });
     },
-    [channelId, isConnected],
+    [],
   );
 
   // Load older messages (history)

@@ -198,7 +198,7 @@ export function MessageList({
         el.scrollTop = el.scrollHeight;
       }
     }
-  }, [messages]);
+  }, [messages, currentUserId]);
 
   // Scroll to bottom on initial load
   useEffect(() => {

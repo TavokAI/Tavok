@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { useSession } from "next-auth/react";
 import { useChatContext } from "@/components/providers/chat-provider";
 import { useDmList } from "@/lib/hooks/use-dm-list";
@@ -155,9 +156,11 @@ function MemberItem({
     >
       <div className="relative flex-shrink-0">
         {avatarUrl ? (
-          <img
+          <Image
             src={avatarUrl}
             alt={name}
+            width={32}
+            height={32}
             className="h-8 w-8 rounded-full object-cover"
           />
         ) : (
