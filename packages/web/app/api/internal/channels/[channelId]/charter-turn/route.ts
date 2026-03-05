@@ -62,3 +62,146 @@ export async function POST(
     return NextResponse.json({ error: "Internal error" }, { status: 500 });
   }
 }
+
+/**
+ * PUT /api/internal/channels/{channelId}/charter-turn
+ *
+ * Atomic turn claim for ordered charter modes. Called by Go proxy at stream
+ * start to atomically verify and reserve a turn, preventing the TOCTOU race
+ * where two concurrent streams both pass the turn check on a stale snapshot.
+ *
+ * Body: { botId: string }
+ *
+ * On success: increments charterCurrentTurn and returns { granted: true, ... }.
+ * On rejection: returns 409 with reason (wrong agent, max turns, not active).
+ *
+ * Auth: x-internal-secret header.
+ */
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: Promise<{ channelId: string }> },
+) {
+  if (!validateInternalSecret(request)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { channelId } = await params;
+
+  let body: { botId?: string };
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
+
+  const { botId } = body;
+  if (!botId || typeof botId !== "string") {
+    return NextResponse.json({ error: "botId is required" }, { status: 400 });
+  }
+
+  try {
+    // Use an interactive transaction for serializable read-check-update
+    const result = await prisma.$transaction(async (tx) => {
+      const channel = await tx.channel.findUnique({
+        where: { id: channelId },
+        select: {
+          charterStatus: true,
+          swarmMode: true,
+          charterCurrentTurn: true,
+          charterMaxTurns: true,
+          charterAgentOrder: true,
+        },
+      });
+
+      if (!channel) {
+        return { granted: false, reason: "Channel not found", status: 404 };
+      }
+
+      if (channel.charterStatus !== "ACTIVE") {
+        return {
+          granted: false,
+          reason: `Charter is not active (status: ${channel.charterStatus})`,
+          status: 409,
+        };
+      }
+
+      // Check max turns
+      if (
+        channel.charterMaxTurns > 0 &&
+        channel.charterCurrentTurn >= channel.charterMaxTurns
+      ) {
+        return {
+          granted: false,
+          reason: "Charter complete: maximum turns reached",
+          status: 409,
+        };
+      }
+
+      // Check turn order for ordered modes
+      const orderedModes = ["ROUND_ROBIN", "CODE_REVIEW_SPRINT"];
+      const agentOrder = channel.charterAgentOrder ?? [];
+      if (
+        orderedModes.includes(channel.swarmMode) &&
+        agentOrder.length > 0
+      ) {
+        const expectedIndex =
+          channel.charterCurrentTurn % agentOrder.length;
+        const expectedBot = agentOrder[expectedIndex];
+        if (expectedBot !== botId) {
+          return {
+            granted: false,
+            reason: `Not your turn: waiting for agent ${expectedBot} (turn ${channel.charterCurrentTurn + 1})`,
+            status: 409,
+          };
+        }
+      }
+
+      // Claim the turn by incrementing atomically within the transaction
+      const updated = await tx.channel.update({
+        where: { id: channelId },
+        data: { charterCurrentTurn: { increment: 1 } },
+        select: {
+          charterCurrentTurn: true,
+          charterMaxTurns: true,
+        },
+      });
+
+      let completed = false;
+      if (
+        updated.charterMaxTurns > 0 &&
+        updated.charterCurrentTurn >= updated.charterMaxTurns
+      ) {
+        await tx.channel.update({
+          where: { id: channelId },
+          data: { charterStatus: "COMPLETED" },
+        });
+        completed = true;
+      }
+
+      return {
+        granted: true,
+        currentTurn: updated.charterCurrentTurn,
+        maxTurns: updated.charterMaxTurns,
+        completed,
+        status: 200,
+      };
+    });
+
+    if (!result.granted) {
+      return NextResponse.json(
+        { granted: false, reason: result.reason },
+        { status: result.status },
+      );
+    }
+
+    return NextResponse.json({
+      granted: true,
+      currentTurn: result.currentTurn,
+      maxTurns: result.maxTurns,
+      completed: result.completed,
+    });
+  } catch (error) {
+    console.error("Failed to claim charter turn:", error);
+    return NextResponse.json({ error: "Internal error" }, { status: 500 });
+  }
+}

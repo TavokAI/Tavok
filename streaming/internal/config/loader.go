@@ -351,9 +351,52 @@ func (l *Loader) GetChannelCharter(ctx context.Context, channelID string) (*Char
 	return &charter, nil
 }
 
+// ClaimCharterTurn atomically claims a charter turn via PUT.
+// PUT /api/internal/channels/{channelId}/charter-turn
+// Body: { "botId": "..." }
+// The server verifies turn order, max turns, and charter status inside a
+// serializable transaction, then increments the turn counter atomically.
+// Returns a non-error result for all application-level responses (200, 409, 404).
+// Only returns an error for transport/server failures (5xx, network). (P1-Fix 4)
+func (l *Loader) ClaimCharterTurn(ctx context.Context, channelID, botID string) (*ClaimCharterTurnResult, error) {
+	url := fmt.Sprintf("%s/api/internal/channels/%s/charter-turn", l.webURL, channelID)
+
+	body := map[string]string{"botId": botID}
+	bodyJSON, err := json.Marshal(body)
+	if err != nil {
+		return nil, fmt.Errorf("marshal body: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "PUT", url, bytes.NewReader(bodyJSON))
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("x-internal-secret", l.internalSecret)
+
+	resp, err := l.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("http request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// 200 (granted), 409 (rejected), 404 (not found) are all valid application responses
+	if resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusConflict || resp.StatusCode == http.StatusNotFound {
+		var result ClaimCharterTurnResult
+		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+			return nil, fmt.Errorf("decode response: %w", err)
+		}
+		return &result, nil
+	}
+
+	respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+	return nil, fmt.Errorf("web API returned %d: %s", resp.StatusCode, string(respBody))
+}
+
 // IncrementCharterTurn increments the charter turn counter via the internal API.
 // POST /api/internal/channels/{channelId}/charter-turn
 // Returns the new turn count and whether the charter is completed. (TASK-0020)
+// Deprecated: Use ClaimCharterTurn for atomic turn claiming at stream start.
 func (l *Loader) IncrementCharterTurn(ctx context.Context, channelID string) (currentTurn int, completed bool, err error) {
 	url := fmt.Sprintf("%s/api/internal/channels/%s/charter-turn", l.webURL, channelID)
 

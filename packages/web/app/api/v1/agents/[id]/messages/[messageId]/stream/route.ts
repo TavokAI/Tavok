@@ -39,14 +39,16 @@ export async function POST(
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const { tokens, done, finalContent, metadata, thinking, error } = body as {
-    tokens?: string[];
-    done?: boolean;
-    finalContent?: string;
-    metadata?: Record<string, unknown>;
-    thinking?: { phase: string; detail?: string };
-    error?: string;
-  };
+  const { tokens, done, finalContent, metadata, thinking, error, tokenOffset } =
+    body as {
+      tokens?: string[];
+      done?: boolean;
+      finalContent?: string;
+      metadata?: Record<string, unknown>;
+      thinking?: { phase: string; detail?: string };
+      error?: string;
+      tokenOffset?: number;
+    };
 
   // Verify message ownership and resolve channelId from DB (not from request body)
   const ownership = await verifyMessageOwnership(messageId, agent.botId);
@@ -91,8 +93,8 @@ export async function POST(
       return NextResponse.json({ ok: true });
     }
 
-    // Broadcast tokens
-    let tokenIndex = 0;
+    // Broadcast tokens — use caller-supplied offset for cross-batch monotonicity
+    let tokenIndex = typeof tokenOffset === "number" ? tokenOffset : 0;
     if (tokens && Array.isArray(tokens)) {
       for (const tokenText of tokens) {
         await broadcastStreamToken(resolvedChannelId, {
@@ -122,6 +124,7 @@ export async function POST(
       return NextResponse.json({
         ok: true,
         tokensReceived: tokens?.length || 0,
+        nextTokenOffset: tokenIndex,
         completed: true,
       });
     }
@@ -129,6 +132,7 @@ export async function POST(
     return NextResponse.json({
       ok: true,
       tokensReceived: tokens?.length || 0,
+      nextTokenOffset: tokenIndex,
     });
   } catch (err) {
     console.error("Agent stream failed:", err);

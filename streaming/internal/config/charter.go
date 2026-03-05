@@ -83,6 +83,16 @@ func (c *CharterConfig) SystemPromptInjection() string {
 	return injection
 }
 
+// ClaimCharterTurnResult holds the response from the atomic turn claim endpoint.
+// PUT /api/internal/channels/{channelId}/charter-turn
+type ClaimCharterTurnResult struct {
+	Granted     bool   `json:"granted"`
+	Reason      string `json:"reason,omitempty"`
+	CurrentTurn int    `json:"currentTurn,omitempty"`
+	MaxTurns    int    `json:"maxTurns,omitempty"`
+	Completed   bool   `json:"completed,omitempty"`
+}
+
 // itoa is a simple int to string conversion without importing strconv.
 func itoa(n int) string {
 	if n == 0 {

@@ -220,38 +220,41 @@ func (m *Manager) handleStream(ctx context.Context, req streamRequest) {
 		charter = nil // Non-fatal: charter enforcement is optional
 	}
 
-	// 1c. Charter enforcement checks (TASK-0020)
+	// 1c. Atomic charter turn claim (TASK-0020, P1-Fix 4)
+	// Replaces the old snapshot-based check with a transactional claim that
+	// prevents the TOCTOU race where two concurrent streams both pass the
+	// turn check on a stale snapshot.
+	var charterClaimCompleted bool
 	if charter != nil && charter.IsEnforced() {
-		// Check if max turns reached
-		if charter.HasReachedMaxTurns() {
-			m.logger.Info("Charter max turns reached — rejecting stream",
+		claim, claimErr := m.loader.ClaimCharterTurn(ctx, req.ChannelID, req.BotID)
+		if claimErr != nil {
+			m.logger.Error("Failed to claim charter turn",
 				"channelId", req.ChannelID,
-				"messageId", req.MessageID,
-				"currentTurn", charter.CurrentTurn,
-				"maxTurns", charter.MaxTurns,
+				"botId", req.BotID,
+				"error", claimErr,
 			)
-			m.publishError(ctx, req, "", "Charter complete: maximum turns reached", 0, startTime)
-			m.publishCharterStatusEvent(ctx, req.ChannelID, charter.CurrentTurn, charter.MaxTurns, "COMPLETED")
+			m.publishError(ctx, req, "", "Failed to claim charter turn", 0, startTime)
 			return
 		}
-
-		// Check turn order for ordered modes
-		if charter.SwarmMode == "ROUND_ROBIN" || charter.SwarmMode == "CODE_REVIEW_SPRINT" {
-			if !charter.IsAgentTurn(req.BotID) {
-				expected := charter.ExpectedAgent()
-				m.logger.Info("Not this agent's turn — rejecting stream",
-					"channelId", req.ChannelID,
-					"botId", req.BotID,
-					"expectedBot", expected,
-					"currentTurn", charter.CurrentTurn,
-				)
-				m.publishError(ctx, req, "",
-					fmt.Sprintf("Not your turn: waiting for agent %s (turn %d)", expected, charter.CurrentTurn+1),
-					0, startTime,
-				)
-				return
-			}
+		if !claim.Granted {
+			m.logger.Info("Charter turn claim rejected",
+				"channelId", req.ChannelID,
+				"botId", req.BotID,
+				"reason", claim.Reason,
+			)
+			m.publishError(ctx, req, "", claim.Reason, 0, startTime)
+			return
 		}
+		charterClaimCompleted = claim.Completed
+		// Update charter config with the new turn count from the claim
+		charter.CurrentTurn = claim.CurrentTurn
+		m.logger.Info("Charter turn claimed",
+			"channelId", req.ChannelID,
+			"botId", req.BotID,
+			"currentTurn", claim.CurrentTurn,
+			"maxTurns", claim.MaxTurns,
+			"completed", claim.Completed,
+		)
 	}
 
 	// 1d. Inject charter into system prompt (TASK-0020)
@@ -473,27 +476,20 @@ func (m *Manager) handleStream(ctx context.Context, req streamRequest) {
 		)
 	}
 
-	// 8. Increment charter turn counter and publish status (TASK-0020)
+	// 8. Publish charter status event (TASK-0020, P1-Fix 4)
+	// Turn was already claimed atomically at stream start — no increment needed.
 	if charter != nil && charter.IsEnforced() {
-		newTurn, completed, turnErr := m.loader.IncrementCharterTurn(ctx, req.ChannelID)
-		if turnErr != nil {
-			m.logger.Error("Failed to increment charter turn",
-				"channelId", req.ChannelID,
-				"error", turnErr,
-			)
-		} else {
-			status := "ACTIVE"
-			if completed {
-				status = "COMPLETED"
-			}
-			m.publishCharterStatusEvent(ctx, req.ChannelID, newTurn, charter.MaxTurns, status)
-			m.logger.Info("Charter turn incremented",
-				"channelId", req.ChannelID,
-				"newTurn", newTurn,
-				"maxTurns", charter.MaxTurns,
-				"completed", completed,
-			)
+		status := "ACTIVE"
+		if charterClaimCompleted {
+			status = "COMPLETED"
 		}
+		m.publishCharterStatusEvent(ctx, req.ChannelID, charter.CurrentTurn, charter.MaxTurns, status)
+		m.logger.Info("Charter status published",
+			"channelId", req.ChannelID,
+			"currentTurn", charter.CurrentTurn,
+			"maxTurns", charter.MaxTurns,
+			"completed", charterClaimCompleted,
+		)
 	}
 
 	m.logger.Info("Stream completed",

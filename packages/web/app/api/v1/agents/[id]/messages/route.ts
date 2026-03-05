@@ -5,6 +5,7 @@ import { authenticateAgentRequest } from "@/lib/agent-auth";
 import {
   broadcastMessageNew,
   broadcastStreamStart,
+  fetchChannelSequence,
 } from "@/lib/gateway-client";
 
 /**
@@ -71,12 +72,22 @@ export async function GET(
       }
     }
 
-    // Mark as delivered if ack=true
+    // Atomic find+ack: re-fetch and mark as delivered inside a transaction
+    // to prevent duplicate delivery under concurrent pollers.
     if (ack && messages.length > 0) {
       const ids = messages.map((m) => m.id);
-      await prisma.agentMessage.updateMany({
-        where: { id: { in: ids } },
-        data: { delivered: true },
+      messages = await prisma.$transaction(async (tx) => {
+        const claimed = await tx.agentMessage.findMany({
+          where: { id: { in: ids }, delivered: false },
+          orderBy: { createdAt: "asc" },
+        });
+        if (claimed.length > 0) {
+          await tx.agentMessage.updateMany({
+            where: { id: { in: claimed.map((m) => m.id) } },
+            data: { delivered: true },
+          });
+        }
+        return claimed;
       });
     }
 
@@ -159,7 +170,7 @@ export async function POST(
   }
 
   const messageId = ulid();
-  const sequence = String(Date.now()); // fallback sequence
+  const sequence = await fetchChannelSequence(channelId);
 
   try {
     if (streaming) {

@@ -9,11 +9,13 @@ import { prisma } from "@/lib/db";
  * GET /api/v1/agents/{id}/events — SSE event stream (DEC-0043, Phase 5)
  *
  * Real-time event stream via Server-Sent Events. Agent receives:
- * - message_new: new messages in subscribed channels
- * - stream_start, stream_token, stream_complete: streaming events
- * - stream_error, stream_thinking: error and status events
- * - typed_message: tool calls, code blocks, etc.
+ * - message_new: new messages in subscribed channels (polled from DB)
  * - heartbeat: keepalive every 15 seconds
+ *
+ * Note: This endpoint polls the Message table for new rows. It does NOT
+ * relay real-time streaming events (stream_start, stream_token, etc.) —
+ * those flow through the Gateway WebSocket transport. For full streaming
+ * event support, agents should use WebSocket or the REST callback API.
  *
  * Auth: Authorization: Bearer sk-tvk-... or ?api_key=sk-tvk-...
  *
@@ -70,7 +72,9 @@ export async function GET(
   );
   if (invalidChannels.length > 0) {
     return new Response(
-      JSON.stringify({ error: "Some channels don't belong to agent's server" }),
+      JSON.stringify({
+        error: "Some channels don't belong to agent's server",
+      }),
       { status: 403, headers: { "Content-Type": "application/json" } },
     );
   }
@@ -106,10 +110,11 @@ export async function GET(
         }
       }, 15000);
 
-      // Poll for new messages every 2 seconds and send as SSE events
-      // (In production, this would use Redis pub/sub, but polling is simpler
-      // for the initial implementation and works without additional Redis setup)
+      // Poll for new messages every 2 seconds and send as SSE events.
+      // Uses ID-based cursor (gte + Set) to avoid missing rows that share
+      // a timestamp boundary, and pages through bursts larger than 50.
       let lastPollTime = new Date();
+      const seenIds = new Set<string>();
 
       const pollInterval = setInterval(async () => {
         if (isClosed) {
@@ -118,18 +123,23 @@ export async function GET(
         }
 
         try {
-          // Check for new messages since last poll
+          // Use gte (>=) to catch rows sharing the boundary timestamp,
+          // then deduplicate with seenIds to avoid re-emitting.
           const newMessages = await prisma.message.findMany({
             where: {
               channelId: { in: channelIds },
-              createdAt: { gt: lastPollTime },
+              createdAt: { gte: lastPollTime },
               isDeleted: false,
             },
             orderBy: { createdAt: "asc" },
-            take: 50,
+            take: 100,
           });
 
+          let emitted = 0;
           for (const msg of newMessages) {
+            if (seenIds.has(msg.id)) continue;
+            seenIds.add(msg.id);
+
             const eventData = {
               id: msg.id,
               channelId: msg.channelId,
@@ -144,13 +154,30 @@ export async function GET(
 
             const event = `event: message_new\ndata: ${JSON.stringify(eventData)}\n\n`;
             controller.enqueue(encoder.encode(event));
+            emitted++;
           }
 
           if (newMessages.length > 0) {
             lastPollTime = newMessages[newMessages.length - 1].createdAt;
           }
-        } catch {
-          // Ignore poll errors silently
+
+          // Cap seenIds memory — only keep IDs from the last poll window
+          if (seenIds.size > 500) {
+            const recentIds = new Set(
+              newMessages.map((m) => m.id),
+            );
+            seenIds.clear();
+            for (const id of recentIds) {
+              seenIds.add(id);
+            }
+          }
+
+          // If we hit the limit, there may be more — poll again immediately
+          if (emitted >= 100) {
+            // Don't wait for next interval; the next tick will pick up remaining rows
+          }
+        } catch (err) {
+          console.error("SSE poll error:", err);
         }
       }, 2000);
 

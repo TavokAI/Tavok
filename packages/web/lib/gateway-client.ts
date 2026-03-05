@@ -114,3 +114,29 @@ export async function broadcastTypedMessage(
 ): Promise<void> {
   return broadcastToChannel(`room:${channelId}`, "typed_message", payload);
 }
+
+/**
+ * Fetch the next monotonic sequence number for a channel from the Gateway.
+ * Falls back to Date.now() if the Gateway is unreachable.
+ */
+export async function fetchChannelSequence(
+  channelId: string,
+): Promise<string> {
+  try {
+    const response = await fetch(
+      `${GATEWAY_INTERNAL_URL}/api/internal/sequence?channelId=${channelId}`,
+      {
+        headers: {
+          "x-internal-secret": INTERNAL_API_SECRET || "",
+        },
+      },
+    );
+    if (response.ok) {
+      const data = await response.json();
+      return String(data.sequence);
+    }
+  } catch {
+    // Gateway unavailable — fall back to timestamp
+  }
+  return String(Date.now());
+}

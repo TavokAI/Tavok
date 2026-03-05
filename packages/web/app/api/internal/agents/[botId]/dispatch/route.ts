@@ -8,6 +8,7 @@ import {
   broadcastStreamStart,
   broadcastStreamToken,
   broadcastStreamComplete,
+  fetchChannelSequence,
 } from "@/lib/gateway-client";
 
 /**
@@ -132,7 +133,7 @@ export async function POST(
     // Handle SSE streaming response
     if (contentType.includes("text/event-stream") && response.body) {
       const messageId = ulid();
-      const sequence = String(Date.now()); // fallback sequence
+      const sequence = await fetchChannelSequence(channelId);
 
       // Persist streaming placeholder before broadcasting
       await persistMessage({
@@ -245,7 +246,7 @@ export async function POST(
     const responseBody = await response.json().catch(() => null);
     if (responseBody?.content) {
       const messageId = ulid();
-      const sequence = String(Date.now());
+      const sequence = await fetchChannelSequence(channelId);
 
       // Persist and broadcast
       await broadcastMessageNew(channelId, {
