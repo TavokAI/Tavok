@@ -163,9 +163,7 @@ export async function GET(
 
           // Cap seenIds memory — only keep IDs from the last poll window
           if (seenIds.size > 500) {
-            const recentIds = new Set(
-              newMessages.map((m) => m.id),
-            );
+            const recentIds = new Set(newMessages.map((m) => m.id));
             seenIds.clear();
             for (const id of recentIds) {
               seenIds.add(id);

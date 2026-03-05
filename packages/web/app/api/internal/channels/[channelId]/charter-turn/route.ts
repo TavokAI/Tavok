@@ -140,12 +140,8 @@ export async function PUT(
       // Check turn order for ordered modes
       const orderedModes = ["ROUND_ROBIN", "CODE_REVIEW_SPRINT"];
       const agentOrder = channel.charterAgentOrder ?? [];
-      if (
-        orderedModes.includes(channel.swarmMode) &&
-        agentOrder.length > 0
-      ) {
-        const expectedIndex =
-          channel.charterCurrentTurn % agentOrder.length;
+      if (orderedModes.includes(channel.swarmMode) && agentOrder.length > 0) {
+        const expectedIndex = channel.charterCurrentTurn % agentOrder.length;
         const expectedBot = agentOrder[expectedIndex];
         if (expectedBot !== botId) {
           return {

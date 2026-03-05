@@ -80,16 +80,12 @@ export async function POST(
 
     // Handle thinking
     if (thinking) {
-      await broadcastToChannel(
-        `room:${resolvedChannelId}`,
-        "stream_thinking",
-        {
-          messageId,
-          phase: thinking.phase,
-          detail: thinking.detail || null,
-          timestamp: new Date().toISOString(),
-        },
-      );
+      await broadcastToChannel(`room:${resolvedChannelId}`, "stream_thinking", {
+        messageId,
+        phase: thinking.phase,
+        detail: thinking.detail || null,
+        timestamp: new Date().toISOString(),
+      });
       return NextResponse.json({ ok: true });
     }
 

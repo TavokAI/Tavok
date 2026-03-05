@@ -111,16 +111,12 @@ export async function POST(
 
     // Handle thinking/status updates
     if (thinking) {
-      await broadcastToChannel(
-        `room:${webhook.channelId}`,
-        "stream_thinking",
-        {
-          messageId,
-          phase: thinking.phase,
-          detail: thinking.detail || null,
-          timestamp: new Date().toISOString(),
-        },
-      );
+      await broadcastToChannel(`room:${webhook.channelId}`, "stream_thinking", {
+        messageId,
+        phase: thinking.phase,
+        detail: thinking.detail || null,
+        timestamp: new Date().toISOString(),
+      });
       return NextResponse.json({ ok: true });
     }
 
@@ -180,10 +176,7 @@ async function verifyWebhookMessageOwnership(
   messageId: string,
   botId: string,
   channelId: string,
-): Promise<
-  | { valid: true }
-  | { valid: false; error: string; status: number }
-> {
+): Promise<{ valid: true } | { valid: false; error: string; status: number }> {
   let message;
   try {
     message = await prisma.message.findUnique({

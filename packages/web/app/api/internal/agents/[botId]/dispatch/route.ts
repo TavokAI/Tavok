@@ -231,9 +231,7 @@ export async function POST(
           await updateMessage(messageId, {
             streamingStatus: "ERROR",
             content: fullContent || "*[Error: Stream read failed]*",
-          }).catch((e) =>
-            console.error("Failed to persist stream error:", e),
-          );
+          }).catch((e) => console.error("Failed to persist stream error:", e));
         }
       } finally {
         reader.releaseLock();
