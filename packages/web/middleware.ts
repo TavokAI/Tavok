@@ -3,8 +3,8 @@ import type { NextRequest } from "next/server";
 import { getToken } from "next-auth/jwt";
 import { RateLimiter } from "@/lib/rate-limit";
 
-// Rate limiter for login attempts: 10 per 60s per IP
-const loginLimiter = new RateLimiter({ max: 10, windowSec: 60 });
+// Rate limiter for login attempts: 30 per 60s per IP
+const loginLimiter = new RateLimiter({ max: 30, windowSec: 60 });
 
 const publicRoutes = ["/login", "/register"];
 const publicPrefixes = ["/api/auth", "/api/health", "/api/internal", "/api/v1"];
