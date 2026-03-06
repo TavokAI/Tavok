@@ -69,7 +69,11 @@ uploads/
 
 # === Dev tooling directories ===
 .agents/
-.claude/
+.claude/*
+!.claude/settings.json
+!.claude/hooks/
+.claude/hooks/*
+!.claude/hooks/*.sh
 .openhands/
 .pi/
 .playwright-mcp/
