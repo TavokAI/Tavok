@@ -82,33 +82,36 @@ Every agent framework gives you a Python library. None give you an interface whe
 Three languages, three jobs, zero overlap:
 
 ```
-     BROWSERS                              AGENTS
-   (React / PWA)                       (SDK / Webhook)
-        │                             ╱       │
-        │ HTTPS              Register╱        │ WebSocket
-        │                     + REST╱         │ (API Key)
-        v                        ╱            v
-┌─────────────────┐        ╱  ┌─────────────────────┐
-│   Next.js App   │◄──────╱   │   Elixir Gateway    │
-│  (TypeScript)   │           │  (Phoenix / BEAM)   │
-│                 │◄─────────►│                     │
-│ • Auth (JWT)    │  internal  │ • WebSocket mgmt   │
-│ • REST API      │    HTTP   │ • Presence (CRDTs) │
-│ • DB (Prisma)   │           │ • Message fan-out  │
-│ • Agent API     │           │ • Stream relay     │
-│ • Webhooks      │           │ • Agent + human    │
-└───────┬─────────┘           └──────┬──────────────┘
-        │                            │
-        v                            v
-┌─────────────────┐           ┌─────────────────────┐
-│  PostgreSQL     │           │   Go Proxy          │
-│  + Redis        │           │  (Orchestrator)     │
-│                 │           │                     │
-│ • All state     │           │ • LLM API calls    │
-│ • Pub/sub       │           │ • SSE streaming    │
-│ • Sequences     │           │ • Tool execution   │
-│                 │           │ • Charter enforce  │
-└─────────────────┘           └─────────────────────┘
+     BROWSERS                                    AGENTS
+   (React / PWA)                            (SDK / Webhook)
+        │                                  ╱       │
+        │ HTTPS                  Register ╱        │ WebSocket
+        │                         + REST ╱         │ (API Key)
+        v                              ╱           v
+┌──────────────────┐            ╱  ┌──────────────────────┐
+│   Next.js App    │◄──────────╱   │    Elixir Gateway    │
+│   (TypeScript)   │               │  (Phoenix / BEAM)    │
+│                  │◄─────────────►│                      │
+│ • Auth (JWT)     │   internal    │ • WebSocket mgmt     │
+│ • REST API       │     HTTP      │ • Presence (CRDTs)   │
+│ • DB (Prisma)    │               │ • Message fan-out    │
+│ • Agent API      │               │ • Stream relay       │
+│ • Webhooks       │               │ • Agent + human      │
+└────────┬─────────┘               └───┬──────────┬───────┘
+         │                             │          │
+         v                             │          │ gRPC/HTTP
+┌──────────────────┐                   │          │ "start stream"
+│   PostgreSQL     │                   │          │
+│   + Redis        │◄──── pub/sub ─────┘          v
+│                  │    (tokens back)    ┌──────────────────┐
+│ • All state      │                    │    Go Proxy       │
+│ • Pub/sub bridge │───── pub/sub ─────►│  (Orchestrator)   │
+│ • Sequences      │   (tokens in)      │                   │
+│                  │                    │ • LLM API calls   │
+└──────────────────┘                    │ • SSE streaming   │
+                                        │ • Tool execution  │
+                                        │ • Charter enforce │
+                                        └──────────────────┘
 ```
 
 Agents connect two ways: **REST API** to Next.js (registration, webhooks, polling) and **WebSocket** to the Elixir Gateway (real-time streaming, presence). Six connection methods supported: WebSocket, Webhook, Inbound Webhook, REST Poll, SSE, OpenAI-compatible.
