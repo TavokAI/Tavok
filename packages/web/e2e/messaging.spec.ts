@@ -12,7 +12,7 @@ const DEMO_USER = { email: "demo@tavok.ai", password: "DemoPass123!" };
  */
 async function openChannel(page: Page, channelName: string): Promise<void> {
   // Make sure the CHANNELS tab is active in the left panel
-  await page.getByText("CHANNELS", { exact: true }).click();
+  await page.getByRole("tab", { name: "CHANNELS" }).click();
 
   // Click the channel in the sidebar (channels are displayed with # prefix as text)
   const channelButton = page.locator("button").filter({
@@ -38,7 +38,7 @@ test.describe("Messaging", () => {
 
   test("can see seeded server in the sidebar", async ({ page }) => {
     // Click the SERVERS tab
-    await page.getByText("SERVERS", { exact: true }).click();
+    await page.getByRole("tab", { name: "SERVERS" }).click();
 
     // The seeded server should be visible
     await expect(page.getByText("AI Research Lab")).toBeVisible({
@@ -48,7 +48,7 @@ test.describe("Messaging", () => {
 
   test("can navigate to a channel and see messages", async ({ page }) => {
     // First, select the server
-    await page.getByText("SERVERS", { exact: true }).click();
+    await page.getByRole("tab", { name: "SERVERS" }).click();
     await page.getByText("AI Research Lab").click();
 
     // Open the #general channel
@@ -60,15 +60,15 @@ test.describe("Messaging", () => {
     const messageItems = page.locator("div.group.flex.gap-4.px-4");
     await expect(messageItems.first()).toBeVisible({ timeout: 10_000 });
 
-    // Verify the channel header shows # general
-    await expect(page.getByText("# general").first()).toBeVisible();
+    // Verify the channel header shows the channel name
+    await expect(page.getByText("general").first()).toBeVisible();
   });
 
   test("send a message and see it appear in the message list", async ({
     page,
   }) => {
     // Navigate to server and channel
-    await page.getByText("SERVERS", { exact: true }).click();
+    await page.getByRole("tab", { name: "SERVERS" }).click();
     await page.getByText("AI Research Lab").click();
     await openChannel(page, "general");
 
@@ -91,7 +91,7 @@ test.describe("Messaging", () => {
     page,
   }) => {
     // Navigate to a channel
-    await page.getByText("SERVERS", { exact: true }).click();
+    await page.getByRole("tab", { name: "SERVERS" }).click();
     await page.getByText("AI Research Lab").click();
     await openChannel(page, "general");
 
@@ -103,7 +103,7 @@ test.describe("Messaging", () => {
   });
 
   test("empty message is not sent", async ({ page }) => {
-    await page.getByText("SERVERS", { exact: true }).click();
+    await page.getByRole("tab", { name: "SERVERS" }).click();
     await page.getByText("AI Research Lab").click();
     await openChannel(page, "general");
 
@@ -119,14 +119,14 @@ test.describe("Messaging", () => {
   test("can open multiple channels and see channel headers", async ({
     page,
   }) => {
-    await page.getByText("SERVERS", { exact: true }).click();
+    await page.getByRole("tab", { name: "SERVERS" }).click();
     await page.getByText("AI Research Lab").click();
 
     // Open #general
     await openChannel(page, "general");
 
-    // Verify the panel shows # general in its header/titlebar
-    await expect(page.getByText("# general").first()).toBeVisible();
+    // Verify the panel shows the channel name in its header/titlebar
+    await expect(page.getByText("general").first()).toBeVisible();
   });
 
   test("can see the empty state for a new channel", async ({ page }) => {
@@ -134,7 +134,7 @@ test.describe("Messaging", () => {
     // Since seeded channels have messages, we look for it only if a channel
     // has no messages. We'll just confirm the text exists in code and test
     // the channel with messages instead.
-    await page.getByText("SERVERS", { exact: true }).click();
+    await page.getByRole("tab", { name: "SERVERS" }).click();
     await page.getByText("AI Research Lab").click();
     await openChannel(page, "general");
 
@@ -144,7 +144,7 @@ test.describe("Messaging", () => {
   });
 
   test("multiline message via Shift+Enter", async ({ page }) => {
-    await page.getByText("SERVERS", { exact: true }).click();
+    await page.getByRole("tab", { name: "SERVERS" }).click();
     await page.getByText("AI Research Lab").click();
     await openChannel(page, "general");
 

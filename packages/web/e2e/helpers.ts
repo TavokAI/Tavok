@@ -53,7 +53,7 @@ export async function login(
     // If we landed on /login, the session cookie wasn't accepted
     if (!page.url().includes("/login")) {
       // Success — wait for app to render
-      await expect(page.getByRole("button", { name: "SERVERS" })).toBeVisible({
+      await expect(page.getByRole("tab", { name: "SERVERS" })).toBeVisible({
         timeout: 15_000,
       });
       return;
@@ -100,7 +100,7 @@ export async function login(
     );
   }
 
-  await expect(page.getByRole("button", { name: "SERVERS" })).toBeVisible({
+  await expect(page.getByRole("tab", { name: "SERVERS" })).toBeVisible({
     timeout: 15_000,
   });
 }

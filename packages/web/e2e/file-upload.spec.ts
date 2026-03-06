@@ -10,7 +10,7 @@ import { login } from "./helpers";
 const DEMO_USER = { email: "demo@tavok.ai", password: "DemoPass123!" };
 
 async function openChannel(page: Page, channelName: string): Promise<void> {
-  await page.getByText("CHANNELS", { exact: true }).click();
+  await page.getByRole("tab", { name: "CHANNELS" }).click();
 
   const channelButton = page.locator("button").filter({
     has: page.locator(`text="${channelName}"`),
@@ -23,7 +23,7 @@ async function openChannel(page: Page, channelName: string): Promise<void> {
 }
 
 async function selectServer(page: Page): Promise<void> {
-  await page.getByText("SERVERS", { exact: true }).click();
+  await page.getByRole("tab", { name: "SERVERS" }).click();
   await page.getByText("AI Research Lab").click();
   await page.waitForTimeout(500);
 }

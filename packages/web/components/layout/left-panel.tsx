@@ -78,8 +78,13 @@ export function LeftPanel() {
     <>
       <div className="flex flex-col border-r border-border bg-background-primary h-full">
         {/* Tabs */}
-        <div className="flex border-b border-border bg-background-secondary h-[48px] p-1.5 shrink-0 gap-1">
+        <div
+          role="tablist"
+          className="flex border-b border-border bg-background-secondary h-[48px] p-1.5 shrink-0 gap-1"
+        >
           <button
+            role="tab"
+            aria-selected={activeTab === "servers"}
             onClick={() => setActiveTab("servers")}
             className={`flex-1 flex items-center justify-center gap-1.5 rounded-md text-[11px] font-semibold transition-all ${
               activeTab === "servers"
@@ -91,6 +96,8 @@ export function LeftPanel() {
             SERVERS
           </button>
           <button
+            role="tab"
+            aria-selected={activeTab === "channels"}
             onClick={() => setActiveTab("channels")}
             className={`flex-1 flex items-center justify-center gap-1.5 rounded-md text-[11px] font-semibold transition-all ${
               activeTab === "channels"
@@ -102,6 +109,8 @@ export function LeftPanel() {
             CHANNELS
           </button>
           <button
+            role="tab"
+            aria-selected={activeTab === "messages"}
             onClick={() => setActiveTab("messages")}
             className={`flex-1 flex items-center justify-center gap-1.5 rounded-md text-[11px] font-semibold transition-all ${
               activeTab === "messages"

@@ -44,7 +44,7 @@ test.describe("Authentication", () => {
     await login(page, DEMO_USER.email, DEMO_USER.password);
 
     // The app layout has tab buttons in the left panel: SERVERS, CHANNELS, DMs
-    await expect(page.getByRole("button", { name: "SERVERS" })).toBeVisible({
+    await expect(page.getByRole("tab", { name: "SERVERS" })).toBeVisible({
       timeout: 10_000,
     });
   });
@@ -52,7 +52,7 @@ test.describe("Authentication", () => {
   test("login with alice account succeeds", async ({ page }) => {
     await login(page, ALICE.email, ALICE.password);
 
-    await expect(page.getByRole("button", { name: "SERVERS" })).toBeVisible({
+    await expect(page.getByRole("tab", { name: "SERVERS" })).toBeVisible({
       timeout: 10_000,
     });
   });
