@@ -25,7 +25,7 @@ async def register_agent(
     """Register a new agent with a Tavok server.
 
     Args:
-        base_url: The Tavok web server URL (e.g. ``http://localhost:3000``).
+        base_url: The Tavok web server URL (e.g. ``http://localhost:5555``).
         server_id: ULID of the server to join.
         display_name: Agent display name shown in chat.
         model: LLM model identifier (e.g. ``claude-sonnet-4-20250514``).

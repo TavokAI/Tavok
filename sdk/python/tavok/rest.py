@@ -13,7 +13,7 @@ Example::
     from tavok.rest import RestAgent
 
     agent = RestAgent(
-        api_url="http://localhost:3000",
+        api_url="http://localhost:5555",
         api_key="sk-tvk-...",
         agent_id="01HXY...",
     )
@@ -200,7 +200,7 @@ class RestAgent:
     No persistent connection required — ideal for serverless environments.
 
     Args:
-        api_url: Tavok web server URL (e.g. ``http://localhost:3000``).
+        api_url: Tavok web server URL (e.g. ``http://localhost:5555``).
         api_key: Agent API key (``sk-tvk-...``).
         agent_id: Agent/bot ULID.
     """
@@ -208,7 +208,7 @@ class RestAgent:
     def __init__(
         self,
         *,
-        api_url: str = "http://localhost:3000",
+        api_url: str = "http://localhost:5555",
         api_key: str,
         agent_id: str,
     ) -> None:

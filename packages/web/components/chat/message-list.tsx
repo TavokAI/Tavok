@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useRef, useEffect, useCallback, useMemo } from "react";
 import type { MessagePayload, ReactionData } from "@/lib/hooks/use-channel";
@@ -214,25 +214,25 @@ export function MessageList({
     <div
       ref={containerRef}
       onScroll={handleScroll}
-      className="flex-1 overflow-y-auto pb-4"
+      className="flex-1 overflow-y-auto px-2 pb-4 pt-3"
     >
       {/* Loading indicator at top */}
       {hasMoreHistory && messages.length > 0 && (
-        <div className="px-4 py-3 space-y-3">
+        <div className="space-y-3 px-4 py-3">
           {[1, 2, 3].map((i) => (
             <div key={i} className="flex items-start gap-3 animate-pulse">
-              <div className="h-8 w-8 rounded-full bg-background-tertiary flex-shrink-0" />
+              <div className="h-8 w-8 flex-shrink-0 rounded-full bg-background-tertiary/80" />
               <div className="flex-1 space-y-1.5">
-                <div className="h-3 w-24 rounded bg-background-tertiary" />
+                <div className="h-3 w-24 rounded bg-background-tertiary/80" />
                 <div
-                  className="h-3 rounded bg-background-tertiary"
+                  className="h-3 rounded bg-background-tertiary/80"
                   style={{ width: `${60 + i * 10}%` }}
                 />
               </div>
             </div>
           ))}
           <div className="flex justify-center">
-            <span className="text-[10px] text-text-dim font-mono tracking-wider">
+            <span className="text-[10px] font-mono tracking-[0.16em] text-text-dim">
               LOADING HISTORY
             </span>
           </div>
@@ -241,12 +241,12 @@ export function MessageList({
 
       {/* Empty state */}
       {messages.length === 0 && (
-        <div className="flex h-full items-center justify-center">
-          <div className="text-center">
-            <p className="text-lg font-semibold text-text-primary">
+        <div className="flex h-full items-center justify-center px-4 py-10">
+          <div className="chrome-card rounded-[24px] px-8 py-10 text-center">
+            <p className="font-display text-xl font-semibold text-white">
               No messages yet
             </p>
-            <p className="mt-1 text-sm text-text-muted">
+            <p className="mt-2 text-sm text-text-muted">
               Be the first to send a message!
             </p>
           </div>
@@ -255,15 +255,15 @@ export function MessageList({
 
       {/* TASK-0012: Active streams indicator for multi-bot channels */}
       {activeStreamCount > 1 && (
-        <div className="sticky top-0 z-10 flex justify-center py-1.5">
-          <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium bg-accent-cyan/10 text-accent-cyan border border-accent-cyan/20">
-            <span className="w-1.5 h-1.5 rounded-full bg-accent-cyan animate-pulse" />
+        <div className="sticky top-0 z-10 flex justify-center py-2">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-accent-cyan/20 bg-accent-cyan/10 px-3 py-1.5 text-xs font-medium text-accent-cyan shadow-[0_10px_24px_rgba(89,184,255,0.1)]">
+            <span className="w-1.5 h-1.5 rounded-full bg-accent-agent animate-pulse" />
             {activeStreamCount} agents responding
           </span>
         </div>
       )}
 
-      {/* TASK-0016: Compute divider position — the index of the FIRST unread message */}
+      {/* TASK-0016: Compute divider position â€” the index of the FIRST unread message */}
       {(() => {
         // Find the index where the divider should be inserted
         let dividerIndex = -1;

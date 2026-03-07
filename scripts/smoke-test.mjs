@@ -6,13 +6,13 @@
  * Zero external dependencies — just Node 20+ fetch.
  *
  * Usage:
- *   node scripts/smoke-test.mjs                     # default: http://localhost:3000
+ *   node scripts/smoke-test.mjs                     # default: http://localhost:5555
  *   node scripts/smoke-test.mjs https://my.tavok.ai # custom base URL
  *
  * Exit code 0 = all passed, 1 = failures.
  */
 
-const BASE = process.argv[2] || "http://localhost:3000";
+const BASE = process.argv[2] || "http://localhost:5555";
 const RUN = Date.now().toString(36); // unique suffix per run
 
 // ─── Helpers ────────────────────────────────────────────────────────────────

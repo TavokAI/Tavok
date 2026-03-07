@@ -6,7 +6,7 @@ Quick start::
 
     agent = Agent(
         url="ws://localhost:4001",
-        api_url="http://localhost:3000",
+        api_url="http://localhost:5555",
         name="my-agent",
     )
 

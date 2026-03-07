@@ -30,7 +30,7 @@ ANTHROPIC_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 
 agent = Agent(
     url=os.environ.get("TAVOK_WS_URL", "ws://localhost:4001"),
-    api_url=os.environ.get("TAVOK_API_URL", "http://localhost:3000"),
+    api_url=os.environ.get("TAVOK_API_URL", "http://localhost:5555"),
     name="Claude Agent",
     api_key=API_KEY,
     agent_id=AGENT_ID,

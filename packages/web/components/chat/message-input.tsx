@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import {
   useState,
@@ -405,7 +405,7 @@ export function MessageInput({
 
   return (
     <div
-      className="px-4 pb-6 pt-0 relative"
+      className="relative px-5 pb-5 pt-1"
       onDragEnter={handleDragEnter}
       onDragLeave={handleDragLeave}
       onDragOver={handleDragOver}
@@ -413,8 +413,8 @@ export function MessageInput({
     >
       {/* Drag-and-drop overlay (TASK-0025) */}
       {isDragging && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center bg-accent/10 border-2 border-dashed border-accent rounded-lg pointer-events-none">
-          <div className="flex items-center gap-2 text-accent text-sm font-mono font-bold">
+        <div className="pointer-events-none absolute inset-0 z-50 flex items-center justify-center rounded-[22px] border-2 border-dashed border-brand/35 bg-brand/10 backdrop-blur-sm">
+          <div className="flex items-center gap-2 text-sm font-semibold text-orange-100">
             <svg
               width="20"
               height="20"
@@ -432,16 +432,16 @@ export function MessageInput({
         </div>
       )}
       {pendingFiles.length > 0 && (
-        <div className="flex flex-wrap gap-2 px-4 pb-1">
+        <div className="flex flex-wrap gap-2 px-1 pb-2">
           {pendingFiles.map((file) => (
             <div
               key={file.fileId}
-              className="relative inline-flex items-center gap-1.5 rounded bg-background-tertiary px-2 py-1 text-xs text-text-secondary overflow-hidden"
+              className="relative inline-flex items-center gap-1.5 overflow-hidden rounded-full border border-white/8 bg-background-tertiary/75 px-3 py-1.5 text-xs text-text-secondary"
             >
               {/* Upload progress bar (TASK-0025) */}
               {file.progress < 1 && (
                 <div
-                  className="absolute bottom-0 left-0 h-0.5 bg-accent transition-all duration-200"
+                  className="absolute bottom-0 left-0 h-0.5 bg-accent-green transition-all duration-200"
                   style={{ width: `${Math.round(file.progress * 100)}%` }}
                 />
               )}
@@ -462,7 +462,7 @@ export function MessageInput({
           ))}
         </div>
       )}
-      <div className="relative flex items-end gap-2 bg-background-secondary border border-border px-3 py-2 mt-1">
+      <div className="relative mt-1 flex items-end gap-3 rounded-[22px] border border-white/10 bg-[linear-gradient(180deg,rgba(20,32,57,0.96),rgba(13,24,45,0.94))] px-4 py-3 shadow-[0_16px_34px_rgba(3,9,22,0.24)]">
         <MentionAutocomplete
           query={mentionQuery}
           options={mentionOptions}
@@ -482,7 +482,7 @@ export function MessageInput({
         <button
           onClick={() => fileInputRef.current?.click()}
           disabled={disabled || uploading}
-          className="flex h-6 w-6 flex-shrink-0 items-center justify-center text-text-dim transition hover:text-text-primary disabled:opacity-30"
+          className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-text-dim transition hover:bg-background-tertiary/55 hover:text-text-primary disabled:opacity-30"
           title="Upload file"
           aria-label="Upload file"
         >
@@ -501,8 +501,8 @@ export function MessageInput({
             </svg>
           )}
         </button>
-        <div className="flex-1 flex items-end min-h-[24px]">
-          <span className="text-brand mr-2 mb-[3px] select-none text-sm leading-none opacity-80">
+        <div className="flex min-h-[24px] flex-1 items-end">
+          <span className="mb-[5px] mr-1.5 select-none text-sm leading-none text-brand opacity-90">
             &#9658;
           </span>
           <textarea
@@ -517,7 +517,7 @@ export function MessageInput({
               channelName ? `Message #${channelName}` : "Type here..."
             }
             rows={1}
-            className="max-h-[200px] flex-1 resize-none bg-transparent text-sm font-mono text-text-primary placeholder-text-dim outline-none leading-relaxed py-0.5"
+            className="max-h-[200px] flex-1 resize-none bg-transparent py-0.5 text-sm leading-7 text-text-primary placeholder:text-text-dim outline-none"
           />
         </div>
         <button
@@ -527,7 +527,7 @@ export function MessageInput({
             (!value.trim() &&
               pendingFiles.filter((f) => f.progress >= 1).length === 0)
           }
-          className="flex h-6 w-6 flex-shrink-0 items-center justify-center text-text-dim transition hover:text-brand disabled:opacity-30"
+          className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-text-dim transition hover:bg-brand/10 hover:text-brand disabled:opacity-30"
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
             <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />

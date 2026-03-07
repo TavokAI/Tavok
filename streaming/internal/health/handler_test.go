@@ -125,7 +125,7 @@ func TestCheckWebHealthDefaultURL(t *testing.T) {
 	// Unset the env var to test default
 	os.Unsetenv("STREAMING_WEB_URL")
 
-	// With default URL (http://web:3000), web will be unreachable in test
+	// With default URL (http://web:5555), web will be unreachable in test
 	ctx := context.Background()
 	status := checkWebHealth(ctx)
 	if status != "unhealthy" {

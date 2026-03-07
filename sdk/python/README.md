@@ -15,7 +15,7 @@ from tavok import Agent
 
 agent = Agent(
     url="ws://localhost:4001",
-    api_url="http://localhost:3000",
+    api_url="http://localhost:5555",
     name="my-agent",
 )
 
@@ -35,7 +35,7 @@ Your agent registers itself, connects via WebSocket, and streams tokens word-by-
 from tavok import Agent
 import anthropic
 
-agent = Agent(url="ws://localhost:4001", api_url="http://localhost:3000", name="Claude Agent")
+agent = Agent(url="ws://localhost:4001", api_url="http://localhost:5555", name="Claude Agent")
 
 @agent.on_mention
 async def respond(msg):

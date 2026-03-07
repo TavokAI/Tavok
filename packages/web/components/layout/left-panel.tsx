@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState } from "react";
 import Image from "next/image";
@@ -40,70 +40,65 @@ export function LeftPanel() {
   const [showCreateChannel, setShowCreateChannel] = useState(false);
   const [showServerSettings, setShowServerSettings] = useState(false);
 
-  // TASK-0019: DM conversations list
   const { conversations: dmConversations, isLoading: dmsLoading } = useDmList();
-
-  // Derive active DM from URL
   const activeDmId = pathname.match(/\/dms\/([^/]+)/)?.[1] || null;
-
-  // Derive which channels have active panels
   const openChannelIds = new Set(
     panels.filter((p) => !p.isClosed).map((p) => p.channelId),
   );
 
   return (
     <>
-      <div className="flex flex-col border-r border-border bg-background-primary h-full">
-        {/* Tabs */}
-        <div
-          role="tablist"
-          className="flex border-b border-border bg-background-secondary h-[48px] p-1.5 shrink-0 gap-1"
-        >
-          <button
-            role="tab"
-            aria-selected={activeTab === "servers"}
-            onClick={() => setActiveTab("servers")}
-            className={`flex-1 flex items-center justify-center gap-1.5 rounded-md text-[11px] font-semibold transition-all ${
-              activeTab === "servers"
-                ? "bg-brand/10 text-brand shadow-sm"
-                : "text-text-muted hover:bg-background-floating hover:text-text-secondary"
-            }`}
+      <div className="chrome-panel flex h-full flex-col rounded-[28px] overflow-hidden">
+        <div className="border-b border-border/60 px-3 pb-3 pt-3">
+          <div
+            role="tablist"
+            className="grid h-[44px] grid-cols-3 gap-1 rounded-2xl border border-white/5 bg-background-tertiary/55 p-1"
           >
-            <ServerIcon className="h-3.5 w-3.5" />
-            SERVERS
-          </button>
-          <button
-            role="tab"
-            aria-selected={activeTab === "channels"}
-            onClick={() => setActiveTab("channels")}
-            className={`flex-1 flex items-center justify-center gap-1.5 rounded-md text-[11px] font-semibold transition-all ${
-              activeTab === "channels"
-                ? "bg-brand/10 text-brand shadow-sm"
-                : "text-text-muted hover:bg-background-floating hover:text-text-secondary"
-            }`}
-          >
-            <Hash className="h-3.5 w-3.5" />
-            CHANNELS
-          </button>
-          <button
-            role="tab"
-            aria-selected={activeTab === "messages"}
-            onClick={() => setActiveTab("messages")}
-            className={`flex-1 flex items-center justify-center gap-1.5 rounded-md text-[11px] font-semibold transition-all ${
-              activeTab === "messages"
-                ? "bg-brand/10 text-brand shadow-sm"
-                : "text-text-muted hover:bg-background-floating hover:text-text-secondary"
-            }`}
-          >
-            <MessageSquare className="h-3.5 w-3.5" />
-            DMs
-          </button>
+            <button
+              role="tab"
+              aria-selected={activeTab === "servers"}
+              onClick={() => setActiveTab("servers")}
+              className={`flex items-center justify-center gap-1.5 rounded-xl text-[11px] font-semibold tracking-[0.08em] transition-all ${
+                activeTab === "servers"
+                  ? "border border-brand/20 bg-brand/10 text-orange-100 shadow-[0_10px_22px_rgba(255,155,69,0.14)]"
+                  : "text-text-muted hover:bg-background-floating/60 hover:text-text-primary"
+              }`}
+            >
+              <ServerIcon className="h-3.5 w-3.5" />
+              SERVERS
+            </button>
+            <button
+              role="tab"
+              aria-selected={activeTab === "channels"}
+              onClick={() => setActiveTab("channels")}
+              className={`flex items-center justify-center gap-1.5 rounded-xl text-[11px] font-semibold tracking-[0.08em] transition-all ${
+                activeTab === "channels"
+                  ? "border border-brand/20 bg-brand/10 text-orange-100 shadow-[0_10px_22px_rgba(255,155,69,0.14)]"
+                  : "text-text-muted hover:bg-background-floating/60 hover:text-text-primary"
+              }`}
+            >
+              <Hash className="h-3.5 w-3.5" />
+              CHANNELS
+            </button>
+            <button
+              role="tab"
+              aria-selected={activeTab === "messages"}
+              onClick={() => setActiveTab("messages")}
+              className={`flex items-center justify-center gap-1.5 rounded-xl text-[11px] font-semibold tracking-[0.08em] transition-all ${
+                activeTab === "messages"
+                  ? "border border-brand/20 bg-brand/10 text-orange-100 shadow-[0_10px_22px_rgba(255,155,69,0.14)]"
+                  : "text-text-muted hover:bg-background-floating/60 hover:text-text-primary"
+              }`}
+            >
+              <MessageSquare className="h-3.5 w-3.5" />
+              DMs
+            </button>
+          </div>
         </div>
 
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto p-3">
+        <div className="flex-1 overflow-y-auto px-3.5 py-3">
           {activeTab === "servers" ? (
-            <div className="space-y-1">
+            <div className="space-y-1.5">
               {servers.map((server) => {
                 const isActive = currentServerId === server.id;
                 return (
@@ -113,21 +108,21 @@ export function LeftPanel() {
                       router.push(`/servers/${server.id}`);
                       setActiveTab("channels");
                     }}
-                    className={`flex w-full items-center gap-3 rounded-md px-2.5 py-2 text-sm font-medium transition-all ${
+                    className={`flex w-full items-center gap-3 rounded-2xl border px-3 py-2.5 text-sm font-medium transition-all ${
                       isActive
-                        ? "bg-brand/10 text-brand"
-                        : "text-text-secondary hover:bg-background-floating hover:text-text-primary"
+                        ? "border-brand/30 bg-brand/10 text-orange-100 shadow-[0_14px_24px_rgba(255,155,69,0.08)]"
+                        : "border-transparent text-text-secondary hover:border-white/5 hover:bg-background-floating/55 hover:text-text-primary"
                     }`}
                   >
-                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded border border-border bg-background-floating text-xs font-bold overflow-hidden shadow-sm">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-background-floating text-xs font-bold text-text-primary shadow-[0_8px_18px_rgba(3,9,22,0.22)]">
                       {server.iconUrl ? (
                         <Image
                           src={server.iconUrl}
                           alt=""
                           loader={passthroughImageLoader}
                           unoptimized
-                          width={28}
-                          height={28}
+                          width={36}
+                          height={36}
                           className="h-full w-full object-cover"
                         />
                       ) : (
@@ -138,12 +133,12 @@ export function LeftPanel() {
                   </button>
                 );
               })}
-              <div className="pt-2 mt-2 border-t border-border">
+              <div className="mt-3 border-t border-border/50 pt-3">
                 <button
                   onClick={() => setShowCreateServer(true)}
-                  className="flex w-full items-center gap-3 rounded-md px-2.5 py-2 text-sm font-medium text-text-muted hover:bg-background-floating hover:text-text-primary transition-all group"
+                  className="flex w-full items-center gap-3 rounded-2xl border border-dashed border-white/10 px-3 py-2.5 text-sm font-medium text-text-muted transition-all hover:border-brand/20 hover:bg-background-floating/45 hover:text-text-primary"
                 >
-                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded border border-dashed border-text-muted bg-transparent group-hover:border-text-primary group-hover:text-text-primary transition-colors">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-dashed border-current/50 bg-background-tertiary/60">
                     <Plus className="h-4 w-4" />
                   </div>
                   <span>New Server</span>
@@ -151,12 +146,12 @@ export function LeftPanel() {
               </div>
             </div>
           ) : activeTab === "messages" ? (
-            <div className="space-y-1">
-              <div className="mb-3 px-1 flex items-center justify-between">
-                <span className="text-[11px] font-semibold text-text-muted">
+            <div className="space-y-1.5">
+              <div className="mb-3 flex items-center justify-between px-1">
+                <span className="text-[11px] font-semibold tracking-[0.12em] text-text-muted">
                   DIRECT MESSAGES
                 </span>
-                <button className="text-text-muted hover:text-text-primary">
+                <button className="rounded-lg p-1 text-text-muted hover:bg-background-floating/55 hover:text-text-primary">
                   <Plus className="h-3.5 w-3.5" />
                 </button>
               </div>
@@ -164,10 +159,9 @@ export function LeftPanel() {
               {dmsLoading ? (
                 <div className="px-2 text-xs text-text-muted">Loading...</div>
               ) : dmConversations.length === 0 ? (
-                <div className="px-2 text-xs text-text-muted text-center mt-6 p-4 rounded-md border border-dashed border-border">
+                <div className="rounded-2xl border border-dashed border-white/10 bg-background-tertiary/45 px-3 py-5 text-center text-xs text-text-muted">
                   No direct messages yet.
-                  <br />
-                  <span className="text-text-dim mt-1 block">
+                  <span className="mt-1 block text-text-dim">
                     Click a member to start a conversation.
                   </span>
                 </div>
@@ -178,23 +172,21 @@ export function LeftPanel() {
                     <button
                       key={dm.id}
                       onClick={() => router.push(`/dms/${dm.id}`)}
-                      className={`flex w-full items-center gap-3 rounded-md px-2.5 py-2 text-sm transition-colors ${
+                      className={`flex w-full items-center gap-3 rounded-2xl border px-3 py-2.5 text-sm transition-all ${
                         isActive
-                          ? "bg-brand/10 text-brand"
-                          : "text-text-secondary hover:bg-background-floating hover:text-text-primary"
+                          ? "border-brand/30 bg-brand/10 text-orange-100 shadow-[0_14px_24px_rgba(255,155,69,0.08)]"
+                          : "border-transparent text-text-secondary hover:border-white/5 hover:bg-background-floating/55 hover:text-text-primary"
                       }`}
                     >
-                      {/* Avatar */}
-                      <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full border border-border bg-background-floating text-xs font-bold text-text-primary shadow-sm">
+                      <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full border border-white/10 bg-background-floating text-xs font-bold text-text-primary shadow-[0_8px_16px_rgba(3,9,22,0.2)]">
                         {dm.otherUser.displayName.charAt(0).toUpperCase()}
                       </div>
-                      {/* Name + preview */}
-                      <div className="min-w-0 flex-1 text-left flex flex-col justify-center">
+                      <div className="min-w-0 flex-1 text-left">
                         <div className="truncate font-medium">
                           {dm.otherUser.displayName}
                         </div>
                         {dm.lastMessage && (
-                          <div className="truncate text-xs text-text-muted mt-0.5">
+                          <div className="mt-0.5 truncate text-xs text-text-muted">
                             {dm.lastMessage.content}
                           </div>
                         )}
@@ -209,14 +201,14 @@ export function LeftPanel() {
               {currentServerId ? (
                 <div>
                   <div className="mb-3 flex items-center justify-between px-1">
-                    <span className="text-[11px] font-semibold text-text-muted uppercase tracking-wide truncate pr-2">
+                    <span className="truncate pr-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-text-muted">
                       {currentServerName}
                     </span>
-                    <div className="flex items-center gap-1 shrink-0">
+                    <div className="flex shrink-0 items-center gap-1">
                       {hasPermission(Permissions.MANAGE_CHANNELS) && (
                         <button
                           onClick={() => setShowCreateChannel(true)}
-                          className="text-text-muted hover:text-text-primary p-1 rounded hover:bg-background-floating transition-colors"
+                          className="rounded-lg p-1 text-text-muted transition-colors hover:bg-background-floating/60 hover:text-text-primary"
                           title="Create Channel"
                         >
                           <Plus className="h-3.5 w-3.5" />
@@ -226,7 +218,7 @@ export function LeftPanel() {
                         hasPermission(Permissions.MANAGE_SERVER)) && (
                         <button
                           onClick={() => setShowServerSettings(true)}
-                          className="text-text-muted hover:text-text-primary p-1 rounded hover:bg-background-floating transition-colors"
+                          className="rounded-lg p-1 text-text-muted transition-colors hover:bg-background-floating/60 hover:text-text-primary"
                           title="Server Settings"
                         >
                           <Settings2 className="h-3.5 w-3.5" />
@@ -234,7 +226,7 @@ export function LeftPanel() {
                       )}
                     </div>
                   </div>
-                  <div className="space-y-0.5">
+                  <div className="space-y-1.5">
                     {channels.map((channel) => {
                       const isOpen = openChannelIds.has(channel.id);
                       const isStreaming = activeStreams.has(channel.id);
@@ -252,37 +244,41 @@ export function LeftPanel() {
                               `/servers/${currentServerId}/channels/${channel.id}`,
                             );
                           }}
-                          className={`group flex w-full items-center justify-between rounded-md px-2.5 py-1.5 text-sm transition-colors ${
+                          className={`group flex w-full items-center justify-between rounded-2xl border px-3 py-2 text-sm font-medium transition-all ${
                             isOpen
-                              ? "bg-brand/10 text-brand font-medium"
-                              : "text-text-secondary hover:bg-background-floating hover:text-text-primary font-medium"
+                              ? "border-brand/20 bg-brand/10 text-orange-100 shadow-[0_14px_24px_rgba(255,155,69,0.08)]"
+                              : "border-transparent text-text-secondary hover:border-white/5 hover:bg-background-floating/55 hover:text-text-primary"
                           }`}
                         >
                           <div className="flex items-center gap-2.5 truncate">
                             <Hash
-                              className={`h-4 w-4 shrink-0 ${isOpen ? "text-brand" : "text-text-muted group-hover:text-text-primary"}`}
+                              className={`h-4 w-4 shrink-0 ${
+                                isOpen
+                                  ? "text-brand"
+                                  : "text-text-muted group-hover:text-text-primary"
+                              }`}
                             />
                             <span className="truncate">{channel.name}</span>
                           </div>
                           {isStreaming && (
-                            <span className="relative flex h-2 w-2 mr-1 shrink-0">
-                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-brand opacity-75"></span>
-                              <span className="relative inline-flex rounded-full h-2 w-2 bg-brand"></span>
+                            <span className="relative mr-1 flex h-2.5 w-2.5 shrink-0">
+                              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent-green opacity-75" />
+                              <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-accent-green shadow-[0_0_14px_rgba(41,211,145,0.55)]" />
                             </span>
                           )}
                         </button>
                       );
                     })}
                     {channels.length === 0 && (
-                      <div className="px-2 text-sm text-text-muted mt-2">
+                      <div className="px-2 pt-2 text-sm text-text-muted">
                         No channels found
                       </div>
                     )}
                   </div>
                 </div>
               ) : (
-                <div className="px-4 py-8 text-sm text-text-muted text-center rounded-md border border-dashed border-border mt-4">
-                  <ServerIcon className="h-8 w-8 mx-auto mb-3 text-text-dim" />
+                <div className="rounded-2xl border border-dashed border-white/10 bg-background-tertiary/45 px-4 py-8 text-center text-sm text-text-muted">
+                  <ServerIcon className="mx-auto mb-3 h-8 w-8 text-text-dim" />
                   Select a server from the{" "}
                   <span className="font-semibold text-text-secondary">
                     SERVERS

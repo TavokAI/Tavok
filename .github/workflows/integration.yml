@@ -40,7 +40,7 @@ jobs:
         run: |
           echo "Waiting for services..."
           for i in $(seq 1 90); do
-            if curl -sf http://localhost:3000/api/health > /dev/null 2>&1 && \
+            if curl -sf http://localhost:5555/api/health > /dev/null 2>&1 && \
                curl -sf http://localhost:4001/api/health > /dev/null 2>&1 && \
                curl -sf http://localhost:4002/health > /dev/null 2>&1; then
               echo "All services healthy after ${i}s"
@@ -72,13 +72,13 @@ jobs:
           COOKIE_JAR=$(mktemp)
 
           # Get CSRF token + cookie
-          CSRF_RESPONSE=$(curl -s -c "$COOKIE_JAR" http://localhost:3000/api/auth/csrf)
+          CSRF_RESPONSE=$(curl -s -c "$COOKIE_JAR" http://localhost:5555/api/auth/csrf)
           CSRF_TOKEN=$(echo "$CSRF_RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin)['csrfToken'])" 2>/dev/null || echo "PARSE_FAILED")
           echo "CSRF token (first 20 chars): ${CSRF_TOKEN:0:20}..."
 
           # Authenticate with seeded user
           AUTH_RESPONSE=$(curl -s -b "$COOKIE_JAR" -c "$COOKIE_JAR" \
-            -X POST http://localhost:3000/api/auth/callback/credentials \
+            -X POST http://localhost:5555/api/auth/callback/credentials \
             -d "email=demo@tavok.ai&password=DemoPass123!&csrfToken=$CSRF_TOKEN&json=true")
           echo "Auth response: $AUTH_RESPONSE"
 

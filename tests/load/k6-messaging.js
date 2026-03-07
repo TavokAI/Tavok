@@ -34,7 +34,7 @@ const wsConnectFailRate = new Rate("ws_connect_fail_rate");
 // Configuration
 // ---------------------------------------------------------------------------
 
-const BASE_URL = __ENV.BASE_URL || "http://localhost:3000";
+const BASE_URL = __ENV.BASE_URL || "http://localhost:5555";
 const WS_URL = __ENV.WS_URL || "ws://localhost:4001";
 
 const CREDENTIALS = {

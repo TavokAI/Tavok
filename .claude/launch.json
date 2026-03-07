@@ -5,14 +5,14 @@
       "name": "web-docker",
       "runtimeExecutable": "docker",
       "runtimeArgs": ["compose", "up", "web"],
-      "port": 3000
+      "port": 5555
     },
     {
       "name": "web",
       "runtimeExecutable": "C:\\Program Files\\nodejs\\node.exe",
-      "runtimeArgs": ["node_modules/next/dist/bin/next", "dev"],
+      "runtimeArgs": ["node_modules/next/dist/bin/next", "dev", "-p", "5555"],
       "cwd": "packages/web",
-      "port": 3000
+      "port": 5555
     },
     {
       "name": "gateway",
@@ -42,7 +42,7 @@
       "name": "all-services",
       "runtimeExecutable": "docker",
       "runtimeArgs": ["compose", "-f", "docker-compose.yml", "-f", "docker-compose.dev.yml", "up", "--build"],
-      "port": 3000
+      "port": 5555
     }
   ]
 }

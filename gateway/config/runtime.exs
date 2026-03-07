@@ -40,7 +40,7 @@ config :tavok_gateway,
          "redis://localhost:6379"
 
 # Next.js internal API URL
-config :tavok_gateway, :web_url, System.get_env("GATEWAY_WEB_URL") || "http://localhost:3000"
+config :tavok_gateway, :web_url, System.get_env("GATEWAY_WEB_URL") || "http://localhost:5555"
 
 # Internal API secret
 config :tavok_gateway,

@@ -57,9 +57,9 @@ RUN mkdir -p /app/uploads && chown nextjs:nodejs /app/uploads
 
 USER nextjs
 
-EXPOSE 3000
+EXPOSE 5555
 
-ENV PORT=3000
+ENV PORT=5555
 ENV HOSTNAME="0.0.0.0"
 
 # Run migrations then start

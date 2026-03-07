@@ -194,7 +194,7 @@ export async function POST(
         sequence,
       });
 
-      const webUrl = process.env.NEXTAUTH_URL || "http://localhost:3000";
+      const webUrl = process.env.NEXTAUTH_URL || "http://localhost:5555";
 
       return NextResponse.json(
         {
@@ -249,7 +249,7 @@ export async function POST(
 }
 
 async function persistMessage(data: Record<string, unknown>) {
-  const internalUrl = process.env.NEXTAUTH_URL || "http://localhost:3000";
+  const internalUrl = process.env.NEXTAUTH_URL || "http://localhost:5555";
   await fetch(`${internalUrl}/api/internal/messages`, {
     method: "POST",
     headers: {

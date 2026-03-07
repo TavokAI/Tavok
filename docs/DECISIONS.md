@@ -132,7 +132,7 @@
 
 **Date**: 2026-02-23
 **Status**: Accepted
-**Context**: Docker health check for web service used `wget -qO- http://localhost:3000/api/health` but always returned "Connection refused" even though the server was listening on `0.0.0.0:3000`.
+**Context**: Docker health check for web service used `wget -qO- http://localhost:5555/api/health` but always returned "Connection refused" even though the server was listening on `0.0.0.0:5555`.
 **Decision**: Use `127.0.0.1` explicitly instead of `localhost` in all Docker health checks.
 **Rationale**: Alpine Linux resolves `localhost` to `::1` (IPv6) first. Next.js standalone server only binds to `0.0.0.0` (IPv4). Using `127.0.0.1` explicitly bypasses the IPv6 resolution and connects to the correct address.
 **Consequences**: All health check URLs in docker-compose.yml use `127.0.0.1` instead of `localhost`.
@@ -923,7 +923,7 @@ model AgentRegistration {
 
 5. **Token usage from metadata**: If the responding bot's message has metadata (tokensIn, tokensOut), these are included in the OpenAI usage response.
 
-**Consequences**: Any tool that supports `base_url` override works with Tavok out of the box. LiteLLM users just set `base_url="http://tavok:3000/api/v1"` and `api_key="sk-tvk-..."`. This is the highest-leverage integration point — one endpoint covers dozens of frameworks.
+**Consequences**: Any tool that supports `base_url` override works with Tavok out of the box. LiteLLM users just set `base_url="http://tavok:5555/api/v1"` and `api_key="sk-tvk-..."`. This is the highest-leverage integration point — one endpoint covers dozens of frameworks.
 
 ---
 

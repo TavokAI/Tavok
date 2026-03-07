@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import React, { useEffect, useMemo, useState } from "react";
 import { useChatContext } from "@/components/providers/chat-provider";
@@ -65,7 +65,7 @@ export function RightPanel() {
           try {
             steps = JSON.parse(agent.thinkingSteps);
           } catch {
-            /* ignore */
+            // Ignore invalid serialized steps.
           }
         }
 
@@ -103,7 +103,7 @@ export function RightPanel() {
   }, [agentList]);
 
   const modelList = useMemo(() => {
-    const models = new Map<string, string>(); // model -> botName
+    const models = new Map<string, string>();
     for (const panel of openPanels) {
       const scoped = serverDataById[panel.serverId];
       if (!scoped) continue;
@@ -120,63 +120,54 @@ export function RightPanel() {
   }, [openPanels, serverDataById]);
 
   return (
-    <div className="flex flex-col border-l border-border bg-background-primary h-full">
-      <div className="flex-1 overflow-y-auto p-4 space-y-8">
-        {/* Agents */}
-        <div>
-          <div className="flex items-center justify-between mb-3 border-b border-border pb-2">
-            <div className="flex items-center gap-2 text-[11px] font-semibold text-text-muted">
-              <Bot className="h-4 w-4" />
+    <div className="chrome-panel flex h-full flex-col rounded-[28px] overflow-hidden">
+      <div className="flex-1 space-y-4 overflow-y-auto p-4">
+        <div className="chrome-card rounded-[24px] p-4">
+          <div className="mb-4 flex items-center justify-between border-b border-border/60 pb-3">
+            <div className="flex items-center gap-2 text-[11px] font-semibold tracking-[0.12em] text-text-muted">
+              <Bot className="h-4 w-4 text-brand" />
               AGENTS
             </div>
             {hasPermission(Permissions.MANAGE_BOTS) && (
               <button
                 onClick={() => setShowManageAgents(true)}
-                className="text-text-muted hover:text-brand transition-colors p-1 rounded hover:bg-background-floating"
+                className="rounded-lg p-1 text-text-muted transition-colors hover:bg-background-floating/60 hover:text-brand"
                 title="Manage Agents"
               >
                 <Settings2 className="h-3.5 w-3.5" />
               </button>
             )}
           </div>
-          <div className="space-y-1">
+          <div className="space-y-2">
             {agentList.length === 0 ? (
-              <div className="text-sm text-text-muted py-2">
+              <div className="py-2 text-sm text-text-muted">
                 No agents active
               </div>
             ) : (
               agentList.map((agent) => (
                 <div
                   key={agent.id}
-                  className="flex items-center justify-between text-sm rounded-md px-2 py-1.5 bg-background-floating border border-border/50"
+                  className="flex items-center justify-between rounded-2xl border border-white/6 bg-background-floating/42 px-3 py-2 text-sm"
                 >
-                  <div className="flex items-center gap-2.5 truncate">
+                  <div className="flex min-w-0 items-center gap-2.5">
                     <div
-                      className={`h-2 w-2 rounded-full shrink-0 shadow-sm ${agent.isStreaming ? "bg-brand animate-pulse shadow-[0_0_8px_rgba(14,165,233,0.6)]" : "bg-status-offline"}`}
+                      className={`h-2.5 w-2.5 shrink-0 rounded-full ${
+                        agent.isStreaming
+                          ? "bg-accent-green shadow-[0_0_14px_rgba(41,211,145,0.55)]"
+                          : "bg-status-offline"
+                      }`}
                     />
-                    <span className="text-text-primary font-medium truncate">
+                    <span className="truncate font-medium text-text-primary">
                       {agent.name}
                     </span>
                   </div>
                   {agent.isStreaming ? (
-                    <div className="flex items-center gap-1 shrink-0">
-                      <span className="flex gap-1">
-                        <span
-                          className="h-1.5 w-1.5 rounded-full bg-brand animate-bounce"
-                          style={{ animationDelay: "0ms" }}
-                        />
-                        <span
-                          className="h-1.5 w-1.5 rounded-full bg-brand animate-bounce"
-                          style={{ animationDelay: "150ms" }}
-                        />
-                        <span
-                          className="h-1.5 w-1.5 rounded-full bg-brand animate-bounce"
-                          style={{ animationDelay: "300ms" }}
-                        />
-                      </span>
+                    <div className="flex items-center gap-1 text-[10px] font-semibold tracking-[0.12em] text-accent-green">
+                      <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent-green" />
+                      LIVE
                     </div>
                   ) : (
-                    <span className="text-[10px] text-text-dim font-bold tracking-wide shrink-0">
+                    <span className="text-[10px] font-semibold tracking-[0.12em] text-text-dim">
                       IDLE
                     </span>
                   )}
@@ -186,12 +177,11 @@ export function RightPanel() {
           </div>
         </div>
 
-        {/* Tasks */}
-        <div>
-          <div className="flex items-center gap-2 text-[11px] font-semibold text-text-muted mb-3 border-b border-border pb-2">
-            <Zap className="h-4 w-4" />
-            TASKS{" "}
-            <span className="font-normal normal-case text-text-dim ml-1">
+        <div className="chrome-card rounded-[24px] p-4">
+          <div className="mb-4 flex items-center gap-2 border-b border-border/60 pb-3 text-[11px] font-semibold tracking-[0.12em] text-text-muted">
+            <Zap className="h-4 w-4 text-accent-green" />
+            TASKS
+            <span className="ml-1 font-normal normal-case tracking-normal text-text-dim">
               (Coming Soon)
             </span>
           </div>
@@ -204,23 +194,23 @@ export function RightPanel() {
               taskList.map((task, i) => (
                 <div
                   key={`${task.agentName}-${task.label}-${i}`}
-                  className={`border-l-2 pl-3 py-0.5 ${
-                    task.isActive ? "border-brand" : "border-border"
-                  }`}
+                  className="rounded-2xl border border-white/6 bg-background-floating/34 px-3 py-2.5"
                 >
                   <div
-                    className={`text-sm font-medium ${task.isActive ? "text-text-primary" : "text-text-muted"}`}
+                    className={`text-sm font-medium ${
+                      task.isActive ? "text-text-primary" : "text-text-muted"
+                    }`}
                   >
                     {task.label}
                   </div>
-                  <div className="text-[11px] text-text-muted mt-0.5">
+                  <div className="mt-1 text-[11px] text-text-muted">
                     @{task.agentName.toLowerCase()}{" "}
-                    {task.isActive ? "• active" : "• ready"}
+                    {task.isActive ? "- active" : "- ready"}
                   </div>
                   {task.isActive && (
-                    <div className="mt-2 h-1 w-full bg-background-tertiary rounded-full overflow-hidden">
+                    <div className="mt-3 h-1 overflow-hidden rounded-full bg-background-tertiary">
                       <div
-                        className="h-full bg-brand animate-pulse"
+                        className="h-full rounded-full bg-accent-green"
                         style={{ width: "60%" }}
                       />
                     </div>
@@ -231,13 +221,12 @@ export function RightPanel() {
           </div>
         </div>
 
-        {/* Members */}
-        <div>
-          <div className="flex items-center gap-2 text-[11px] font-semibold text-text-muted mb-3 border-b border-border pb-2">
-            <Users className="h-4 w-4" />
+        <div className="chrome-card rounded-[24px] p-4">
+          <div className="mb-4 flex items-center gap-2 border-b border-border/60 pb-3 text-[11px] font-semibold tracking-[0.12em] text-text-muted">
+            <Users className="h-4 w-4 text-accent-cyan" />
             MEMBERS
           </div>
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             {members.length === 0 ? (
               <div className="text-sm text-text-muted">No members</div>
             ) : (
@@ -246,14 +235,14 @@ export function RightPanel() {
                 return (
                   <div
                     key={member.userId}
-                    className="flex items-center gap-2.5 text-sm px-2 py-1"
+                    className="flex items-center gap-2.5 rounded-2xl border border-white/6 bg-background-floating/34 px-3 py-2 text-sm"
                   >
-                    <div className="h-2 w-2 rounded-full bg-status-online shrink-0 shadow-[0_0_8px_rgba(16,185,129,0.4)]" />
-                    <span className="text-text-primary font-medium truncate">
+                    <div className="h-2 w-2 shrink-0 rounded-full bg-accent-green shadow-[0_0_12px_rgba(41,211,145,0.45)]" />
+                    <span className="truncate font-medium text-text-primary">
                       {member.displayName}
                     </span>
                     {isOwner && (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-brand/10 text-brand font-semibold shrink-0">
+                      <span className="ml-auto shrink-0 rounded-full border border-brand/20 bg-brand/10 px-2 py-0.5 text-[10px] font-semibold text-orange-100">
                         Owner
                       </span>
                     )}
@@ -264,10 +253,9 @@ export function RightPanel() {
           </div>
         </div>
 
-        {/* Models */}
-        <div>
-          <div className="flex items-center gap-2 text-[11px] font-semibold text-text-muted mb-3 border-b border-border pb-2">
-            <Cpu className="h-4 w-4" />
+        <div className="chrome-card rounded-[24px] p-4">
+          <div className="mb-4 flex items-center gap-2 border-b border-border/60 pb-3 text-[11px] font-semibold tracking-[0.12em] text-text-muted">
+            <Cpu className="h-4 w-4 text-brand" />
             MODELS
           </div>
           <div className="space-y-2 text-sm">
@@ -279,12 +267,12 @@ export function RightPanel() {
               modelList.map(({ model, botName }) => (
                 <div
                   key={model}
-                  className="flex justify-between items-center px-2 py-1.5 rounded-md bg-background-floating border border-border/50"
+                  className="flex items-center justify-between rounded-2xl border border-white/6 bg-background-floating/34 px-3 py-2"
                 >
-                  <span className="font-mono text-xs text-text-secondary truncate">
+                  <span className="truncate font-mono text-xs text-text-secondary">
                     {model}
                   </span>
-                  <span className="text-[11px] text-text-muted shrink-0 ml-2 font-medium">
+                  <span className="ml-2 shrink-0 text-[11px] font-medium text-text-muted">
                     {botName}
                   </span>
                 </div>

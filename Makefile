@@ -3,7 +3,7 @@
 
 .PHONY: help dev up down logs logs-web logs-gateway logs-stream \
         db-migrate db-studio db-seed clean health build regression-harness \
-        test-web test-gateway test-streaming test-unit test-sdk test-e2e test-load test-all demo \
+        test-web test-gateway test-streaming test-hooks test-unit test-sdk test-e2e test-load test-all demo \
         lint format lint-fix
 
 # Default target
@@ -64,7 +64,13 @@ test-gateway: ## Run Elixir gateway unit tests (ExUnit)
 test-streaming: ## Run Go streaming proxy unit tests
 	cd streaming && go test ./... -v -count=1
 
-test-unit: ## Run all unit tests (web + gateway + streaming)
+test-hooks: ## Run Claude Code hook smoke tests (no Docker needed)
+	bash scripts/test-hooks.sh
+
+test-unit: ## Run all unit tests (web + gateway + streaming + hooks)
+	@echo "=== Hooks (smoke) ==="
+	bash scripts/test-hooks.sh
+	@echo ""
 	@echo "=== Web (Vitest) ==="
 	cd packages/web && npx vitest run
 	@echo ""
@@ -144,7 +150,7 @@ db-reset: ## Reset database (WARNING: destroys all data)
 
 health: ## Check health of all services
 	@echo "Checking services..."
-	@echo -n "Web:       " && curl -sf http://localhost:3000/api/health 2>/dev/null && echo "" || echo "UNREACHABLE"
+	@echo -n "Web:       " && curl -sf http://localhost:5555/api/health 2>/dev/null && echo "" || echo "UNREACHABLE"
 	@echo -n "Gateway:   " && curl -sf http://localhost:4001/api/health 2>/dev/null && echo "" || echo "UNREACHABLE"
 	@echo -n "Streaming: " && curl -sf http://localhost:4002/health 2>/dev/null && echo "" || echo "UNREACHABLE"
 

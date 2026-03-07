@@ -542,7 +542,7 @@ Requests missing this header or with an invalid secret receive `401 Unauthorized
 
 ### Gateway → Next.js (Web)
 
-Base URL: `http://web:3000` (Docker internal network)
+Base URL: `http://web:5555` (Docker internal network)
 
 #### POST /api/internal/messages
 
@@ -746,7 +746,7 @@ Get channel metadata including serverId. Used for agent channel authorization.
 
 These endpoints are publicly accessible (no internal secret required). Agents authenticate via `Authorization: Bearer sk-tvk-...` where noted.
 
-Base URL: `http://localhost:3000` (or production URL)
+Base URL: `http://localhost:5555` (or production URL)
 
 #### POST /api/v1/agents/register
 
@@ -1214,7 +1214,7 @@ Create a new inbound webhook. Requires `Authorization: Bearer sk-tvk-...`.
 {
   "id": "01HXY...",
   "token": "whk_...",
-  "url": "http://localhost:3000/api/v1/webhooks/whk_...",
+  "url": "http://localhost:5555/api/v1/webhooks/whk_...",
   "channelId": "01HXY...",
   "name": "CI Notifier"
 }
@@ -1270,7 +1270,7 @@ When a WEBHOOK-method agent is triggered by a message, the Gateway calls `WebCli
   "channelId": "01HXY...",
   "triggerMessage": {"id": "...", "content": "...", "authorName": "...", "authorType": "USER"},
   "contextMessages": [{"role": "user", "content": "..."}, {"role": "assistant", "content": "..."}],
-  "callbackUrl": "http://localhost:3000/api/v1/webhooks/{auto_token}/stream"
+  "callbackUrl": "http://localhost:5555/api/v1/webhooks/{auto_token}/stream"
 }
 ```
 

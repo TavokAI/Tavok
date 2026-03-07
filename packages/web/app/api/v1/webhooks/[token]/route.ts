@@ -182,7 +182,7 @@ export async function POST(
         sequence,
       });
 
-      const webUrl = process.env.NEXTAUTH_URL || "http://localhost:3000";
+      const webUrl = process.env.NEXTAUTH_URL || "http://localhost:5555";
 
       return NextResponse.json(
         {
@@ -251,7 +251,7 @@ async function persistMessage(data: {
   streamingStatus?: string;
   sequence: string;
 }) {
-  const internalUrl = process.env.NEXTAUTH_URL || "http://localhost:3000";
+  const internalUrl = process.env.NEXTAUTH_URL || "http://localhost:5555";
 
   const response = await fetch(`${internalUrl}/api/internal/messages`, {
     method: "POST",

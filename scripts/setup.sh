@@ -35,7 +35,7 @@ read -rp "Your domain (e.g., chat.example.com) or press Enter for localhost: " D
 DOMAIN=${DOMAIN:-localhost}
 
 if [ "$DOMAIN" = "localhost" ]; then
-  NEXTAUTH_URL="http://localhost:3000"
+  NEXTAUTH_URL="http://localhost:5555"
   GATEWAY_WS_URL="ws://localhost:4001/socket"
   CADDY_ENABLED="false"
 else
@@ -104,6 +104,6 @@ if [ "$DOMAIN" != "localhost" ]; then
 else
   echo "Next steps:"
   echo "  1. Run: docker compose up -d"
-  echo "  2. Open http://localhost:3000"
+  echo "  2. Open http://localhost:5555"
 fi
 echo ""

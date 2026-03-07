@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useMemo, useCallback, useState } from "react";
 import Image from "next/image";
@@ -74,35 +74,31 @@ export function MessageItem({
   if (message.isDeleted) {
     if (isGrouped) {
       return (
-        <div className="group flex gap-4 px-4 py-0.5 hover:bg-background-secondary/50 border-l-2 border-transparent">
+        <div className="group mx-2 flex gap-4 rounded-xl px-4 py-1 hover:bg-background-secondary/40">
           <div className="w-10 flex-shrink-0" />
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-mono text-text-muted italic">
-              [message deleted]
-            </p>
+            <p className="text-sm italic text-text-muted">[message deleted]</p>
           </div>
         </div>
       );
     }
     return (
-      <div className="group mt-3 flex gap-4 px-4 py-2 hover:bg-background-secondary/50 border-l-2 border-transparent">
+      <div className="group mx-2 mt-3 flex gap-4 rounded-2xl border border-white/6 bg-background-floating/28 px-4 py-3 hover:bg-background-floating/42">
         <div className="flex-shrink-0 pt-0.5">
-          <div className="flex h-10 w-10 items-center justify-center rounded-sm bg-background-secondary border border-border text-text-dim text-sm font-bold font-mono">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-background-secondary text-sm font-semibold text-text-dim">
             ?
           </div>
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline gap-2 mb-1">
-            <span className="text-sm font-bold font-mono text-text-muted">
+            <span className="text-sm font-semibold text-text-muted">
               {message.authorName}
             </span>
-            <span className="text-[10px] text-text-muted font-mono">
+            <span className="text-[10px] font-mono text-text-muted">
               {formatTime(message.createdAt)}
             </span>
           </div>
-          <p className="text-sm font-mono text-text-muted italic">
-            [message deleted]
-          </p>
+          <p className="text-sm italic text-text-muted">[message deleted]</p>
         </div>
       </div>
     );
@@ -111,7 +107,7 @@ export function MessageItem({
   if (isGrouped) {
     return (
       <div
-        className={`group relative flex gap-4 px-4 py-0.5 hover:bg-background-secondary/50 ${!isBot ? "border-l-2 border-transparent hover:border-brand/30 bg-transparent" : "border-l-2 border-transparent"}`}
+        className={`group relative mx-2 flex gap-4 rounded-xl px-4 py-1 transition-colors hover:bg-background-secondary/36 ${!isBot ? "bg-transparent" : "bg-transparent"}`}
       >
         <div className="w-10 flex-shrink-0" />
         <div className="min-w-0 flex-1">
@@ -161,7 +157,7 @@ export function MessageItem({
 
   return (
     <div
-      className={`group relative mt-3 flex gap-4 px-4 py-2 hover:bg-background-secondary/50 ${!isBot ? "border-l-2 border-brand bg-brand/5" : "border-l-2 border-transparent"}`}
+      className={`group relative mx-2 mt-3 flex gap-4 rounded-[22px] border px-4 py-3 shadow-[0_12px_30px_rgba(3,9,22,0.18)] transition-colors hover:bg-background-floating/46 ${!isBot ? "border-brand/20 bg-brand/10" : "border-accent-cyan/20 bg-background-floating/35"}`}
     >
       {/* Avatar */}
       <div className="flex-shrink-0 pt-0.5">
@@ -177,7 +173,7 @@ export function MessageItem({
           />
         ) : (
           <div
-            className={`flex h-10 w-10 items-center justify-center rounded-sm text-sm font-bold font-mono ${isBot ? "bg-background-secondary border border-accent-cyan text-accent-cyan" : "bg-background-secondary border border-brand text-brand"}`}
+            className={`flex h-10 w-10 items-center justify-center rounded-xl text-sm font-semibold ${isBot ? "border border-accent-cyan/20 bg-accent-cyan/10 text-accent-cyan" : "border border-brand/24 bg-brand/10 text-brand"}`}
           >
             {message.authorName?.charAt(0)?.toUpperCase() || "?"}
           </div>
@@ -188,21 +184,21 @@ export function MessageItem({
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline gap-2 mb-1">
           <span
-            className={`text-sm font-bold font-mono ${isBot ? "text-accent-cyan" : "text-brand"}`}
+            className={`text-sm font-semibold ${isBot ? "text-accent-cyan" : "text-orange-100"}`}
           >
-            {!isBot && <span className="mr-1 opacity-70">▸</span>}
+            {!isBot && <span className="mr-1 text-brand/80">&gt;</span>}
             {message.authorName}
           </span>
           {isBot && (
-            <span className="inline-flex items-center rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider bg-accent-cyan/10 text-accent-cyan border border-accent-cyan/20">
+            <span className="inline-flex items-center rounded-full border border-accent-cyan/20 bg-accent-cyan/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.16em] text-accent-cyan">
               AGENT
             </span>
           )}
-          <span className="text-[10px] text-text-muted font-mono">
+          <span className="text-[10px] font-mono text-text-muted">
             {formatTime(message.createdAt)}
           </span>
           {message.editedAt && (
-            <span className="text-[10px] text-text-muted font-mono">
+            <span className="text-[10px] font-mono text-text-muted">
               (edited)
             </span>
           )}
@@ -214,7 +210,7 @@ export function MessageItem({
             onCancel={() => setIsEditing(false)}
           />
         ) : (
-          <div className="text-sm font-mono text-text-primary leading-relaxed">
+          <div className="text-sm leading-7 text-text-primary">
             <MarkdownContent content={text} mentionNames={mentionNames} />
           </div>
         )}

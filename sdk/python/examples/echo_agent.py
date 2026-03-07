@@ -32,7 +32,7 @@ AGENT_ID = os.environ.get("TAVOK_AGENT_ID")
 
 agent = Agent(
     url=os.environ.get("TAVOK_WS_URL", "ws://localhost:4001"),
-    api_url=os.environ.get("TAVOK_API_URL", "http://localhost:3000"),
+    api_url=os.environ.get("TAVOK_API_URL", "http://localhost:5555"),
     name="Echo Agent",
     api_key=API_KEY,
     agent_id=AGENT_ID,

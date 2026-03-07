@@ -43,7 +43,7 @@ async def main() -> None:
     logger.info("=== Test 1: Agent Registration ===")
     agent = Agent(
         url="ws://localhost:4001",
-        api_url="http://localhost:3000",
+        api_url="http://localhost:5555",
         name="SDK Test Agent",
         capabilities=["chat", "test"],
     )
@@ -90,7 +90,7 @@ async def main() -> None:
 
     agent2 = Agent(
         url="ws://localhost:4001",
-        api_url="http://localhost:3000",
+        api_url="http://localhost:5555",
         name="SDK Test Agent",
         api_key=saved_key,
         agent_id=saved_id,

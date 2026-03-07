@@ -19,7 +19,7 @@ function makeAgentRequest({
   throwOnJson = false,
   authHeader = undefined as string | undefined,
   secret = undefined as string | undefined,
-  url = "http://localhost:3000/api/v1/agents/register",
+  url = "http://localhost:5555/api/v1/agents/register",
 } = {}) {
   const headers = new Headers();
   if (authHeader !== undefined) headers.set("authorization", authHeader);
@@ -687,7 +687,7 @@ describe("createAgentVerifyHandler", () => {
     const res = await handler(
       makeAgentRequest({
         secret: "test-secret",
-        url: `http://localhost:3000/api/internal/agents/verify?api_key=${TEST_API_KEY}`,
+        url: `http://localhost:5555/api/internal/agents/verify?api_key=${TEST_API_KEY}`,
       }),
     );
     expect(res.status).toBe(200);
@@ -704,7 +704,7 @@ describe("createAgentVerifyHandler", () => {
     const res = await handler(
       makeAgentRequest({
         secret: "wrong-secret",
-        url: `http://localhost:3000/api/internal/agents/verify?api_key=${TEST_API_KEY}`,
+        url: `http://localhost:5555/api/internal/agents/verify?api_key=${TEST_API_KEY}`,
       }),
     );
     expect(res.status).toBe(401);
@@ -714,7 +714,7 @@ describe("createAgentVerifyHandler", () => {
     const handler = makeVerifyHandler();
     const res = await handler(
       makeAgentRequest({
-        url: `http://localhost:3000/api/internal/agents/verify?api_key=${TEST_API_KEY}`,
+        url: `http://localhost:5555/api/internal/agents/verify?api_key=${TEST_API_KEY}`,
       }),
     );
     expect(res.status).toBe(401);
@@ -725,7 +725,7 @@ describe("createAgentVerifyHandler", () => {
     const res = await handler(
       makeAgentRequest({
         secret: "test-secret",
-        url: "http://localhost:3000/api/internal/agents/verify",
+        url: "http://localhost:5555/api/internal/agents/verify",
       }),
     );
     expect(res.status).toBe(400);
@@ -737,7 +737,7 @@ describe("createAgentVerifyHandler", () => {
     const res = await handler(
       makeAgentRequest({
         secret: "test-secret",
-        url: "http://localhost:3000/api/internal/agents/verify?api_key=invalid-key-format",
+        url: "http://localhost:5555/api/internal/agents/verify?api_key=invalid-key-format",
       }),
     );
     expect(res.status).toBe(400);
@@ -749,7 +749,7 @@ describe("createAgentVerifyHandler", () => {
     const res = await handler(
       makeAgentRequest({
         secret: "test-secret",
-        url: "http://localhost:3000/api/internal/agents/verify?api_key=sk-tvk-unknown-key-doesnt-exist",
+        url: "http://localhost:5555/api/internal/agents/verify?api_key=sk-tvk-unknown-key-doesnt-exist",
       }),
     );
     expect(res.status).toBe(404);
@@ -779,7 +779,7 @@ describe("createAgentVerifyHandler", () => {
     const res = await handler(
       makeAgentRequest({
         secret: "test-secret",
-        url: `http://localhost:3000/api/internal/agents/verify?api_key=${TEST_API_KEY}`,
+        url: `http://localhost:5555/api/internal/agents/verify?api_key=${TEST_API_KEY}`,
       }),
     );
     expect(res.status).toBe(403);
@@ -801,7 +801,7 @@ describe("createAgentVerifyHandler", () => {
     const res = await handler(
       makeAgentRequest({
         secret: "test-secret",
-        url: `http://localhost:3000/api/internal/agents/verify?api_key=${TEST_API_KEY}`,
+        url: `http://localhost:5555/api/internal/agents/verify?api_key=${TEST_API_KEY}`,
       }),
     );
     expect(res.status).toBe(500);

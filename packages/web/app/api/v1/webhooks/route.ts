@@ -78,7 +78,7 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    const webUrl = process.env.NEXTAUTH_URL || "http://localhost:3000";
+    const webUrl = process.env.NEXTAUTH_URL || "http://localhost:5555";
 
     return NextResponse.json(
       {
