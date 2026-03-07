@@ -3,7 +3,7 @@ name: CI — Unit Tests
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: ["**"]
 
 concurrency:
   group: ci-${{ github.ref }}
