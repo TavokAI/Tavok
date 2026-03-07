@@ -233,7 +233,7 @@ async function verifyWebhookMessageOwnership(
  * Update a message via the internal API.
  */
 async function updateMessage(messageId: string, data: Record<string, unknown>) {
-  const internalUrl = process.env.NEXTAUTH_URL || "http://localhost:3000";
+  const internalUrl = process.env.NEXTAUTH_URL || "http://localhost:5555";
 
   const response = await fetch(
     `${internalUrl}/api/internal/messages/${messageId}`,

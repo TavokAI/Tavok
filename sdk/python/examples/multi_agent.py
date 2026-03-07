@@ -27,7 +27,7 @@ CHANNEL_ID = os.environ.get("TAVOK_CHANNEL_ID", "YOUR_CHANNEL_ID")
 # --- Agent 1: Echo ---
 echo_agent = Agent(
     url=os.environ.get("TAVOK_WS_URL", "ws://localhost:4001"),
-    api_url=os.environ.get("TAVOK_API_URL", "http://localhost:3000"),
+    api_url=os.environ.get("TAVOK_API_URL", "http://localhost:5555"),
     name="Echo Bot",
     capabilities=["chat", "echo"],
 )
@@ -44,7 +44,7 @@ async def echo(msg: Message) -> None:
 # --- Agent 2: Word Counter ---
 counter_agent = Agent(
     url=os.environ.get("TAVOK_WS_URL", "ws://localhost:4001"),
-    api_url=os.environ.get("TAVOK_API_URL", "http://localhost:3000"),
+    api_url=os.environ.get("TAVOK_API_URL", "http://localhost:5555"),
     name="Word Counter",
     capabilities=["chat", "analysis"],
 )

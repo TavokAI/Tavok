@@ -7,7 +7,7 @@ export default defineConfig({
   workers: 1, // Serial — tests share state (seeded DB)
 
   use: {
-    baseURL: "http://localhost:3000",
+    baseURL: "http://localhost:5555",
     trace: "on-first-retry",
     screenshot: "only-on-failure",
   },

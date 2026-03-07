@@ -11,7 +11,7 @@ async function waitForCountIncrease(locator, baseline, timeoutMs = 10000) {
 }
 
 async function run() {
-  const baseUrl = process.env.AUTOMATION_BASE_URL || "http://localhost:3000";
+  const baseUrl = process.env.AUTOMATION_BASE_URL || "http://localhost:5555";
   const browser = await chromium.launch({ headless: true });
   const context = await browser.newContext();
   const page = await context.newPage();

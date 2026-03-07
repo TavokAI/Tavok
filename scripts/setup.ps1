@@ -48,7 +48,7 @@ $DOMAIN = Read-Host "Your domain (e.g., chat.example.com) or press Enter for loc
 if ([string]::IsNullOrWhiteSpace($DOMAIN)) { $DOMAIN = "localhost" }
 
 if ($DOMAIN -eq "localhost") {
-    $NEXTAUTH_URL = "http://localhost:3000"
+    $NEXTAUTH_URL = "http://localhost:5555"
     $GATEWAY_WS_URL = "ws://localhost:4001/socket"
 } else {
     $NEXTAUTH_URL = "https://$DOMAIN"
@@ -94,6 +94,6 @@ if ($DOMAIN -ne "localhost") {
 } else {
     Write-Host "Next steps:"
     Write-Host "  1. Run: docker compose up -d"
-    Write-Host "  2. Open http://localhost:3000"
+    Write-Host "  2. Open http://localhost:5555"
 }
 Write-Host ""

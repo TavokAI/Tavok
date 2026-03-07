@@ -16,7 +16,7 @@ $RootDir = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $ComposePath = Join-Path $RootDir $ComposeFile
 $EnvPath = Join-Path $RootDir ".env"
 
-$webUrl = "http://localhost:3000"
+$webUrl = "http://localhost:5555"
 $gatewayWsUrl = "ws://localhost:4001"
 $gatewayHealthUrl = "http://localhost:4001/api/health"
 

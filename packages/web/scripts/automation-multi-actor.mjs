@@ -7,7 +7,7 @@ async function logDebug(message, data = {}) {
 }
 
 async function login(page, email, password, label) {
-  await page.goto("http://localhost:3000/login", { waitUntil: "domcontentloaded" });
+  await page.goto("http://localhost:5555/login", { waitUntil: "domcontentloaded" });
   if (page.url().includes("/login")) {
     await page.waitForSelector("#email", { timeout: 10000 });
     await page.fill("#email", email);
@@ -74,7 +74,7 @@ async function getMessageRowMetrics(page, text) {
 }
 
 async function run() {
-  const baseUrl = process.env.AUTOMATION_BASE_URL || "http://localhost:3000";
+  const baseUrl = process.env.AUTOMATION_BASE_URL || "http://localhost:5555";
   const preferHeaded = process.env.AUTOMATION_HEADLESS !== "true";
 
   let browser;

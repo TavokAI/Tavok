@@ -79,7 +79,7 @@ func checkRedisConnection(ctx context.Context) string {
 func checkWebHealth(ctx context.Context) string {
 	baseURL := os.Getenv("STREAMING_WEB_URL")
 	if baseURL == "" {
-		baseURL = "http://web:3000"
+		baseURL = "http://web:5555"
 	}
 	url := strings.TrimRight(baseURL, "/") + "/api/health"
 	reqCtx, cancel := context.WithTimeout(ctx, 2*time.Second)

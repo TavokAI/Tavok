@@ -144,7 +144,7 @@ export async function POST(request: NextRequest) {
 
   try {
     // Persist and broadcast user message
-    const internalUrl = process.env.NEXTAUTH_URL || "http://localhost:3000";
+    const internalUrl = process.env.NEXTAUTH_URL || "http://localhost:5555";
     await fetch(`${internalUrl}/api/internal/messages`, {
       method: "POST",
       headers: {

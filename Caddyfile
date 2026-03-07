@@ -9,7 +9,7 @@
 {$DOMAIN:localhost} {
 	# ── Next.js Web App ──
 	handle /api/* {
-		reverse_proxy web:3000
+		reverse_proxy web:5555
 	}
 
 	# ── Phoenix Gateway (WebSocket) ──
@@ -25,7 +25,7 @@
 
 	# Default: Next.js frontend
 	handle {
-		reverse_proxy web:3000
+		reverse_proxy web:5555
 	}
 
 	# ── Security Headers ──

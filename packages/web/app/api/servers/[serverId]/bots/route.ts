@@ -279,7 +279,7 @@ async function createNonBYOKAgent(
     // Build response with method-specific URLs
     const gatewayUrl =
       process.env.NEXT_PUBLIC_GATEWAY_URL || "ws://localhost:4001/socket";
-    const webUrl = process.env.NEXTAUTH_URL || "http://localhost:3000";
+    const webUrl = process.env.NEXTAUTH_URL || "http://localhost:5555";
 
     const response: Record<string, unknown> = {
       id: result.bot.id,

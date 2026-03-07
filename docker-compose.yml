@@ -63,12 +63,12 @@ services:
       dockerfile: packages/web/Dockerfile
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "5555:5555"
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-tavok}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required - see .env.example}@db:5432/${POSTGRES_DB:-tavok}
       REDIS_URL: redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required - see .env.example}@redis:6379
       NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:?NEXTAUTH_SECRET is required - see .env.example}
-      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:5555}
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required - see .env.example}
       INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:?INTERNAL_API_SECRET is required - see .env.example}
       NEXT_PUBLIC_GATEWAY_URL: ${NEXT_PUBLIC_GATEWAY_URL:-ws://localhost:4001/socket}
@@ -82,7 +82,7 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/api/health"]
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:5555/api/health"]
       interval: 10s
       timeout: 5s
       start_period: 30s
@@ -101,7 +101,7 @@ services:
       GATEWAY_PORT: "4001"
       GATEWAY_JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required - see .env.example}
       GATEWAY_REDIS_URL: redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required - see .env.example}@redis:6379
-      GATEWAY_WEB_URL: ${GATEWAY_WEB_URL:-http://web:3000}
+      GATEWAY_WEB_URL: ${GATEWAY_WEB_URL:-http://web:5555}
       INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:?INTERNAL_API_SECRET is required - see .env.example}
       SECRET_KEY_BASE: ${SECRET_KEY_BASE:?SECRET_KEY_BASE is required - see .env.example}
       PHX_SERVER: "true"
@@ -130,7 +130,7 @@ services:
     environment:
       STREAMING_PORT: "4002"
       STREAMING_REDIS_URL: redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required - see .env.example}@redis:6379
-      STREAMING_WEB_URL: ${STREAMING_WEB_URL:-http://web:3000}
+      STREAMING_WEB_URL: ${STREAMING_WEB_URL:-http://web:5555}
       INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:?INTERNAL_API_SECRET is required - see .env.example}
     depends_on:
       redis:

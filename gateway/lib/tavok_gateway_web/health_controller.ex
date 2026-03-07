@@ -41,7 +41,7 @@ defmodule TavokGatewayWeb.HealthController do
   end
 
   defp check_web_health do
-    web_url = Application.get_env(:tavok_gateway, :web_url, "http://localhost:3000")
+    web_url = Application.get_env(:tavok_gateway, :web_url, "http://localhost:5555")
     health_url = web_url <> "/api/health"
 
     case Req.get(health_url, receive_timeout: @check_timeout_ms) do

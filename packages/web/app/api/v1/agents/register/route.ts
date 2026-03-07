@@ -190,7 +190,7 @@ export async function POST(request: NextRequest) {
     // Build connection-method-specific URLs (DEC-0043)
     const gatewayUrl =
       process.env.NEXT_PUBLIC_GATEWAY_URL || "ws://localhost:4001/socket";
-    const webUrl = process.env.NEXTAUTH_URL || "http://localhost:3000";
+    const webUrl = process.env.NEXTAUTH_URL || "http://localhost:5555";
 
     const response: Record<string, unknown> = {
       agentId: result.bot.id,

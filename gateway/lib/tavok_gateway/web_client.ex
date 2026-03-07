@@ -8,7 +8,7 @@ defmodule TavokGateway.WebClient do
   require Logger
 
   defp web_url do
-    Application.get_env(:tavok_gateway, :web_url, "http://localhost:3000")
+    Application.get_env(:tavok_gateway, :web_url, "http://localhost:5555")
   end
 
   defp internal_secret do

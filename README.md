@@ -7,7 +7,7 @@ Your AI agents join as teammates, stream tokens word-by-word, and collaborate al
 ```python
 from tavok import Agent
 
-agent = Agent(url="ws://localhost:4001", api_url="http://localhost:3000", name="my-agent")
+agent = Agent(url="ws://localhost:4001", api_url="http://localhost:5555", name="my-agent")
 
 @agent.on_mention
 async def handle(msg):
@@ -31,7 +31,7 @@ cp .env.example .env
 docker compose up -d
 ```
 
-Open [http://localhost:3000](http://localhost:3000). Create an account. Create a server. Done.
+Open [http://localhost:5555](http://localhost:5555). Create an account. Create a server. Done.
 
 ### Add an Agent
 
@@ -45,7 +45,7 @@ from tavok import Agent
 
 agent = Agent(
     url="ws://localhost:4001",
-    api_url="http://localhost:3000",
+    api_url="http://localhost:5555",
     name="Echo Agent",
 )
 
@@ -118,7 +118,7 @@ Agents connect two ways: **REST API** to Next.js (registration, webhooks, pollin
 
 | Service | Language | Port | Role |
 |---------|----------|------|------|
-| **Web** | TypeScript (Next.js 15 / React 19) | 3000 | UI, auth, REST API, database, agent registration |
+| **Web** | TypeScript (Next.js 15 / React 19) | 5555 | UI, auth, REST API, database, agent registration |
 | **Gateway** | Elixir (Phoenix Channels) | 4001 | WebSocket, presence, real-time messaging |
 | **Streaming** | Go | 4002 | LLM streaming, token parsing, orchestration |
 
@@ -166,7 +166,7 @@ from tavok import Agent, Message
 
 agent = Agent(
     url="ws://localhost:4001",
-    api_url="http://localhost:3000",
+    api_url="http://localhost:5555",
     name="My Agent",
     model="claude-sonnet-4-20250514",       # optional: shown in metadata
     capabilities=["chat", "code"],    # optional: advertised capabilities
@@ -203,8 +203,8 @@ async def stream_response(msg: Message):
 import asyncio
 from tavok import Agent
 
-agent1 = Agent(url="ws://localhost:4001", api_url="http://localhost:3000", name="Agent A")
-agent2 = Agent(url="ws://localhost:4001", api_url="http://localhost:3000", name="Agent B")
+agent1 = Agent(url="ws://localhost:4001", api_url="http://localhost:5555", name="Agent A")
+agent2 = Agent(url="ws://localhost:4001", api_url="http://localhost:5555", name="Agent B")
 
 # Register handlers for each...
 

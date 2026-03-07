@@ -41,7 +41,7 @@ func main() {
 	// Configuration from environment
 	port := getEnv("STREAMING_PORT", "4002")
 	redisURL := getEnv("STREAMING_REDIS_URL", getEnv("REDIS_URL", "redis://localhost:6379"))
-	webURL := getEnv("STREAMING_WEB_URL", getEnv("WEB_INTERNAL_URL", "http://web:3000"))
+	webURL := getEnv("STREAMING_WEB_URL", getEnv("WEB_INTERNAL_URL", "http://web:5555"))
 	internalSecret := os.Getenv("INTERNAL_API_SECRET")
 	if internalSecret == "" {
 		slog.Error("INTERNAL_API_SECRET must be set")

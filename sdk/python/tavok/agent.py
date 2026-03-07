@@ -9,7 +9,7 @@ Minimal example::
 
     agent = Agent(
         url="ws://localhost:4001",
-        api_url="http://localhost:3000",
+        api_url="http://localhost:5555",
         name="my-agent",
     )
 
@@ -32,7 +32,7 @@ from typing import Any
 
 from .auth import register_agent
 from .stream import StreamContext
-from .types import Message, RegistrationResult, StreamComplete, StreamError, StreamStart, StreamToken
+from .types import Message, StreamComplete, StreamError, StreamStart, StreamToken
 from .ws import PhoenixSocket
 
 logger = logging.getLogger("tavok")
@@ -46,7 +46,7 @@ class Agent:
 
     Args:
         url: Gateway WebSocket URL (e.g. ``ws://localhost:4001``).
-        api_url: Web server URL for REST API (e.g. ``http://localhost:3000``).
+        api_url: Web server URL for REST API (e.g. ``http://localhost:5555``).
         name: Display name for the agent.
         api_key: Existing API key. If not provided, the agent will register
             on :meth:`start` and receive a new key.
@@ -60,7 +60,7 @@ class Agent:
         self,
         *,
         url: str = "ws://localhost:4001",
-        api_url: str = "http://localhost:3000",
+        api_url: str = "http://localhost:5555",
         name: str = "Tavok Agent",
         api_key: str | None = None,
         agent_id: str | None = None,

@@ -8,16 +8,16 @@ FAILURES=""
 
 # Run TypeScript type check
 if command -v pnpm &> /dev/null; then
-  pnpm --dir packages/web tsc --noEmit 2>&1 || FAILURES="$FAILURES\n- TypeScript type check failed"
+  (cd "$CLAUDE_PROJECT_DIR/packages/web" && pnpm tsc --noEmit 2>&1) || FAILURES="$FAILURES\n- TypeScript type check failed"
 fi
 
 # Run web tests if they exist
 if [ -f "packages/web/package.json" ]; then
-  pnpm --dir packages/web test --passWithNoTests --watchAll=false 2>&1 || FAILURES="$FAILURES\n- Web tests failed"
+  (cd "$CLAUDE_PROJECT_DIR/packages/web" && pnpm test --passWithNoTests 2>&1) || FAILURES="$FAILURES\n- Web tests failed"
 fi
 
-# Run gateway tests
-if [ -f "gateway/mix.exs" ]; then
+# Run gateway tests (requires mix/Elixir installed locally)
+if [ -f "gateway/mix.exs" ] && command -v mix &> /dev/null; then
   cd "$CLAUDE_PROJECT_DIR/gateway"
   mix test 2>&1 || FAILURES="$FAILURES\n- Gateway tests failed"
 fi

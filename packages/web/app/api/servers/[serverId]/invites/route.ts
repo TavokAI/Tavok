@@ -156,7 +156,7 @@ export async function POST(
       invite: {
         id: invite.id,
         code: invite.code,
-        url: `${process.env.NEXTAUTH_URL || "http://localhost:3000"}/invite/${invite.code}`,
+        url: `${process.env.NEXTAUTH_URL || "http://localhost:5555"}/invite/${invite.code}`,
         maxUses: invite.maxUses,
         uses: invite.uses,
         expiresAt: invite.expiresAt?.toISOString() || null,

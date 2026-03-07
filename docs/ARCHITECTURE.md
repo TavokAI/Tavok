@@ -67,7 +67,7 @@ This prevents split-brain as multi-agent flows grow in complexity.
 
 | Service | Language | Port | Role |
 |---------|----------|------|------|
-| **Web** | TypeScript (Next.js 15 / React 19) | 3000 | UI, auth, REST API, database, agent registration |
+| **Web** | TypeScript (Next.js 15 / React 19) | 5555 | UI, auth, REST API, database, agent registration |
 | **Gateway** | Elixir (Phoenix Channels) | 4001 | WebSocket, presence, real-time messaging, stream relay |
 | **Streaming** | Go | 4002 (internal) | LLM streaming, provider routing, orchestration, tool execution |
 | **PostgreSQL** | - | 5432 | All persistent data |
