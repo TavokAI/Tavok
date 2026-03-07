@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { ChatProvider } from "@/components/providers/chat-provider";
 import { WorkspaceProvider } from "@/components/providers/workspace-provider";
@@ -12,15 +12,18 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     <ChatProvider>
       <WorkspaceProvider>
         <div
-          className="grid h-screen overflow-hidden bg-background-tertiary"
+          className="app-shell grid h-screen overflow-hidden p-3"
           style={{
             gridTemplateColumns: "240px 1fr 280px",
-            gridTemplateRows: "48px 1fr 40px",
+            gridTemplateRows: "56px 1fr 44px",
+            gap: "12px",
           }}
         >
           <TopBar />
           <LeftPanel />
-          <main className="relative overflow-hidden">{children}</main>
+          <main className="relative overflow-hidden rounded-[28px] border border-border/60 bg-background-primary/35 shadow-[0_20px_65px_rgba(2,8,20,0.32)]">
+            {children}
+          </main>
           <RightPanel />
           <BottomBar />
         </div>

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { usePathname, useRouter } from "next/navigation";
@@ -321,7 +321,7 @@ export function ChatPanel({ panel }: ChatPanelProps) {
   return (
     <div
       onMouseDown={focusAndSyncRoute}
-      className="absolute flex flex-col rounded-xl border border-border/80 bg-background-primary shadow-[0_8px_30px_rgb(0,0,0,0.4)] ring-1 ring-white/5 overflow-hidden"
+      className="chrome-panel absolute flex flex-col overflow-hidden rounded-[24px] border border-white/10 shadow-[0_26px_70px_rgba(2,8,20,0.42)] ring-1 ring-white/5"
       style={{
         left: panel.x,
         top: panel.y,
@@ -333,13 +333,13 @@ export function ChatPanel({ panel }: ChatPanelProps) {
       {/* Titlebar */}
       <div
         onMouseDown={handleMouseDownDrag}
-        className={`flex h-[40px] shrink-0 items-center justify-between border-b border-border bg-background-secondary/90 backdrop-blur-md px-3 ${
+        className={`flex h-[44px] shrink-0 items-center justify-between border-b border-white/8 bg-[linear-gradient(180deg,rgba(24,39,70,0.98),rgba(18,30,54,0.92))] px-4 ${
           panel.isMaximized
             ? "cursor-default"
             : "cursor-grab active:cursor-grabbing"
         }`}
       >
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3.5">
           {osVariant === "mac" && (
             <div
               onMouseDown={(e) => e.stopPropagation()}
@@ -364,12 +364,12 @@ export function ChatPanel({ panel }: ChatPanelProps) {
               />
             </div>
           )}
-          <span className="flex items-center gap-1.5 font-mono text-xs font-bold text-text-secondary select-none">
+          <span className="flex items-center gap-1.5 font-display text-sm font-semibold text-white select-none">
             <Hash className="h-3.5 w-3.5" />
             {panel.channelName}
           </span>
           {panelServerName && (
-            <span className="font-mono text-[10px] text-text-dim uppercase tracking-wider select-none">
+            <span className="rounded-full border border-white/6 bg-background-tertiary/45 px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.16em] text-text-muted select-none">
               @{panelServerName}
             </span>
           )}
@@ -377,16 +377,16 @@ export function ChatPanel({ panel }: ChatPanelProps) {
             <button
               onMouseDown={(e) => e.stopPropagation()}
               onClick={() => setShowChannelSettings(true)}
-              className="ml-1 text-text-dim hover:text-text-primary transition-colors"
+              className="ml-1 rounded-lg p-1 text-text-dim transition-colors hover:bg-background-tertiary/55 hover:text-text-primary"
               title="Channel Settings"
             >
               <Settings2 className="h-3.5 w-3.5" />
             </button>
           )}
         </div>
-        <div className="flex items-center gap-2 text-xs select-none">
+        <div className="flex items-center gap-2.5 text-xs select-none">
           {hasActiveStream ? (
-            <div className="flex items-center gap-1.5 text-accent-cyan font-bold tracking-wider">
+            <div className="flex items-center gap-1.5 rounded-full border border-accent-green/20 bg-accent-green/10 px-2.5 py-1 font-semibold tracking-[0.16em] text-accent-green">
               <span className="relative flex h-2 w-2">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-accent-cyan opacity-75"></span>
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-accent-cyan"></span>
@@ -394,23 +394,25 @@ export function ChatPanel({ panel }: ChatPanelProps) {
               LIVE
             </div>
           ) : (
-            <span className="text-text-dim font-bold tracking-wider">IDLE</span>
+            <span className="rounded-full border border-white/8 bg-background-tertiary/45 px-2.5 py-1 font-semibold tracking-[0.16em] text-text-dim">
+              IDLE
+            </span>
           )}
           {osVariant === "windows" && (
             <div
               onMouseDown={(e) => e.stopPropagation()}
-              className="ml-2 flex items-center overflow-hidden rounded border border-border"
+              className="ml-1 flex items-center overflow-hidden rounded-xl border border-white/10 bg-background-tertiary/48"
             >
               <button
                 onClick={handleMinimizePanel}
-                className="flex h-5 w-6 items-center justify-center text-text-secondary transition hover:bg-background-primary hover:text-text-primary"
+                className="flex h-7 w-8 items-center justify-center text-text-secondary transition hover:bg-background-primary/70 hover:text-text-primary"
                 aria-label="Minimize panel"
               >
                 <Minus className="h-3 w-3" />
               </button>
               <button
                 onClick={handleToggleMaximize}
-                className="flex h-5 w-6 items-center justify-center text-text-secondary transition hover:bg-background-primary hover:text-text-primary"
+                className="flex h-7 w-8 items-center justify-center text-text-secondary transition hover:bg-background-primary/70 hover:text-text-primary"
                 aria-label={
                   panel.isMaximized ? "Restore panel" : "Maximize panel"
                 }
@@ -423,7 +425,7 @@ export function ChatPanel({ panel }: ChatPanelProps) {
               </button>
               <button
                 onClick={handleClosePanel}
-                className="flex h-5 w-6 items-center justify-center text-text-secondary transition hover:bg-status-dnd hover:text-white"
+                className="flex h-7 w-8 items-center justify-center text-text-secondary transition hover:bg-status-dnd hover:text-white"
                 aria-label="Close panel"
               >
                 <X className="h-3 w-3" />
@@ -434,7 +436,7 @@ export function ChatPanel({ panel }: ChatPanelProps) {
       </div>
 
       {/* Content */}
-      <div className="flex-1 flex flex-col overflow-hidden bg-background-primary">
+      <div className="flex flex-1 flex-col overflow-hidden bg-[linear-gradient(180deg,rgba(14,23,42,0.82),rgba(11,18,34,0.94))]">
         <MessageList
           messages={messages}
           hasMoreHistory={hasMoreHistory}
@@ -453,8 +455,8 @@ export function ChatPanel({ panel }: ChatPanelProps) {
             aria-live="polite"
             className={
               isErrorHint
-                ? "border-t border-status-dnd/50 bg-status-dnd/10 px-4 py-2 text-sm font-bold tracking-wide text-status-dnd"
-                : "border-t border-brand/60 bg-brand/20 px-4 py-2 text-sm font-bold tracking-wide text-brand"
+                ? "border-t border-status-dnd/35 bg-status-dnd/10 px-4 py-2.5 text-sm font-semibold text-status-dnd"
+                : "border-t border-brand/20 bg-brand/10 px-4 py-2.5 text-sm font-semibold text-orange-100"
             }
           >
             {botTriggerHint}
@@ -464,8 +466,8 @@ export function ChatPanel({ panel }: ChatPanelProps) {
           <div
             className={
               hasJoinedOnce
-                ? "border-t border-border px-4 py-1 text-[10px] font-bold tracking-wider text-status-dnd"
-                : "border-t border-border px-4 py-1 text-[10px] font-bold tracking-wider text-brand"
+                ? "border-t border-white/8 px-4 py-1.5 text-[10px] font-semibold tracking-[0.16em] text-status-dnd"
+                : "border-t border-white/8 px-4 py-1.5 text-[10px] font-semibold tracking-[0.16em] text-brand"
             }
           >
             {hasJoinedOnce
@@ -473,7 +475,7 @@ export function ChatPanel({ panel }: ChatPanelProps) {
               : "CONNECTING TO CHANNEL GATEWAY..."}
           </div>
         )}
-        <div className="border-t border-border mt-auto pt-2 bg-background-secondary">
+        <div className="mt-auto border-t border-white/8 bg-background-secondary/58 pt-2">
           <MessageInput
             onSend={sendMessage}
             onTyping={sendTyping}
@@ -488,9 +490,9 @@ export function ChatPanel({ panel }: ChatPanelProps) {
       {!panel.isMaximized && (
         <div
           onMouseDown={handleMouseDownResize}
-          className="absolute bottom-0.5 right-0.5 h-2.5 w-2.5 cursor-nwse-resize z-10"
+          className="absolute bottom-1 right-1 z-10 h-3 w-3 cursor-nwse-resize"
         >
-          <div className="absolute bottom-0 right-0 h-2 w-2 border-b border-r border-text-dim pointer-events-none rounded-br-[1px]" />
+          <div className="pointer-events-none absolute bottom-0 right-0 h-2.5 w-2.5 rounded-br-[2px] border-b border-r border-text-dim/80" />
         </div>
       )}
 

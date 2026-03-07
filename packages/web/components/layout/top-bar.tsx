@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import React from "react";
 import { useWorkspaceContext } from "@/components/providers/workspace-provider";
@@ -15,51 +15,57 @@ export function TopBar() {
   const { activeStreams } = useWorkspaceContext();
 
   return (
-    <div className="col-span-3 flex h-[48px] items-center justify-between border-b border-border bg-background-primary px-4 text-sm shadow-sm">
+    <div className="chrome-panel col-span-3 flex h-[56px] items-center justify-between rounded-[24px] px-4 text-sm">
       <div className="flex items-center gap-8">
-        <div className="flex items-center gap-2 font-sans font-bold tracking-wide">
-          <div className="h-5 w-5 rounded bg-brand flex items-center justify-center">
-            <LayoutDashboard className="h-3 w-3 text-white" />
-          </div>
-          <span className="text-brand">TAVOK</span>
-        </div>
-        <div className="flex items-center gap-1">
-          <button className="flex items-center gap-2 rounded-md bg-brand/10 px-3 py-1.5 text-sm font-medium text-brand transition-colors">
+        <div className="flex items-center gap-3">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-brand/40 bg-[linear-gradient(180deg,rgba(255,164,76,0.22),rgba(255,133,31,0.14))] text-brand shadow-[0_12px_26px_rgba(255,155,69,0.16)]">
             <LayoutDashboard className="h-4 w-4" />
+          </div>
+          <span className="font-display text-lg font-semibold tracking-[0.14em] text-white">
+            Tavok
+          </span>
+        </div>
+
+        <div className="flex items-center gap-1.5">
+          <button className="flex items-center gap-2 rounded-xl border border-brand/30 bg-[linear-gradient(180deg,rgba(255,159,67,0.18),rgba(255,159,67,0.1))] px-3.5 py-2 text-sm font-semibold text-orange-100 shadow-[0_12px_24px_rgba(255,155,69,0.12)]">
+            <LayoutDashboard className="h-4 w-4 text-brand" />
             Workspace
           </button>
-          <button className="flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium text-text-dim transition-colors hover:bg-background-secondary hover:text-text-primary">
+          <button className="chrome-pill flex items-center gap-2 rounded-xl px-3.5 py-2 text-sm font-medium text-text-muted hover:text-text-primary">
             <MessageSquare className="h-4 w-4" />
             DMs
           </button>
-          <button className="flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium text-text-dim transition-colors hover:bg-background-secondary hover:text-text-primary">
+          <button className="chrome-pill flex items-center gap-2 rounded-xl px-3.5 py-2 text-sm font-medium text-text-muted hover:text-text-primary">
             <CreditCard className="h-4 w-4" />
             Costs
           </button>
-          <button className="flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium text-text-dim transition-colors hover:bg-background-secondary hover:text-text-primary">
+          <button className="chrome-pill flex items-center gap-2 rounded-xl px-3.5 py-2 text-sm font-medium text-text-muted hover:text-text-primary">
             <CheckSquare className="h-4 w-4" />
             Tasks
           </button>
-          <button className="flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium text-text-dim transition-colors hover:bg-background-secondary hover:text-text-primary">
+          <button className="chrome-pill flex items-center gap-2 rounded-xl px-3.5 py-2 text-sm font-medium text-text-muted hover:text-text-primary">
             <FileText className="h-4 w-4" />
             Notes
           </button>
-          <button className="flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium text-text-dim transition-colors hover:bg-background-secondary hover:text-text-primary">
+          <button className="chrome-pill flex items-center gap-2 rounded-xl px-3.5 py-2 text-sm font-medium text-text-muted hover:text-text-primary">
             <Activity className="h-4 w-4" />
             Activity
           </button>
         </div>
       </div>
-      <div className="flex items-center gap-4 text-xs font-medium text-text-muted">
-        <div className="flex items-center gap-1.5 rounded-full border border-border bg-background-secondary px-3 py-1">
-          <div className="h-2 w-2 rounded-full bg-accent-green shadow-[0_0_8px_rgba(16,185,129,0.4)]"></div>
+
+      <div className="flex items-center gap-3 text-xs font-semibold">
+        <div className="chrome-pill flex items-center gap-2 rounded-full px-3 py-1.5 text-text-secondary">
+          <span className="h-2 w-2 rounded-full bg-accent-green shadow-[0_0_14px_rgba(41,211,145,0.55)]" />
           CONNECTED
         </div>
-        <div className="flex items-center gap-2">
-          <Activity className="h-3.5 w-3.5 text-brand" />
+        <div className="chrome-pill flex items-center gap-2 rounded-full px-3 py-1.5 text-text-secondary">
+          <Activity className="h-3.5 w-3.5 text-accent-cyan" />
           {activeStreams.size} STREAMING
         </div>
-        <div className="text-text-dim">0 tokens/min</div>
+        <div className="chrome-pill rounded-full px-3 py-1.5 text-text-muted">
+          0 tokens/min
+        </div>
       </div>
     </div>
   );
