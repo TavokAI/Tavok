@@ -1,5 +1,6 @@
 # Tavok — Docker Compose configuration
-# Starts all services with one command: docker-compose up --build
+# Start all services:          docker compose up -d       (pulls pre-built images)
+# Build from source instead:   docker compose up --build -d
 #
 # Service startup order (enforced via depends_on + healthchecks):
 # 1. db (PostgreSQL) + redis — no dependencies
@@ -58,6 +59,7 @@ services:
   # ============================================================
 
   web:
+    image: ghcr.io/tavokai/tavok-web:latest
     build:
       context: .
       dockerfile: packages/web/Dockerfile
@@ -91,6 +93,7 @@ services:
       - tavok-net
 
   gateway:
+    image: ghcr.io/tavokai/tavok-gateway:latest
     build:
       context: ./gateway
       dockerfile: Dockerfile
@@ -121,6 +124,7 @@ services:
       - tavok-net
 
   streaming:
+    image: ghcr.io/tavokai/tavok-streaming:latest
     build:
       context: ./streaming
       dockerfile: Dockerfile

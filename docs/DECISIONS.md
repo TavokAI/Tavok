@@ -1160,3 +1160,20 @@ model AgentRegistration {
 - Homebrew and curl install stay aligned with the same GitHub Release assets and checksums
 
 **Consequences**: Release automation now owns binary builds and checksum generation. The bootstrap CLI is intentionally narrow in scope: it generates Tavok deployment config and reports version information, but it does not replace cloning the repository or running Docker Compose.
+
+## DEC-0055 — Pre-built Docker images on GHCR with image+build compose pattern
+
+**Date**: 2026-03-08
+**Status**: Accepted
+**Context**: Users must clone the repo and run `docker compose up --build` to use Tavok, which takes 5-15 minutes and requires all three toolchains' dependencies to be downloaded from npm, hex.pm, Go modules, and Alpine CDN. Agent platforms like OpenClaw have restricted or flaky outbound access, causing builds to fail. Pre-built images eliminate the build step entirely.
+
+**Decision**: Publish multi-arch Docker images to GHCR on every tag push. Use the `image:` + `build:` pattern in docker-compose.yml so `docker compose up -d` pulls pre-built images by default, while `docker compose up --build` still builds from source.
+
+**Rationale**:
+
+- `image:` + `build:` together is native Compose behavior: pull wins by default, `--build` overrides. Zero extra files or profiles needed.
+- Separate workflow file (not extending release.yml) keeps CI concerns isolated and allows independent failure.
+- Multi-arch (amd64 + arm64) covers x86 servers, Apple Silicon Macs, and ARM cloud instances (Graviton, Ampere).
+- GHCR chosen over Docker Hub because it is free for public repos, uses the same GITHUB_TOKEN, and keeps images co-located with the source.
+
+**Consequences**: First `docker compose up` is now a pull (seconds) instead of a build (minutes). Developers must use `--build` for local changes. `make up` no longer builds by default; `make up-build` is the new developer target.

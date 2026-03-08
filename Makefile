@@ -1,7 +1,7 @@
 # Tavok — Developer Commands
 # Run `make help` to see all available commands.
 
-.PHONY: help dev up down logs logs-web logs-gateway logs-stream \
+.PHONY: help dev up up-build down logs logs-web logs-gateway logs-stream \
         db-migrate db-studio db-seed clean health build regression-harness \
         test-cli test-web test-gateway test-streaming test-hooks test-unit test-sdk test-e2e test-load test-all demo \
         lint format lint-fix
@@ -43,8 +43,11 @@ lint-fix: ## Auto-fix lint and formatting issues
 dev: ## Start all services in development mode (with hot reload)
 	docker-compose -f docker-compose.yml -f docker-compose.dev.yml up --build
 
-up: ## Start all services in production mode (detached)
-	docker-compose up --build -d
+up: ## Start all services (pulls pre-built images, detached)
+	docker compose up -d
+
+up-build: ## Start all services, building from source
+	docker compose up --build -d
 
 down: ## Stop all services
 	docker-compose down

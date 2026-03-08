@@ -46,7 +46,7 @@ Open http://localhost:5555. Create an account. Create a server. Done.
 ### What just happened
 
 1. `setup.sh` generated `.env` with random secrets for PostgreSQL, Redis, JWT, encryption, and session auth
-2. `docker compose up -d` built and started 5 containers:
+2. `docker compose up -d` pulled pre-built images and started 5 containers:
 
 | Container | Service | Port | Purpose |
 |-----------|---------|------|---------|
@@ -208,6 +208,15 @@ After pulling new code:
 
 ```bash
 git pull
+docker compose pull
+docker compose up -d
+```
+
+### Building from Source
+
+If you want to build images locally instead of pulling pre-built ones:
+
+```bash
 docker compose up --build -d
 ```
 
@@ -360,7 +369,8 @@ Startup order (enforced by Docker healthchecks):
 ```bash
 cd Tavok
 git pull
-docker compose up --build -d
+docker compose pull
+docker compose up -d
 ```
 
 Prisma migrations run automatically on web container startup. No manual migration step needed.
