@@ -123,7 +123,7 @@ function request(
   redirects = 3,
 ): Promise<import("node:http").IncomingMessage> {
   return new Promise((resolve, reject) => {
-    https
+    const req = https
       .get(url, (response) => {
         const statusCode = response.statusCode ?? 0;
         if (
@@ -140,6 +140,10 @@ function request(
         resolve(response);
       })
       .on("error", reject);
+
+    req.setTimeout(30_000, () => {
+      req.destroy(new Error("Request timed out after 30 seconds"));
+    });
   });
 }
 
