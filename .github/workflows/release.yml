@@ -144,12 +144,13 @@ jobs:
   npm-publish:
     name: Publish npm Package
     needs: verify
-    if: ${{ secrets.NPM_TOKEN != '' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
       contents: read
       id-token: write
+    env:
+      NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
     steps:
       - uses: actions/checkout@v4
 
@@ -169,8 +170,11 @@ jobs:
       - name: Build npm wrapper
         run: pnpm --dir packages/cli build
 
+      - name: Skip npm publish when token is absent
+        if: ${{ env.NODE_AUTH_TOKEN == '' }}
+        run: echo "NPM_TOKEN not configured; skipping npm publish."
+
       - name: Publish package
+        if: ${{ env.NODE_AUTH_TOKEN != '' }}
         run: npm publish --access public
         working-directory: packages/cli
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
