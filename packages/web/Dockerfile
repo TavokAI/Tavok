@@ -4,7 +4,7 @@
 
 # --- Stage 1: Build ---
 FROM node:20-alpine AS builder
-RUN corepack enable && corepack prepare pnpm@9.15.9 --activate
+RUN npm install -g pnpm@9.15.9
 WORKDIR /app
 
 # Copy workspace config + package files first (for layer caching)
