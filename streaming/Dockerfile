@@ -5,7 +5,7 @@
 # --- Stage 1: Build ---
 FROM golang:1.23-alpine AS builder
 
-RUN apk add --no-cache ca-certificates
+RUN apk update && apk add --no-cache ca-certificates
 
 WORKDIR /app
 
@@ -21,7 +21,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /streaming ./cmd/proxy
 # --- Stage 2: Runtime ---
 FROM alpine:3.20
 
-RUN apk add --no-cache ca-certificates curl
+RUN apk update && apk add --no-cache ca-certificates curl
 
 # Create non-root user
 RUN addgroup -S streaming && adduser -S streaming -G streaming

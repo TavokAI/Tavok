@@ -6,7 +6,7 @@
 # --- Stage 1: Build ---
 FROM elixir:1.17-alpine AS builder
 
-RUN apk add --no-cache build-base git
+RUN apk update && apk add --no-cache build-base git
 
 WORKDIR /app
 
@@ -36,7 +36,7 @@ RUN mix release
 # Must match Alpine version from elixir:1.17-alpine (3.22) for OpenSSL compatibility
 FROM alpine:3.22 AS runner
 
-RUN apk add --no-cache libstdc++ openssl ncurses-libs curl
+RUN apk update && apk add --no-cache libstdc++ openssl ncurses-libs curl
 
 WORKDIR /app
 

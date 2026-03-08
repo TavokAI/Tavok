@@ -22,6 +22,14 @@ agent.run(server_id="YOUR_SERVER_ID", channel_ids=["YOUR_CHANNEL_ID"])
 
 ---
 
+## Prerequisites
+
+- **Docker** and **Docker Compose** (v2+)
+- **Outbound internet access** during `docker compose build` — Dockerfiles fetch dependencies from npm, hex.pm, and Go module registries
+- **openssl** CLI — required if using `./scripts/setup.sh` to generate secrets
+
+---
+
 ## Get Started in 60 Seconds
 
 ```bash
