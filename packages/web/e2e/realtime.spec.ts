@@ -148,9 +148,9 @@ test.describe("Real-time messaging", () => {
       // (unlike fill), so we must wait explicitly.
       const inputA = pageA.getByPlaceholder("Message #general");
       await expect(inputA).toBeEnabled({ timeout: 10_000 });
-      await expect(
-        pageB.getByPlaceholder("Message #general"),
-      ).toBeEnabled({ timeout: 10_000 });
+      await expect(pageB.getByPlaceholder("Message #general")).toBeEnabled({
+        timeout: 10_000,
+      });
 
       // User A starts typing (triggers onTyping callback)
       await inputA.pressSequentially("Hello from Alice", { delay: 50 });
