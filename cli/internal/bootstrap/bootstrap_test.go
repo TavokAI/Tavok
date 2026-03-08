@@ -149,6 +149,78 @@ func TestNormalizeDomain(t *testing.T) {
 	}
 }
 
+func TestRedisPasswordIsURLSafe(t *testing.T) {
+	// DEC-0057: Redis password must not contain /, +, or = because
+	// the Go streaming service parses it as part of a redis:// URL.
+	for i := 0; i < 50; i++ {
+		secrets, err := NewSecrets()
+		if err != nil {
+			t.Fatalf("NewSecrets: %v", err)
+		}
+		if strings.ContainsAny(secrets.RedisPassword, "/+=") {
+			t.Fatalf("RedisPassword contains URL-unsafe character: %q", secrets.RedisPassword)
+		}
+		if strings.ContainsAny(secrets.PostgresPassword, "/+=") {
+			t.Fatalf("PostgresPassword contains URL-unsafe character: %q", secrets.PostgresPassword)
+		}
+	}
+}
+
+func TestParseEnvSecrets(t *testing.T) {
+	dir := t.TempDir()
+	envPath := filepath.Join(dir, ".env")
+
+	envContent := `# Tavok Config
+DOMAIN=localhost
+NEXTAUTH_SECRET=my-next-secret
+JWT_SECRET=my-jwt-secret
+INTERNAL_API_SECRET=my-internal-secret
+SECRET_KEY_BASE=my-secret-key
+ENCRYPTION_KEY=my-enc-key
+POSTGRES_PASSWORD=my-pg-pass
+REDIS_PASSWORD=my-redis-pass
+TAVOK_ADMIN_TOKEN=my-admin-token
+`
+	if err := os.WriteFile(envPath, []byte(envContent), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	secrets, err := ParseEnvSecrets(envPath)
+	if err != nil {
+		t.Fatalf("ParseEnvSecrets: %v", err)
+	}
+
+	if secrets.AdminToken != "my-admin-token" {
+		t.Fatalf("AdminToken = %q, want %q", secrets.AdminToken, "my-admin-token")
+	}
+	if secrets.RedisPassword != "my-redis-pass" {
+		t.Fatalf("RedisPassword = %q, want %q", secrets.RedisPassword, "my-redis-pass")
+	}
+	if secrets.PostgresPassword != "my-pg-pass" {
+		t.Fatalf("PostgresPassword = %q, want %q", secrets.PostgresPassword, "my-pg-pass")
+	}
+}
+
+func TestParseEnvSecretsFailsWithoutAdminToken(t *testing.T) {
+	dir := t.TempDir()
+	envPath := filepath.Join(dir, ".env")
+
+	envContent := `DOMAIN=localhost
+POSTGRES_PASSWORD=test
+`
+	if err := os.WriteFile(envPath, []byte(envContent), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := ParseEnvSecrets(envPath)
+	if err == nil {
+		t.Fatal("expected error when TAVOK_ADMIN_TOKEN is missing")
+	}
+	if !strings.Contains(err.Error(), "TAVOK_ADMIN_TOKEN") {
+		t.Fatalf("expected admin token error, got: %v", err)
+	}
+}
+
 func TestWriteEnvFileRejectsOverwriteWithoutForce(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, ".env")

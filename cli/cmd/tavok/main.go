@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/TavokAI/Tavok/cli/internal/bootstrap"
@@ -40,7 +41,7 @@ func runInit(args []string) {
 	output := flags.String("output", ".env", "Path to the generated env file")
 	force := flags.Bool("force", false, "Overwrite the output file if it already exists")
 	email := flags.String("email", "admin@localhost", "Admin email for bootstrap")
-	yes := flags.Bool("yes", false, "Skip prompts, use defaults")
+	flags.Bool("yes", false, "Skip prompts, use defaults (kept for backwards compat)")
 	flags.Parse(args)
 
 	// Determine working directory (use cwd)
@@ -58,13 +59,19 @@ func runInit(args []string) {
 	}
 	fmt.Println("ok")
 
-	// Check required ports
-	requiredPorts := []int{5555, 4001, 4002, 55432, 6379}
-	for _, port := range requiredPorts {
-		if err := bootstrap.CheckPort(port); err != nil {
-			fmt.Fprintf(os.Stderr, "\nERROR: %v\n", err)
-			fmt.Fprintf(os.Stderr, "Free port %d and try again, or stop the conflicting service.\n", port)
-			os.Exit(1)
+	// Check if Tavok is already running (skip port checks if so)
+	tavokRunning := isTavokRunning(dir)
+	if tavokRunning {
+		fmt.Println("  Tavok containers detected   (resuming setup)")
+	} else {
+		// Only check ports if Tavok is NOT already running
+		requiredPorts := []int{5555, 4001, 4002, 55432, 6379}
+		for _, port := range requiredPorts {
+			if err := bootstrap.CheckPort(port); err != nil {
+				fmt.Fprintf(os.Stderr, "\nERROR: %v\n", err)
+				fmt.Fprintf(os.Stderr, "Free port %d and try again, or stop the conflicting service.\n", port)
+				os.Exit(1)
+			}
 		}
 	}
 
@@ -80,51 +87,64 @@ func runInit(args []string) {
 	envPath := filepath.Join(dir, *output)
 	fmt.Print("  Writing .env                ")
 
-	// Check for existing .env
-	if !*force {
-		if _, statErr := os.Stat(envPath); statErr == nil {
-			if *yes {
-				fmt.Println("exists (skipping)")
-				// Read existing admin token for bootstrap
-				runBootstrapFromExisting(dir, *domain, *email)
-				return
-			}
-			fmt.Fprintf(os.Stderr, "\nERROR: %s already exists. Use --force to overwrite.\n", envPath)
-			os.Exit(1)
-		}
+	// If .env exists and no --force: reuse existing secrets for idempotent resume.
+	// This lets users re-run `tavok init` after a partial failure without
+	// regenerating secrets (which would break existing DB volumes — DEC-0057).
+	var secrets bootstrap.Secrets
+	var envExists bool
+
+	if _, statErr := os.Stat(envPath); statErr == nil {
+		envExists = true
 	}
 
-	secrets, err := bootstrap.NewSecrets()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "ERROR: generate secrets: %v\n", err)
-		os.Exit(1)
+	if envExists && !*force {
+		// Parse existing .env for the admin token so we can resume bootstrap
+		existingSecrets, parseErr := bootstrap.ParseEnvSecrets(envPath)
+		if parseErr != nil {
+			fmt.Fprintf(os.Stderr, "\nERROR: could not read existing %s: %v\n", envPath, parseErr)
+			fmt.Fprintln(os.Stderr, "Use --force to regenerate, or fix the file manually.")
+			os.Exit(1)
+		}
+		secrets = existingSecrets
+		fmt.Println("exists (reusing)")
+	} else {
+		var genErr error
+		secrets, genErr = bootstrap.NewSecrets()
+		if genErr != nil {
+			fmt.Fprintf(os.Stderr, "ERROR: generate secrets: %v\n", genErr)
+			os.Exit(1)
+		}
+
+		config := bootstrap.BuildConfig(*domain, time.Now().UTC(), secrets)
+		if err := bootstrap.WriteEnvFile(envPath, config, *force); err != nil {
+			fmt.Fprintf(os.Stderr, "ERROR: write env: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Println("ok")
 	}
 
 	config := bootstrap.BuildConfig(*domain, time.Now().UTC(), secrets)
-	if err := bootstrap.WriteEnvFile(envPath, config, *force); err != nil {
-		fmt.Fprintf(os.Stderr, "ERROR: write env: %v\n", err)
-		os.Exit(1)
+
+	// ── Phase 3: Pull images (skip if already running) ──
+
+	if !tavokRunning {
+		fmt.Println("  Pulling images...           (this may take a few minutes)")
+		if err := runDockerCompose(dir, "pull"); err != nil {
+			fmt.Fprintf(os.Stderr, "\nERROR: docker compose pull failed: %v\n", err)
+			fmt.Fprintln(os.Stderr, "Check your internet connection and try: docker compose pull")
+			os.Exit(1)
+		}
+
+		// ── Phase 4: Start services ──
+
+		fmt.Print("  Starting services...        ")
+		if err := runDockerCompose(dir, "up", "-d"); err != nil {
+			fmt.Fprintf(os.Stderr, "ERROR: docker compose up failed: %v\n", err)
+			fmt.Fprintln(os.Stderr, "Check logs with: docker compose logs")
+			os.Exit(1)
+		}
+		fmt.Println("ok")
 	}
-	fmt.Println("ok")
-
-	// ── Phase 3: Pull images ──
-
-	fmt.Println("  Pulling images...           (this may take a few minutes)")
-	if err := runDockerCompose(dir, "pull"); err != nil {
-		fmt.Fprintf(os.Stderr, "\nERROR: docker compose pull failed: %v\n", err)
-		fmt.Fprintln(os.Stderr, "Check your internet connection and try: docker compose pull")
-		os.Exit(1)
-	}
-
-	// ── Phase 4: Start services ──
-
-	fmt.Print("  Starting services...        ")
-	if err := runDockerCompose(dir, "up", "-d"); err != nil {
-		fmt.Fprintf(os.Stderr, "ERROR: docker compose up failed: %v\n", err)
-		fmt.Fprintln(os.Stderr, "Check logs with: docker compose logs")
-		os.Exit(1)
-	}
-	fmt.Println("ok")
 
 	// ── Phase 5: Health polling ──
 
@@ -240,6 +260,18 @@ func runBootstrapFromExisting(dir, domain, email string) {
 		fmt.Printf("  Config: %s\n", tavokCfgPath)
 	}
 	fmt.Printf("  Open: %s\n", baseURL)
+}
+
+// isTavokRunning checks if Tavok containers are already running in the given directory.
+func isTavokRunning(dir string) bool {
+	cmd := exec.Command("docker", "compose", "ps", "--status=running", "-q")
+	cmd.Dir = dir
+	output, err := cmd.Output()
+	if err != nil {
+		return false
+	}
+	// If any container IDs are returned, Tavok is running
+	return len(strings.TrimSpace(string(output))) > 0
 }
 
 // checkDockerBlocking verifies Docker and Docker Compose are installed. Returns false if missing.

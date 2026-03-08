@@ -67,7 +67,7 @@ type BootstrapRequest struct {
 
 // BootstrapResponse is the parsed response from /api/v1/bootstrap.
 type BootstrapResponse struct {
-	Admin   struct {
+	Admin struct {
 		Email    string `json:"email"`
 		Username string `json:"username"`
 	} `json:"admin"`
@@ -204,12 +204,15 @@ func NewSecrets() (Secrets, error) {
 		return Secrets{}, err
 	}
 
-	redisPassword, err := randomBase64(32)
+	// Redis password MUST be URL-safe because the Go streaming service
+	// parses it as part of a redis:// URL. Base64 contains /, +, = which
+	// break URL parsing. Use alphanumeric instead (DEC-0057).
+	redisPassword, err := randomAlphaNumeric(32)
 	if err != nil {
 		return Secrets{}, err
 	}
 
-	adminToken, err := randomBase64(32)
+	adminToken, err := randomHex(32)
 	if err != nil {
 		return Secrets{}, err
 	}
@@ -337,6 +340,47 @@ func CheckPort(port int) error {
 // GeneratePassword creates a random 16-character alphanumeric password.
 func GeneratePassword() (string, error) {
 	return randomAlphaNumeric(16)
+}
+
+// ParseEnvSecrets reads an existing .env file and extracts the secrets.
+// Used for idempotent re-runs: reuse existing secrets instead of regenerating
+// (which would break DB volumes that were initialized with the old password).
+func ParseEnvSecrets(path string) (Secrets, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return Secrets{}, fmt.Errorf("read env file: %w", err)
+	}
+
+	vars := make(map[string]string)
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		if idx := strings.Index(line, "="); idx > 0 {
+			key := line[:idx]
+			value := line[idx+1:]
+			vars[key] = value
+		}
+	}
+
+	s := Secrets{
+		NextAuthSecret:    vars["NEXTAUTH_SECRET"],
+		JWTSecret:         vars["JWT_SECRET"],
+		InternalAPISecret: vars["INTERNAL_API_SECRET"],
+		SecretKeyBase:     vars["SECRET_KEY_BASE"],
+		EncryptionKey:     vars["ENCRYPTION_KEY"],
+		PostgresPassword:  vars["POSTGRES_PASSWORD"],
+		RedisPassword:     vars["REDIS_PASSWORD"],
+		AdminToken:        vars["TAVOK_ADMIN_TOKEN"],
+	}
+
+	// Validate that at least the critical secrets exist
+	if s.AdminToken == "" {
+		return Secrets{}, fmt.Errorf("TAVOK_ADMIN_TOKEN not found in %s", path)
+	}
+
+	return s, nil
 }
 
 func normalizeDomain(domain string) string {

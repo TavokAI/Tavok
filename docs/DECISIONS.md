@@ -1202,3 +1202,18 @@ model AgentRegistration {
 - `127.0.0.1` binding prevents LAN exposure of fresh localhost installs.
 
 **Consequences**: `npx tavok init` now runs the full lifecycle (write files → pull images → start services → bootstrap → print summary). The CLI no longer requires a git clone. Existing `scripts/setup.sh` still works for users who prefer the two-step flow.
+
+---
+
+## DEC-0057: URL-safe passwords and idempotent init
+
+**Date**: 2026-03-08
+**Status**: Accepted
+**Context**: QA testing by an AI agent found that `tavok init` generated Redis passwords using base64 encoding, which includes `/`, `+`, and `=`. The Go streaming service parses Redis credentials as part of a `redis://` URL, and these characters break URL parsing — causing the streaming service to crash-loop. Additionally, `tavok init` was not idempotent: if it failed mid-setup (e.g., at health check), re-running would regenerate all secrets, breaking existing database volumes that used the original password.
+
+**Decision**:
+1. **URL-safe passwords**: `RedisPassword` now uses `randomAlphaNumeric(32)` instead of `randomBase64(32)`. `AdminToken` uses `randomHex(32)`. `PostgresPassword` was already alphanumeric.
+2. **Idempotent init**: When `.env` already exists and `--force` is not set, `tavok init` reads existing secrets via `ParseEnvSecrets()` and resumes from where it left off (skip pull/start if containers are running, retry bootstrap).
+3. **Tavok container detection**: Before port checks, `docker compose ps --status=running -q` detects Tavok's own containers. If running, port checks and image pulls are skipped.
+
+**Consequences**: `tavok init` can be safely re-run after any failure without `--force` or `docker compose down`. Passwords are always URL-safe. The `--force` flag now truly means "regenerate everything from scratch" (requires volume wipe).
