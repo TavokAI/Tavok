@@ -1177,3 +1177,28 @@ model AgentRegistration {
 - GHCR chosen over Docker Hub because it is free for public repos, uses the same GITHUB_TOKEN, and keeps images co-located with the source.
 
 **Consequences**: First `docker compose up` is now a pull (seconds) instead of a build (minutes). Developers must use `--build` for local changes. `make up` no longer builds by default; `make up-build` is the new developer target.
+
+
+## DEC-0056 — Bootstrap API and admin token for zero-touch onboarding
+
+**Date**: 2026-03-08
+**Status**: Accepted
+**Context**: Agent QA revealed 9+ pain points in the Tavok onboarding flow. After `docker compose up`, users needed to: create an account in the browser, create a server, find the server ID (from URL or database), enable agent registration (browser-only PATCH), install the SDK (not on PyPI), and write code with manually-discovered IDs. This 10+ step, 15-minute, 3-interface flow is unacceptable for a platform marketed as simple.
+
+**Decision**: Add three components to enable `npx tavok init` as a single command that produces a fully running instance:
+
+1. **TAVOK_ADMIN_TOKEN** — A new secret generated alongside the existing 7 secrets during `tavok init`. Scoped exclusively to `POST /api/v1/bootstrap`. Not a general admin key. Constant-time comparison via `crypto.timingSafeEqual`.
+
+2. **POST /api/v1/bootstrap** — First-run setup endpoint with three independent guards (admin token required, user count must be 0, rate limited 3/60s). Creates admin user, default server with `allowAgentRegistration: true` and `registrationApprovalRequired: false`, and #general channel in a single transaction.
+
+3. **SDK auto-discovery** — `.tavok.json` config file written by CLI after bootstrap. Contains only topology info (URLs, server ID, channel ID) — no secrets. Python SDK resolves config from: explicit args > env vars > .tavok.json > localhost defaults.
+
+**Additional security fix**: Application services (web, gateway, streaming) now bind to `127.0.0.1` by default instead of `0.0.0.0`, controlled via `BIND_ADDRESS` env var. Production deployments set `0.0.0.0` where Caddy handles TLS ingress.
+
+**Rationale**:
+- Admin token shares threat model with existing `.env` secrets (DB password, JWT secret). No expanded attack surface.
+- Triple-guarded bootstrap (token + first-run + rate limit) provides defense in depth.
+- SDK auto-discovery eliminates "treasure hunt" for server/channel IDs.
+- `127.0.0.1` binding prevents LAN exposure of fresh localhost installs.
+
+**Consequences**: `npx tavok init` now runs the full lifecycle (write files → pull images → start services → bootstrap → print summary). The CLI no longer requires a git clone. Existing `scripts/setup.sh` still works for users who prefer the two-step flow.

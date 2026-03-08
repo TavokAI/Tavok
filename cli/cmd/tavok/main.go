@@ -39,95 +39,281 @@ func runInit(args []string) {
 	domain := flags.String("domain", "localhost", "Domain for the Tavok deployment")
 	output := flags.String("output", ".env", "Path to the generated env file")
 	force := flags.Bool("force", false, "Overwrite the output file if it already exists")
+	email := flags.String("email", "admin@localhost", "Admin email for bootstrap")
+	yes := flags.Bool("yes", false, "Skip prompts, use defaults")
 	flags.Parse(args)
 
-	// Check if we're in a Tavok checkout
-	if !isTavokCheckout() {
-		fmt.Fprintln(os.Stderr, "ERROR: docker-compose.yml not found in the current directory.")
-		fmt.Fprintln(os.Stderr, "")
-		fmt.Fprintln(os.Stderr, "tavok init generates .env but must be run inside a Tavok checkout.")
-		fmt.Fprintln(os.Stderr, "Clone the repo first, then use the setup script:")
-		fmt.Fprintln(os.Stderr, "")
-		fmt.Fprintln(os.Stderr, "  git clone https://github.com/TavokAI/Tavok.git")
-		fmt.Fprintln(os.Stderr, "  cd Tavok")
-		fmt.Fprintf(os.Stderr, "  ./scripts/setup.sh --domain %s\n", *domain)
-		fmt.Fprintln(os.Stderr, "  docker compose up -d")
-		fmt.Fprintln(os.Stderr, "")
+	// Determine working directory (use cwd)
+	dir, err := os.Getwd()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "ERROR: cannot determine working directory: %v\n", err)
 		os.Exit(1)
 	}
 
-	// Pre-flight: warn if Docker is missing (non-blocking)
-	checkDocker()
+	// ── Phase 1: Pre-flight checks ──
+
+	fmt.Print("  Checking Docker...          ")
+	if !checkDockerBlocking() {
+		os.Exit(1)
+	}
+	fmt.Println("ok")
+
+	// Check required ports
+	requiredPorts := []int{5555, 4001, 4002, 55432, 6379}
+	for _, port := range requiredPorts {
+		if err := bootstrap.CheckPort(port); err != nil {
+			fmt.Fprintf(os.Stderr, "\nERROR: %v\n", err)
+			fmt.Fprintf(os.Stderr, "Free port %d and try again, or stop the conflicting service.\n", port)
+			os.Exit(1)
+		}
+	}
+
+	// ── Phase 2: Write files ──
+
+	fmt.Print("  Writing docker-compose.yml  ")
+	if err := bootstrap.WriteDockerCompose(dir, *force); err != nil {
+		fmt.Fprintf(os.Stderr, "ERROR: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Println("ok")
+
+	envPath := filepath.Join(dir, *output)
+	fmt.Print("  Writing .env                ")
+
+	// Check for existing .env
+	if !*force {
+		if _, statErr := os.Stat(envPath); statErr == nil {
+			if *yes {
+				fmt.Println("exists (skipping)")
+				// Read existing admin token for bootstrap
+				runBootstrapFromExisting(dir, *domain, *email)
+				return
+			}
+			fmt.Fprintf(os.Stderr, "\nERROR: %s already exists. Use --force to overwrite.\n", envPath)
+			os.Exit(1)
+		}
+	}
 
 	secrets, err := bootstrap.NewSecrets()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "generate secrets: %v\n", err)
+		fmt.Fprintf(os.Stderr, "ERROR: generate secrets: %v\n", err)
 		os.Exit(1)
 	}
 
 	config := bootstrap.BuildConfig(*domain, time.Now().UTC(), secrets)
-	if err := bootstrap.WriteEnvFile(*output, config, *force); err != nil {
-		fmt.Fprintf(os.Stderr, "write env: %v\n", err)
+	if err := bootstrap.WriteEnvFile(envPath, config, *force); err != nil {
+		fmt.Fprintf(os.Stderr, "ERROR: write env: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Println("ok")
+
+	// ── Phase 3: Pull images ──
+
+	fmt.Println("  Pulling images...           (this may take a few minutes)")
+	if err := runDockerCompose(dir, "pull"); err != nil {
+		fmt.Fprintf(os.Stderr, "\nERROR: docker compose pull failed: %v\n", err)
+		fmt.Fprintln(os.Stderr, "Check your internet connection and try: docker compose pull")
 		os.Exit(1)
 	}
 
-	fmt.Printf("Created %s for %s\n", filepath.Clean(*output), config.Domain)
-	fmt.Println()
-	if config.Domain == "localhost" {
-		fmt.Println("Next: docker compose up -d")
-		fmt.Println("      (pulls pre-built images from ghcr.io — no build needed)")
-		fmt.Println("Open: http://localhost:5555")
+	// ── Phase 4: Start services ──
+
+	fmt.Print("  Starting services...        ")
+	if err := runDockerCompose(dir, "up", "-d"); err != nil {
+		fmt.Fprintf(os.Stderr, "ERROR: docker compose up failed: %v\n", err)
+		fmt.Fprintln(os.Stderr, "Check logs with: docker compose logs")
+		os.Exit(1)
+	}
+	fmt.Println("ok")
+
+	// ── Phase 5: Health polling ──
+
+	fmt.Print("  Waiting for health...       ")
+	baseURL := config.NextAuthURL
+	if err := bootstrap.PollHealth(baseURL, 120*time.Second); err != nil {
+		fmt.Fprintf(os.Stderr, "ERROR: %v\n", err)
+		fmt.Fprintln(os.Stderr, "Check logs with: docker compose logs web")
+		os.Exit(1)
+	}
+	fmt.Println("ok")
+
+	// ── Phase 6: Bootstrap ──
+
+	adminPassword, err := bootstrap.GeneratePassword()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "ERROR: generate admin password: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Derive username from email
+	username := "admin"
+	if atIdx := len(*email) - len(*email); atIdx >= 0 {
+		parts := splitEmail(*email)
+		if parts != "" {
+			username = parts
+		}
+	}
+
+	result, err := bootstrap.CallBootstrap(baseURL, secrets.AdminToken, bootstrap.BootstrapRequest{
+		Email:       *email,
+		Username:    username,
+		Password:    adminPassword,
+		DisplayName: "Admin",
+		ServerName:  "Tavok",
+	})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "\nERROR: bootstrap: %v\n", err)
+		os.Exit(1)
+	}
+
+	if result == nil {
+		// Already bootstrapped (403) — try to read existing .tavok.json
+		fmt.Println()
+		fmt.Println("  Already bootstrapped. Services are running.")
+
+		tavokCfgPath := filepath.Join(dir, ".tavok.json")
+		if _, statErr := os.Stat(tavokCfgPath); statErr == nil {
+			fmt.Printf("  Config: %s\n", tavokCfgPath)
+		}
+		fmt.Printf("  Open: %s\n", baseURL)
 		return
 	}
 
-	fmt.Printf("Next: point DNS for %s to your server, then:\n", config.Domain)
-	fmt.Println("      docker compose --profile production up -d")
-	fmt.Println("      (pulls pre-built images from ghcr.io — no build needed)")
-	fmt.Printf("Open: https://%s\n", config.Domain)
+	// Write .tavok.json (no secrets)
+	if err := bootstrap.WriteTavokConfig(dir, bootstrap.TavokConfig{
+		URL:        result.URLs.Web,
+		GatewayURL: result.URLs.Gateway,
+		ServerID:   result.Server.ID,
+		ChannelID:  result.Channel.ID,
+	}); err != nil {
+		fmt.Fprintf(os.Stderr, "WARNING: could not write .tavok.json: %v\n", err)
+	}
+
+	// Write credentials file (mode 0600)
+	if err := bootstrap.WriteCredentials(dir, *email, adminPassword); err != nil {
+		fmt.Fprintf(os.Stderr, "WARNING: could not write .tavok-credentials: %v\n", err)
+	}
+
+	// ── Phase 7: Print summary ──
+
+	fmt.Println()
+	fmt.Printf("  Tavok is running at %s\n", result.URLs.Web)
+	fmt.Println()
+	fmt.Println("  Admin login:")
+	fmt.Printf("    Email:    %s\n", *email)
+	fmt.Printf("    Password: %s\n", adminPassword)
+	fmt.Println("    (saved to .tavok-credentials — delete after first login)")
+	fmt.Println()
+	fmt.Printf("  Server: %q (%s)\n", result.Server.Name, result.Server.ID)
+	fmt.Printf("  Channel: #%s (%s)\n", result.Channel.Name, result.Channel.ID)
+	fmt.Println()
+	fmt.Println("  Connect an agent:")
+	fmt.Println("    pip install tavok-sdk")
+	fmt.Println()
+	fmt.Println("    from tavok import Agent")
+	fmt.Println("    agent = Agent(name=\"MyBot\")")
+	fmt.Println("    @agent.on_mention")
+	fmt.Println("    async def handle(msg):")
+	fmt.Println("        async with agent.stream(msg.channel_id) as s:")
+	fmt.Println("            await s.token(\"Hello!\")")
+	fmt.Println("    agent.run()  # auto-discovers from .tavok.json")
+	fmt.Println()
 }
 
-func isTavokCheckout() bool {
-	_, err := os.Stat("docker-compose.yml")
-	return err == nil
+// runBootstrapFromExisting handles the case where .env already exists (idempotent re-run).
+func runBootstrapFromExisting(dir, domain, email string) {
+	config := bootstrap.BuildConfig(domain, time.Now().UTC(), bootstrap.Secrets{})
+	baseURL := config.NextAuthURL
+
+	// Check if services are already running
+	fmt.Print("  Checking services...        ")
+	if err := bootstrap.PollHealth(baseURL, 5*time.Second); err != nil {
+		fmt.Println("not running")
+		fmt.Println()
+		fmt.Println("  .env exists. Start services with: docker compose up -d")
+		return
+	}
+	fmt.Println("running")
+
+	tavokCfgPath := filepath.Join(dir, ".tavok.json")
+	if _, err := os.Stat(tavokCfgPath); err == nil {
+		fmt.Printf("  Config: %s\n", tavokCfgPath)
+	}
+	fmt.Printf("  Open: %s\n", baseURL)
 }
 
-// checkDocker prints warnings if Docker or Docker Compose are not installed.
-// Non-blocking — .env is still generated so users can install Docker afterwards.
-func checkDocker() {
-	dockerOK := true
-
+// checkDockerBlocking verifies Docker and Docker Compose are installed. Returns false if missing.
+func checkDockerBlocking() bool {
 	if _, err := exec.LookPath("docker"); err != nil {
-		dockerOK = false
-		fmt.Fprintln(os.Stderr, "⚠ Docker not found.")
+		fmt.Println("MISSING")
+		fmt.Fprintln(os.Stderr, "")
+		fmt.Fprintln(os.Stderr, "  Docker is required but not installed.")
 		switch runtime.GOOS {
 		case "linux":
 			fmt.Fprintln(os.Stderr, "  Install: https://docs.docker.com/engine/install/")
 		case "darwin":
 			fmt.Fprintln(os.Stderr, "  Install: brew install --cask docker")
-			fmt.Fprintln(os.Stderr, "      or: https://docs.docker.com/desktop/install/mac-install/")
 		case "windows":
 			fmt.Fprintln(os.Stderr, "  Install: https://docs.docker.com/desktop/install/windows-install/")
 		default:
 			fmt.Fprintln(os.Stderr, "  Install: https://docs.docker.com/engine/install/")
 		}
-		fmt.Fprintln(os.Stderr, "")
+		return false
 	}
 
-	if dockerOK {
-		// Only check compose if docker exists (compose is a docker subcommand)
-		if err := exec.Command("docker", "compose", "version").Run(); err != nil {
-			fmt.Fprintln(os.Stderr, "⚠ docker compose (v2) not found.")
-			fmt.Fprintln(os.Stderr, "  Docker Compose v2 ships with Docker Desktop and recent Docker Engine.")
-			fmt.Fprintln(os.Stderr, "  See: https://docs.docker.com/compose/install/")
-			fmt.Fprintln(os.Stderr, "")
+	if err := exec.Command("docker", "compose", "version").Run(); err != nil {
+		fmt.Println("MISSING")
+		fmt.Fprintln(os.Stderr, "")
+		fmt.Fprintln(os.Stderr, "  Docker Compose v2 is required but not found.")
+		fmt.Fprintln(os.Stderr, "  See: https://docs.docker.com/compose/install/")
+		return false
+	}
+
+	return true
+}
+
+// runDockerCompose executes docker compose with the given args in the specified directory.
+func runDockerCompose(dir string, args ...string) error {
+	cmdArgs := append([]string{"compose"}, args...)
+	cmd := exec.Command("docker", cmdArgs...)
+	cmd.Dir = dir
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
+}
+
+// splitEmail returns the local part of an email, sanitized for use as a username.
+func splitEmail(email string) string {
+	for i, c := range email {
+		if c == '@' {
+			local := email[:i]
+			// Sanitize for username: only letters, numbers, underscores
+			var result []byte
+			for _, ch := range []byte(local) {
+				if (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '_' {
+					result = append(result, ch)
+				}
+			}
+			if len(result) >= 3 {
+				return string(result)
+			}
+			return "admin"
 		}
 	}
+	return "admin"
 }
 
 func printUsage() {
 	fmt.Println("Tavok CLI")
 	fmt.Println()
 	fmt.Println("Usage:")
-	fmt.Println("  tavok init [--domain chat.example.com] [--output .env] [--force]")
+	fmt.Println("  tavok init [--domain localhost] [--email admin@localhost] [--yes] [--force]")
 	fmt.Println("  tavok version")
+	fmt.Println()
+	fmt.Println("The init command sets up a complete Tavok instance:")
+	fmt.Println("  1. Writes docker-compose.yml and .env with secure secrets")
+	fmt.Println("  2. Pulls pre-built Docker images from ghcr.io")
+	fmt.Println("  3. Starts all services")
+	fmt.Println("  4. Creates admin account and default server")
+	fmt.Println("  5. Writes .tavok.json for SDK auto-discovery")
 }

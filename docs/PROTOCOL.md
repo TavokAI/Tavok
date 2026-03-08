@@ -742,6 +742,49 @@ Get channel metadata including serverId. Used for agent channel authorization.
 }
 ```
 
+### Bootstrap API (DEC-0051)
+
+First-run setup endpoint. Creates admin user, default server, and enables agent registration. Called by the CLI after services are healthy.
+
+#### POST /api/v1/bootstrap
+
+**Auth:** `Authorization: Bearer admin-{TAVOK_ADMIN_TOKEN}` (from `.env`)
+
+**Guards (all must pass):**
+1. Valid admin token
+2. User count === 0 (first-run only)
+3. Rate limit: 3 per 60s per IP
+
+**Request body:**
+
+```json
+{
+  "email": "admin@localhost",
+  "username": "admin",
+  "password": "generated-password",
+  "displayName": "Admin",
+  "serverName": "Tavok"
+}
+```
+
+**Response:** `201 Created`
+
+```json
+{
+  "admin": { "email": "admin@localhost", "username": "admin" },
+  "server": { "id": "01KK...", "name": "Tavok" },
+  "channel": { "id": "01KK...", "name": "general" },
+  "urls": { "web": "http://localhost:5555", "gateway": "ws://localhost:4001/socket" }
+}
+```
+
+**Error responses:**
+- `401` — Missing or invalid admin token
+- `403` — Already bootstrapped (users exist in database)
+- `429` — Rate limited
+
+The server is created with `allowAgentRegistration: true` and `registrationApprovalRequired: false`, so agents can immediately self-register after bootstrap.
+
 ### Public Agent API (DEC-0040)
 
 These endpoints are publicly accessible (no internal secret required). Agents authenticate via `Authorization: Bearer sk-tvk-...` where noted.
@@ -1659,3 +1702,4 @@ After loading bot config, the Go proxy:
 | 2026-03-01 | v3.3 | Add §9 Channel Charter / Swarm Modes — 7 swarm modes, charter session lifecycle, Go-enforced turn order, charter injection into system prompt, charter_status WebSocket events, frontend swarm settings + live header (TASK-0020, DEC-0050) |
 | 2026-03-02 | v3.4 | Add stream_checkpoint event, StreamCheckpointPayload, hive:stream:checkpoint Redis channel, tokenHistory + checkpoints on MessagePayload, POST /api/internal/stream/resume endpoint (TASK-0021, DEC-0053) |
 | 2026-03-02 | v3.5 | Add reaction_update event for room and DM channels, ReactionUpdatePayload schema, DM reaction CRUD endpoints (GET/POST/DELETE /api/dms/{dmId}/messages/{messageId}/reactions), DmReaction model (TASK-0030) |
+| 2026-03-08 | v3.6 | Add Bootstrap API (POST /api/v1/bootstrap) — first-run setup with admin token auth, creates admin user + server + channel with agent registration enabled (DEC-0051) |

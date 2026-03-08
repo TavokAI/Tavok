@@ -4,22 +4,19 @@ Quick start::
 
     from tavok import Agent
 
-    agent = Agent(
-        url="ws://localhost:4001",
-        api_url="http://localhost:5555",
-        name="my-agent",
-    )
+    agent = Agent(name="my-agent")
 
     @agent.on_mention
     async def handle(msg):
         async with agent.stream(msg.channel_id) as s:
             await s.token("Hello! I'm an agent.")
 
-    agent.run(server_id="YOUR_SERVER_ID", channel_ids=["YOUR_CHANNEL_ID"])
+    agent.run()  # auto-discovers server from .tavok.json or env vars
 """
 
 from .agent import Agent
 from .auth import deregister_agent, register_agent, update_agent
+from .config import TavokConfig
 from .rest import PollMessage, RestAgent, RestStream
 from .stream import StreamContext
 from .types import (
@@ -50,6 +47,7 @@ __all__ = [
     "StreamStart",
     "StreamStatus",
     "StreamToken",
+    "TavokConfig",
     "WebhookEvent",
     "WebhookHandler",
     "WebhookVerificationError",

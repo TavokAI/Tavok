@@ -1,5 +1,5 @@
 import { execSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 
 import { detectInstallTarget } from "./install-target";
@@ -45,31 +45,11 @@ function checkDocker(): void {
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
 
-  // Pre-flight: if running "init", check Docker first, then check checkout
+  // Pre-flight: if running "init", check Docker availability
   if (args[0] === "init") {
     checkDocker();
-
-    if (!existsSync("docker-compose.yml")) {
-      const domainIdx = args.indexOf("--domain");
-      const domain =
-        domainIdx !== -1 && args[domainIdx + 1]
-          ? args[domainIdx + 1]
-          : "localhost";
-
-      console.error(
-        "ERROR: docker-compose.yml not found in the current directory.\n" +
-          "\n" +
-          "tavok init generates .env but must be run inside a Tavok checkout.\n" +
-          "Clone the repo first, then use the setup script:\n" +
-          "\n" +
-          "  git clone https://github.com/TavokAI/Tavok.git\n" +
-          "  cd Tavok\n" +
-          `  ./scripts/setup.sh --domain ${domain}\n` +
-          "  docker compose up -d\n",
-      );
-      process.exitCode = 1;
-      return;
-    }
+    // Note: docker-compose.yml check removed — the Go binary now embeds it
+    // and writes it to the current directory during init.
   }
 
   const packageVersion = readPackageVersion();

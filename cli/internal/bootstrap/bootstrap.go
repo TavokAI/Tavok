@@ -1,15 +1,24 @@
 package bootstrap
 
 import (
+	"bytes"
 	"crypto/rand"
+	_ "embed"
 	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"io"
+	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 )
+
+//go:embed docker-compose.yml
+var DockerComposeYML []byte
 
 type Secrets struct {
 	NextAuthSecret    string
@@ -19,6 +28,7 @@ type Secrets struct {
 	EncryptionKey     string
 	PostgresPassword  string
 	RedisPassword     string
+	AdminToken        string
 }
 
 type Config struct {
@@ -26,6 +36,7 @@ type Config struct {
 	GeneratedAt       time.Time
 	NextAuthURL       string
 	GatewayURL        string
+	BindAddress       string
 	PostgresPassword  string
 	RedisPassword     string
 	NextAuthSecret    string
@@ -33,16 +44,57 @@ type Config struct {
 	InternalAPISecret string
 	SecretKeyBase     string
 	EncryptionKey     string
+	AdminToken        string
+}
+
+// TavokConfig is written to .tavok.json for SDK auto-discovery.
+// Contains ONLY topology info — no secrets.
+type TavokConfig struct {
+	URL        string `json:"url"`
+	GatewayURL string `json:"gatewayUrl"`
+	ServerID   string `json:"serverId"`
+	ChannelID  string `json:"channelId"`
+}
+
+// BootstrapRequest is the POST body for /api/v1/bootstrap.
+type BootstrapRequest struct {
+	Email       string `json:"email"`
+	Username    string `json:"username"`
+	Password    string `json:"password"`
+	DisplayName string `json:"displayName"`
+	ServerName  string `json:"serverName"`
+}
+
+// BootstrapResponse is the parsed response from /api/v1/bootstrap.
+type BootstrapResponse struct {
+	Admin   struct {
+		Email    string `json:"email"`
+		Username string `json:"username"`
+	} `json:"admin"`
+	Server struct {
+		ID   string `json:"id"`
+		Name string `json:"name"`
+	} `json:"server"`
+	Channel struct {
+		ID   string `json:"id"`
+		Name string `json:"name"`
+	} `json:"channel"`
+	URLs struct {
+		Web     string `json:"web"`
+		Gateway string `json:"gateway"`
+	} `json:"urls"`
 }
 
 func BuildConfig(domain string, generatedAt time.Time, secrets Secrets) Config {
 	normalizedDomain := normalizeDomain(domain)
 	nextAuthURL := "http://localhost:5555"
 	gatewayURL := "ws://localhost:4001/socket"
+	bindAddress := "127.0.0.1" // Safe default: localhost only
 
 	if normalizedDomain != "localhost" {
 		nextAuthURL = fmt.Sprintf("https://%s", normalizedDomain)
 		gatewayURL = fmt.Sprintf("wss://%s/socket", normalizedDomain)
+		bindAddress = "0.0.0.0" // Production: Caddy handles ingress
 	}
 
 	return Config{
@@ -50,6 +102,7 @@ func BuildConfig(domain string, generatedAt time.Time, secrets Secrets) Config {
 		GeneratedAt:       generatedAt.UTC(),
 		NextAuthURL:       nextAuthURL,
 		GatewayURL:        gatewayURL,
+		BindAddress:       bindAddress,
 		PostgresPassword:  secrets.PostgresPassword,
 		RedisPassword:     secrets.RedisPassword,
 		NextAuthSecret:    secrets.NextAuthSecret,
@@ -57,6 +110,7 @@ func BuildConfig(domain string, generatedAt time.Time, secrets Secrets) Config {
 		InternalAPISecret: secrets.InternalAPISecret,
 		SecretKeyBase:     secrets.SecretKeyBase,
 		EncryptionKey:     secrets.EncryptionKey,
+		AdminToken:        secrets.AdminToken,
 	}
 }
 
@@ -72,6 +126,10 @@ func RenderEnv(config Config) string {
 		"NEXTAUTH_URL=" + config.NextAuthURL,
 		"NEXT_PUBLIC_GATEWAY_URL=" + config.GatewayURL,
 		"",
+		"# Network binding: 127.0.0.1 = localhost only (safe default),",
+		"# 0.0.0.0 = all interfaces (production with Caddy/TLS)",
+		"BIND_ADDRESS=" + config.BindAddress,
+		"",
 		"POSTGRES_USER=tavok",
 		"POSTGRES_PASSWORD=" + config.PostgresPassword,
 		"POSTGRES_DB=tavok",
@@ -84,6 +142,9 @@ func RenderEnv(config Config) string {
 		"INTERNAL_API_SECRET=" + config.InternalAPISecret,
 		"SECRET_KEY_BASE=" + config.SecretKeyBase,
 		"ENCRYPTION_KEY=" + config.EncryptionKey,
+		"",
+		"# Admin token for CLI bootstrap (scoped to /api/v1/bootstrap only)",
+		"TAVOK_ADMIN_TOKEN=" + config.AdminToken,
 		"",
 		"GATEWAY_PORT=4001",
 		"STREAMING_PORT=4002",
@@ -148,6 +209,11 @@ func NewSecrets() (Secrets, error) {
 		return Secrets{}, err
 	}
 
+	adminToken, err := randomBase64(32)
+	if err != nil {
+		return Secrets{}, err
+	}
+
 	return Secrets{
 		NextAuthSecret:    nextAuthSecret,
 		JWTSecret:         jwtSecret,
@@ -156,7 +222,121 @@ func NewSecrets() (Secrets, error) {
 		EncryptionKey:     encryptionKey,
 		PostgresPassword:  postgresPassword,
 		RedisPassword:     redisPassword,
+		AdminToken:        adminToken,
 	}, nil
+}
+
+// WriteDockerCompose writes the embedded docker-compose.yml to the given directory.
+func WriteDockerCompose(dir string, force bool) error {
+	path := filepath.Join(dir, "docker-compose.yml")
+
+	if !force {
+		if _, err := os.Stat(path); err == nil {
+			return nil // Already exists, skip
+		}
+	}
+
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return fmt.Errorf("create directory: %w", err)
+	}
+
+	return os.WriteFile(path, DockerComposeYML, 0o644)
+}
+
+// WriteTavokConfig writes .tavok.json with connection topology (no secrets).
+func WriteTavokConfig(dir string, cfg TavokConfig) error {
+	data, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal config: %w", err)
+	}
+	data = append(data, '\n')
+	return os.WriteFile(filepath.Join(dir, ".tavok.json"), data, 0o644)
+}
+
+// WriteCredentials writes admin credentials to .tavok-credentials (mode 0600).
+func WriteCredentials(dir, email, password string) error {
+	content := fmt.Sprintf(
+		"# Tavok Admin Credentials\n# DELETE THIS FILE after your first login\nemail=%s\npassword=%s\n",
+		email, password,
+	)
+	return os.WriteFile(filepath.Join(dir, ".tavok-credentials"), []byte(content), 0o600)
+}
+
+// PollHealth polls the health endpoint until it responds 200 or timeout.
+func PollHealth(baseURL string, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	client := &http.Client{Timeout: 5 * time.Second}
+
+	for time.Now().Before(deadline) {
+		resp, err := client.Get(baseURL + "/api/health")
+		if err == nil {
+			resp.Body.Close()
+			if resp.StatusCode == 200 {
+				return nil
+			}
+		}
+		time.Sleep(2 * time.Second)
+	}
+
+	return fmt.Errorf("health check timed out after %s", timeout)
+}
+
+// CallBootstrap calls POST /api/v1/bootstrap with the admin token.
+func CallBootstrap(baseURL, adminToken string, req BootstrapRequest) (*BootstrapResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+
+	httpReq, err := http.NewRequest("POST", baseURL+"/api/v1/bootstrap", bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Authorization", "Bearer admin-"+adminToken)
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("bootstrap request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read response: %w", err)
+	}
+
+	if resp.StatusCode == 403 {
+		// Already bootstrapped — not an error for idempotent init
+		return nil, nil
+	}
+
+	if resp.StatusCode != 201 {
+		return nil, fmt.Errorf("bootstrap failed (HTTP %d): %s", resp.StatusCode, string(respBody))
+	}
+
+	var result BootstrapResponse
+	if err := json.Unmarshal(respBody, &result); err != nil {
+		return nil, fmt.Errorf("parse response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// CheckPort returns nil if the TCP port is available, or an error if it's in use.
+func CheckPort(port int) error {
+	ln, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", port))
+	if err != nil {
+		return fmt.Errorf("port %d is already in use", port)
+	}
+	ln.Close()
+	return nil
+}
+
+// GeneratePassword creates a random 16-character alphanumeric password.
+func GeneratePassword() (string, error) {
+	return randomAlphaNumeric(16)
 }
 
 func normalizeDomain(domain string) string {

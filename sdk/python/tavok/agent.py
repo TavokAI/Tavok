@@ -7,11 +7,7 @@ Minimal example::
 
     from tavok import Agent
 
-    agent = Agent(
-        url="ws://localhost:4001",
-        api_url="http://localhost:5555",
-        name="my-agent",
-    )
+    agent = Agent(name="my-agent")
 
     @agent.on_mention
     async def handle(msg):
@@ -19,18 +15,21 @@ Minimal example::
             await s.token("Hello! ")
             await s.token("I'm an agent.")
 
-    agent.run(server_id="01HXY...", channel_ids=["01HXY..."])
+    agent.run()  # auto-discovers server from .tavok.json or env vars
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import signal
+import sys
 from collections.abc import Callable, Coroutine
 from typing import Any
 
 from .auth import register_agent
+from .config import TavokConfig
 from .stream import StreamContext
 from .types import Message, StreamComplete, StreamError, StreamStart, StreamToken
 from .ws import PhoenixSocket
@@ -44,13 +43,20 @@ MessageHandler = Callable[[Message], Coroutine[Any, Any, None]]
 class Agent:
     """A Tavok agent that connects via WebSocket and responds to messages.
 
+    All connection parameters are optional. The agent discovers configuration
+    from (in order): explicit arguments, environment variables, ``.tavok.json``
+    file, then localhost defaults.
+
     Args:
         url: Gateway WebSocket URL (e.g. ``ws://localhost:4001``).
         api_url: Web server URL for REST API (e.g. ``http://localhost:5555``).
         name: Display name for the agent.
         api_key: Existing API key. If not provided, the agent will register
-            on :meth:`start` and receive a new key.
+            on :meth:`start` and receive a new key. Also reads ``TAVOK_API_KEY``.
         agent_id: Existing agent/bot ULID. Required if ``api_key`` is provided.
+            Also reads ``TAVOK_AGENT_ID``.
+        server_id: Default server ULID. Also discovered from ``.tavok.json``.
+        channel_ids: Default channel ULIDs. Also discovered from ``.tavok.json``.
         model: LLM model identifier for display purposes.
         capabilities: List of capability strings.
         avatar_url: Avatar image URL.
@@ -59,20 +65,29 @@ class Agent:
     def __init__(
         self,
         *,
-        url: str = "ws://localhost:4001",
-        api_url: str = "http://localhost:5555",
+        url: str | None = None,
+        api_url: str | None = None,
         name: str = "Tavok Agent",
         api_key: str | None = None,
         agent_id: str | None = None,
+        server_id: str | None = None,
+        channel_ids: list[str] | None = None,
         model: str | None = None,
         capabilities: list[str] | None = None,
         avatar_url: str | None = None,
     ) -> None:
-        self._gateway_url = url.rstrip("/")
-        self._api_url = api_url.rstrip("/")
+        # Auto-discover configuration from env vars and .tavok.json
+        config = TavokConfig.discover()
+
+        self._gateway_url = (url or config.gateway_url).rstrip("/")
+        self._api_url = (api_url or config.url).rstrip("/")
         self._name = name
-        self._api_key = api_key
-        self._agent_id = agent_id
+        self._api_key = api_key or os.environ.get("TAVOK_API_KEY")
+        self._agent_id = agent_id or os.environ.get("TAVOK_AGENT_ID")
+        self._default_server_id = server_id or config.server_id
+        self._default_channel_ids = channel_ids or (
+            [config.channel_id] if config.channel_id else None
+        )
         self._model = model
         self._capabilities = capabilities or ["chat"]
         self._avatar_url = avatar_url
@@ -215,22 +230,32 @@ class Agent:
     async def start(
         self,
         *,
-        server_id: str,
+        server_id: str | None = None,
         channel_ids: list[str] | None = None,
     ) -> None:
         """Register (if needed), connect, and join channels.
 
         Args:
-            server_id: The server ULID to register with.
-            channel_ids: Channel ULIDs to join. If empty, the agent
-                connects but doesn't join any channel.
+            server_id: The server ULID to register with. If not provided,
+                uses the value from the constructor, env vars, or .tavok.json.
+            channel_ids: Channel ULIDs to join. If not provided, uses
+                auto-discovered defaults. If empty list, no channels joined.
         """
+        resolved_server = server_id or self._default_server_id
+        resolved_channels = channel_ids if channel_ids is not None else self._default_channel_ids
+
         # Step 1: Register if we don't have an API key
         if not self._api_key:
-            logger.info("Registering agent '%s' with server %s", self._name, server_id)
+            if not resolved_server:
+                raise ValueError(
+                    "server_id is required for agent registration. "
+                    "Provide it to start(), Agent(), set TAVOK_SERVER_ID, "
+                    "or run 'npx tavok init' to create .tavok.json."
+                )
+            logger.info("Registering agent '%s' with server %s", self._name, resolved_server)
             result = await register_agent(
                 base_url=self._api_url,
-                server_id=server_id,
+                server_id=resolved_server,
                 display_name=self._name,
                 model=self._model,
                 capabilities=self._capabilities,
@@ -257,7 +282,7 @@ class Agent:
         await self._socket.connect()
 
         # Step 3: Join channels
-        for ch_id in channel_ids or []:
+        for ch_id in resolved_channels or []:
             await self.join_channel(ch_id)
 
     async def join_channel(self, channel_id: str) -> None:
@@ -295,22 +320,29 @@ class Agent:
     def run(
         self,
         *,
-        server_id: str,
+        server_id: str | None = None,
         channel_ids: list[str] | None = None,
     ) -> None:
         """Blocking entry point — registers, connects, and runs forever.
 
         This is the simplest way to run an agent::
 
-            agent = Agent(url="ws://localhost:4001", name="my-agent")
-            agent.run(server_id="01HXY...", channel_ids=["01HXY..."])
+            agent = Agent(name="my-agent")
+            agent.run()  # auto-discovers from .tavok.json
 
         Args:
-            server_id: The server ULID to register with.
+            server_id: The server ULID. Optional if discoverable from
+                constructor, env vars, or .tavok.json.
             channel_ids: Channel ULIDs to join.
         """
         async def _main() -> None:
             await self.start(server_id=server_id, channel_ids=channel_ids)
+            # Print to stderr so users always see this, even without logging
+            print(
+                f"Agent '{self._name}' running (id={self._agent_id}, "
+                f"gateway={self._gateway_url}). Press Ctrl+C to stop.",
+                file=sys.stderr,
+            )
             logger.info(
                 "Agent '%s' running (id=%s). Press Ctrl+C to stop.",
                 self._name,

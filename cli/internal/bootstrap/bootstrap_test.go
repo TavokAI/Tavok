@@ -17,6 +17,7 @@ func TestBuildConfigForLocalhost(t *testing.T) {
 		EncryptionKey:     "encryption-key",
 		PostgresPassword:  "postgres-password",
 		RedisPassword:     "redis-password",
+		AdminToken:        "admin-token",
 	}
 
 	config := BuildConfig("localhost", time.Date(2026, 3, 8, 12, 0, 0, 0, time.UTC), secrets)
@@ -27,6 +28,19 @@ func TestBuildConfigForLocalhost(t *testing.T) {
 
 	if config.GatewayURL != "ws://localhost:4001/socket" {
 		t.Fatalf("expected localhost gateway URL, got %q", config.GatewayURL)
+	}
+
+	if config.BindAddress != "127.0.0.1" {
+		t.Fatalf("expected localhost bind address 127.0.0.1, got %q", config.BindAddress)
+	}
+}
+
+func TestBuildConfigForProductionBindsAllInterfaces(t *testing.T) {
+	secrets := Secrets{}
+	config := BuildConfig("chat.example.com", time.Date(2026, 3, 8, 12, 0, 0, 0, time.UTC), secrets)
+
+	if config.BindAddress != "0.0.0.0" {
+		t.Fatalf("expected production bind address 0.0.0.0, got %q", config.BindAddress)
 	}
 }
 
@@ -39,6 +53,7 @@ func TestRenderEnvIncludesExpectedFields(t *testing.T) {
 		EncryptionKey:     "encryption-key",
 		PostgresPassword:  "postgres-password",
 		RedisPassword:     "redis-password",
+		AdminToken:        "admin-token",
 	}
 
 	config := BuildConfig("chat.example.com", time.Date(2026, 3, 8, 12, 0, 0, 0, time.UTC), secrets)
@@ -48,6 +63,7 @@ func TestRenderEnvIncludesExpectedFields(t *testing.T) {
 		"DOMAIN=chat.example.com",
 		"NEXTAUTH_URL=https://chat.example.com",
 		"NEXT_PUBLIC_GATEWAY_URL=wss://chat.example.com/socket",
+		"BIND_ADDRESS=0.0.0.0",
 		"POSTGRES_PASSWORD=postgres-password",
 		"REDIS_PASSWORD=redis-password",
 		"NEXTAUTH_SECRET=next-auth-secret",
@@ -55,6 +71,7 @@ func TestRenderEnvIncludesExpectedFields(t *testing.T) {
 		"INTERNAL_API_SECRET=internal-secret",
 		"SECRET_KEY_BASE=secret-key-base",
 		"ENCRYPTION_KEY=encryption-key",
+		"TAVOK_ADMIN_TOKEN=admin-token",
 	}
 
 	for _, expected := range expectedLines {
@@ -78,6 +95,7 @@ func TestNewSecretsPopulatesAllFields(t *testing.T) {
 		"EncryptionKey":     secrets.EncryptionKey,
 		"PostgresPassword":  secrets.PostgresPassword,
 		"RedisPassword":     secrets.RedisPassword,
+		"AdminToken":        secrets.AdminToken,
 	}
 
 	for name, value := range fields {

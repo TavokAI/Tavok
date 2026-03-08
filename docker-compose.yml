@@ -65,7 +65,9 @@ services:
       dockerfile: packages/web/Dockerfile
     restart: unless-stopped
     ports:
-      - "5555:5555"
+      # BIND_ADDRESS defaults to 127.0.0.1 (localhost only — safe default).
+      # Set to 0.0.0.0 in .env for production domains where Caddy handles ingress.
+      - "${BIND_ADDRESS:-127.0.0.1}:5555:5555"
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-tavok}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required - see .env.example}@db:5432/${POSTGRES_DB:-tavok}
       REDIS_URL: redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required - see .env.example}@redis:6379
@@ -75,6 +77,7 @@ services:
       INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:?INTERNAL_API_SECRET is required - see .env.example}
       NEXT_PUBLIC_GATEWAY_URL: ${NEXT_PUBLIC_GATEWAY_URL:-ws://localhost:4001/socket}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:?ENCRYPTION_KEY is required - see .env.example}
+      TAVOK_ADMIN_TOKEN: ${TAVOK_ADMIN_TOKEN:-}
       NODE_ENV: ${NODE_ENV:-production}
     volumes:
       - uploads-data:/app/uploads
@@ -99,7 +102,7 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     ports:
-      - "4001:4001"
+      - "${BIND_ADDRESS:-127.0.0.1}:4001:4001"
     environment:
       GATEWAY_PORT: "4001"
       GATEWAY_JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required - see .env.example}
@@ -130,7 +133,7 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     ports:
-      - "${STREAMING_PORT:-4002}:4002"
+      - "${BIND_ADDRESS:-127.0.0.1}:${STREAMING_PORT:-4002}:4002"
     environment:
       STREAMING_PORT: "4002"
       STREAMING_REDIS_URL: redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required - see .env.example}@redis:6379

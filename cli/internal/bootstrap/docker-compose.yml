@@ -1,0 +1,193 @@
+# Tavok — Docker Compose configuration
+# Start all services:          docker compose up -d       (pulls pre-built images)
+# Build from source instead:   docker compose up --build -d
+#
+# Service startup order (enforced via depends_on + healthchecks):
+# 1. db (PostgreSQL) + redis — no dependencies
+# 2. web (Next.js) — depends on db, redis
+# 3. gateway (Elixir/Phoenix) — depends on redis, web
+# 4. streaming (Go) — depends on redis
+#
+# See docs/OPERATIONS.md "Service Startup Order" for details.
+
+services:
+  # ============================================================
+  # INFRASTRUCTURE
+  # ============================================================
+
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-tavok}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required - see .env.example}
+      POSTGRES_DB: ${POSTGRES_DB:-tavok}
+    ports:
+      # Bound to localhost only — not accessible from external network.
+      # Remove this port mapping entirely in production (services use Docker network).
+      - "127.0.0.1:${POSTGRES_HOST_PORT:-55432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-tavok}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - tavok-net
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:?REDIS_PASSWORD is required - see .env.example}
+    ports:
+      # Bound to localhost only — not accessible from external network.
+      # Remove this port mapping entirely in production.
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:?REDIS_PASSWORD is required - see .env.example}", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - tavok-net
+
+  # ============================================================
+  # APPLICATION SERVICES
+  # ============================================================
+
+  web:
+    image: ghcr.io/tavokai/tavok-web:latest
+    build:
+      context: .
+      dockerfile: packages/web/Dockerfile
+    restart: unless-stopped
+    ports:
+      # BIND_ADDRESS defaults to 127.0.0.1 (localhost only — safe default).
+      # Set to 0.0.0.0 in .env for production domains where Caddy handles ingress.
+      - "${BIND_ADDRESS:-127.0.0.1}:5555:5555"
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-tavok}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required - see .env.example}@db:5432/${POSTGRES_DB:-tavok}
+      REDIS_URL: redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required - see .env.example}@redis:6379
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:?NEXTAUTH_SECRET is required - see .env.example}
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:5555}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required - see .env.example}
+      INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:?INTERNAL_API_SECRET is required - see .env.example}
+      NEXT_PUBLIC_GATEWAY_URL: ${NEXT_PUBLIC_GATEWAY_URL:-ws://localhost:4001/socket}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?ENCRYPTION_KEY is required - see .env.example}
+      TAVOK_ADMIN_TOKEN: ${TAVOK_ADMIN_TOKEN:-}
+      NODE_ENV: ${NODE_ENV:-production}
+    volumes:
+      - uploads-data:/app/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:5555/api/health"]
+      interval: 10s
+      timeout: 5s
+      start_period: 30s
+      retries: 5
+    networks:
+      - tavok-net
+
+  gateway:
+    image: ghcr.io/tavokai/tavok-gateway:latest
+    build:
+      context: ./gateway
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "${BIND_ADDRESS:-127.0.0.1}:4001:4001"
+    environment:
+      GATEWAY_PORT: "4001"
+      GATEWAY_JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required - see .env.example}
+      GATEWAY_REDIS_URL: redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required - see .env.example}@redis:6379
+      GATEWAY_WEB_URL: ${GATEWAY_WEB_URL:-http://web:5555}
+      INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:?INTERNAL_API_SECRET is required - see .env.example}
+      SECRET_KEY_BASE: ${SECRET_KEY_BASE:?SECRET_KEY_BASE is required - see .env.example}
+      PHX_SERVER: "true"
+      MIX_ENV: prod
+    depends_on:
+      redis:
+        condition: service_healthy
+      web:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:4001/api/health"]
+      interval: 10s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+    networks:
+      - tavok-net
+
+  streaming:
+    image: ghcr.io/tavokai/tavok-streaming:latest
+    build:
+      context: ./streaming
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "${BIND_ADDRESS:-127.0.0.1}:${STREAMING_PORT:-4002}:4002"
+    environment:
+      STREAMING_PORT: "4002"
+      STREAMING_REDIS_URL: redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required - see .env.example}@redis:6379
+      STREAMING_WEB_URL: ${STREAMING_WEB_URL:-http://web:5555}
+      INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:?INTERNAL_API_SECRET is required - see .env.example}
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:4002/health"]
+      interval: 10s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+    networks:
+      - tavok-net
+
+  # ============================================================
+  # REVERSE PROXY (production only)
+  # ============================================================
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    profiles:
+      - production
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    environment:
+      DOMAIN: ${DOMAIN:-localhost}
+    depends_on:
+      web:
+        condition: service_healthy
+      gateway:
+        condition: service_healthy
+    networks:
+      - tavok-net
+
+# ============================================================
+# VOLUMES & NETWORKS
+# ============================================================
+
+volumes:
+  postgres-data:
+  redis-data:
+  uploads-data:
+  caddy-data:
+  caddy-config:
+
+networks:
+  tavok-net:
+    driver: bridge
