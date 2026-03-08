@@ -104,7 +104,7 @@ tavok init --domain chat.example.com
 For localhost development:
 
 ```bash
-tavok init
+tavok init --domain localhost
 docker compose up -d
 ```
 

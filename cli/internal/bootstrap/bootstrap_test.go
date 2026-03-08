@@ -64,6 +64,73 @@ func TestRenderEnvIncludesExpectedFields(t *testing.T) {
 	}
 }
 
+func TestNewSecretsPopulatesAllFields(t *testing.T) {
+	secrets, err := NewSecrets()
+	if err != nil {
+		t.Fatalf("NewSecrets: %v", err)
+	}
+
+	fields := map[string]string{
+		"NextAuthSecret":    secrets.NextAuthSecret,
+		"JWTSecret":         secrets.JWTSecret,
+		"InternalAPISecret": secrets.InternalAPISecret,
+		"SecretKeyBase":     secrets.SecretKeyBase,
+		"EncryptionKey":     secrets.EncryptionKey,
+		"PostgresPassword":  secrets.PostgresPassword,
+		"RedisPassword":     secrets.RedisPassword,
+	}
+
+	for name, value := range fields {
+		if value == "" {
+			t.Fatalf("%s is empty", name)
+		}
+	}
+}
+
+func TestNewSecretsAreUnique(t *testing.T) {
+	a, err := NewSecrets()
+	if err != nil {
+		t.Fatalf("NewSecrets (first): %v", err)
+	}
+
+	b, err := NewSecrets()
+	if err != nil {
+		t.Fatalf("NewSecrets (second): %v", err)
+	}
+
+	if a.NextAuthSecret == b.NextAuthSecret {
+		t.Fatal("two calls to NewSecrets produced identical NextAuthSecret")
+	}
+
+	if a.RedisPassword == b.RedisPassword {
+		t.Fatal("two calls to NewSecrets produced identical RedisPassword")
+	}
+}
+
+func TestNormalizeDomain(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"localhost", "localhost"},
+		{"chat.example.com", "chat.example.com"},
+		{"https://chat.example.com", "chat.example.com"},
+		{"http://chat.example.com", "chat.example.com"},
+		{"chat.example.com/", "chat.example.com"},
+		{"https://chat.example.com/", "chat.example.com"},
+		{"  chat.example.com  ", "chat.example.com"},
+		{"", "localhost"},
+		{"   ", "localhost"},
+	}
+
+	for _, tt := range tests {
+		result := normalizeDomain(tt.input)
+		if result != tt.expected {
+			t.Fatalf("normalizeDomain(%q) = %q, want %q", tt.input, result, tt.expected)
+		}
+	}
+}
+
 func TestWriteEnvFileRejectsOverwriteWithoutForce(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, ".env")

@@ -18,11 +18,12 @@ async function main(): Promise<void> {
       "ERROR: docker-compose.yml not found in the current directory.\n" +
         "\n" +
         "tavok init generates .env but must be run inside a Tavok checkout.\n" +
-        "Clone the repo first:\n" +
+        "Clone the repo first, then use the setup script:\n" +
         "\n" +
         "  git clone https://github.com/TavokAI/Tavok.git\n" +
         "  cd Tavok\n" +
-        `  tavok init --domain ${domain}\n`,
+        `  ./scripts/setup.sh --domain ${domain}\n` +
+        "  docker compose up -d\n",
     );
     process.exitCode = 1;
     return;
