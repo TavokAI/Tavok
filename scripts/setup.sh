@@ -49,7 +49,7 @@ echo "         Tavok Setup Script"
 echo "======================================="
 echo ""
 
-# --- Prerequisite check ---
+# --- Prerequisite checks ---
 if ! command -v openssl &>/dev/null; then
   echo "ERROR: 'openssl' is required but not found." >&2
   echo "" >&2
@@ -59,6 +59,48 @@ if ! command -v openssl &>/dev/null; then
   echo "  Alpine:        apk add openssl" >&2
   exit 1
 fi
+
+if ! command -v docker &>/dev/null; then
+  echo "ERROR: 'docker' is required but not found." >&2
+  echo "" >&2
+  echo "Install Docker Engine: https://docs.docker.com/engine/install/" >&2
+  exit 1
+fi
+
+if ! docker compose version &>/dev/null; then
+  echo "ERROR: 'docker compose' (v2) is required but not found." >&2
+  echo "" >&2
+  echo "Docker Compose v2 ships with Docker Desktop and recent Docker Engine." >&2
+  echo "See: https://docs.docker.com/compose/install/" >&2
+  exit 1
+fi
+
+# --- Network connectivity check ---
+# Docker build needs to reach package mirrors. Fail fast if network is down.
+echo "Checking network connectivity..."
+NETWORK_OK=true
+for host in dl-cdn.alpinelinux.org registry.npmjs.org hex.pm proxy.golang.org; do
+  if ! curl -sf --connect-timeout 5 --max-time 10 "https://$host" -o /dev/null 2>/dev/null; then
+    if [ "$NETWORK_OK" = true ]; then
+      echo "" >&2
+      echo "ERROR: Cannot reach required package mirrors." >&2
+      echo "Docker build will fail without network access." >&2
+      echo "" >&2
+      echo "Unreachable hosts:" >&2
+      NETWORK_OK=false
+    fi
+    echo "  ✗ $host" >&2
+  fi
+done
+
+if [ "$NETWORK_OK" = false ]; then
+  echo "" >&2
+  echo "Check your internet connection and DNS settings." >&2
+  echo "If using Docker with iptables disabled, see:" >&2
+  echo "  https://github.com/TavokAI/Tavok/blob/main/docs/INSTALL.md#docker-containers-cant-reach-the-internet" >&2
+  exit 1
+fi
+echo "  ✓ All package mirrors reachable"
 
 # --- Check for existing .env ---
 if [ -f .env ]; then
