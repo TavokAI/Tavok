@@ -39,6 +39,20 @@ func runInit(args []string) {
 	force := flags.Bool("force", false, "Overwrite the output file if it already exists")
 	flags.Parse(args)
 
+	// Check if we're in a Tavok checkout
+	if !isTavokCheckout() {
+		fmt.Fprintln(os.Stderr, "ERROR: docker-compose.yml not found in the current directory.")
+		fmt.Fprintln(os.Stderr, "")
+		fmt.Fprintln(os.Stderr, "tavok init generates .env but must be run inside a Tavok checkout.")
+		fmt.Fprintln(os.Stderr, "Clone the repo first:")
+		fmt.Fprintln(os.Stderr, "")
+		fmt.Fprintln(os.Stderr, "  git clone https://github.com/TavokAI/Tavok.git")
+		fmt.Fprintln(os.Stderr, "  cd Tavok")
+		fmt.Fprintf(os.Stderr, "  tavok init --domain %s\n", *domain)
+		fmt.Fprintln(os.Stderr, "")
+		os.Exit(1)
+	}
+
 	secrets, err := bootstrap.NewSecrets()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "generate secrets: %v\n", err)
@@ -60,6 +74,11 @@ func runInit(args []string) {
 
 	fmt.Printf("Next: point DNS for %s to your server and run docker compose --profile production up -d\n", config.Domain)
 	fmt.Printf("Open: https://%s\n", config.Domain)
+}
+
+func isTavokCheckout() bool {
+	_, err := os.Stat("docker-compose.yml")
+	return err == nil
 }
 
 func printUsage() {

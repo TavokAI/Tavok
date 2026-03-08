@@ -18,6 +18,7 @@ type Secrets struct {
 	SecretKeyBase     string
 	EncryptionKey     string
 	PostgresPassword  string
+	RedisPassword     string
 }
 
 type Config struct {
@@ -26,6 +27,7 @@ type Config struct {
 	NextAuthURL       string
 	GatewayURL        string
 	PostgresPassword  string
+	RedisPassword     string
 	NextAuthSecret    string
 	JWTSecret         string
 	InternalAPISecret string
@@ -49,6 +51,7 @@ func BuildConfig(domain string, generatedAt time.Time, secrets Secrets) Config {
 		NextAuthURL:       nextAuthURL,
 		GatewayURL:        gatewayURL,
 		PostgresPassword:  secrets.PostgresPassword,
+		RedisPassword:     secrets.RedisPassword,
 		NextAuthSecret:    secrets.NextAuthSecret,
 		JWTSecret:         secrets.JWTSecret,
 		InternalAPISecret: secrets.InternalAPISecret,
@@ -73,6 +76,8 @@ func RenderEnv(config Config) string {
 		"POSTGRES_PASSWORD=" + config.PostgresPassword,
 		"POSTGRES_DB=tavok",
 		fmt.Sprintf("DATABASE_URL=postgresql://tavok:%s@db:5432/tavok", config.PostgresPassword),
+		"",
+		"REDIS_PASSWORD=" + config.RedisPassword,
 		"",
 		"NEXTAUTH_SECRET=" + config.NextAuthSecret,
 		"JWT_SECRET=" + config.JWTSecret,
@@ -138,6 +143,11 @@ func NewSecrets() (Secrets, error) {
 		return Secrets{}, err
 	}
 
+	redisPassword, err := randomBase64(32)
+	if err != nil {
+		return Secrets{}, err
+	}
+
 	return Secrets{
 		NextAuthSecret:    nextAuthSecret,
 		JWTSecret:         jwtSecret,
@@ -145,6 +155,7 @@ func NewSecrets() (Secrets, error) {
 		SecretKeyBase:     secretKeyBase,
 		EncryptionKey:     encryptionKey,
 		PostgresPassword:  postgresPassword,
+		RedisPassword:     redisPassword,
 	}, nil
 }
 

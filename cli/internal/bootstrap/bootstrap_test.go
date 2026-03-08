@@ -16,6 +16,7 @@ func TestBuildConfigForLocalhost(t *testing.T) {
 		SecretKeyBase:     "secret-key-base",
 		EncryptionKey:     "encryption-key",
 		PostgresPassword:  "postgres-password",
+		RedisPassword:     "redis-password",
 	}
 
 	config := BuildConfig("localhost", time.Date(2026, 3, 8, 12, 0, 0, 0, time.UTC), secrets)
@@ -37,6 +38,7 @@ func TestRenderEnvIncludesExpectedFields(t *testing.T) {
 		SecretKeyBase:     "secret-key-base",
 		EncryptionKey:     "encryption-key",
 		PostgresPassword:  "postgres-password",
+		RedisPassword:     "redis-password",
 	}
 
 	config := BuildConfig("chat.example.com", time.Date(2026, 3, 8, 12, 0, 0, 0, time.UTC), secrets)
@@ -47,6 +49,7 @@ func TestRenderEnvIncludesExpectedFields(t *testing.T) {
 		"NEXTAUTH_URL=https://chat.example.com",
 		"NEXT_PUBLIC_GATEWAY_URL=wss://chat.example.com/socket",
 		"POSTGRES_PASSWORD=postgres-password",
+		"REDIS_PASSWORD=redis-password",
 		"NEXTAUTH_SECRET=next-auth-secret",
 		"JWT_SECRET=jwt-secret",
 		"INTERNAL_API_SECRET=internal-secret",
