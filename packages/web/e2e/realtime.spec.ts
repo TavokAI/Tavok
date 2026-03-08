@@ -140,8 +140,19 @@ test.describe("Real-time messaging", () => {
       await openChannel(pageA, "general");
       await openChannel(pageB, "general");
 
-      // User A starts typing (triggers onTyping callback)
+      // Wait for both WebSocket connections to be fully established.
+      // The message input is disabled={!isConnected}, so waiting for it
+      // to be enabled guarantees the Phoenix channel has joined and
+      // channelRef.current is set (typing events will be sent/received).
+      // NOTE: pressSequentially does NOT wait for actionability checks
+      // (unlike fill), so we must wait explicitly.
       const inputA = pageA.getByPlaceholder("Message #general");
+      await expect(inputA).toBeEnabled({ timeout: 10_000 });
+      await expect(
+        pageB.getByPlaceholder("Message #general"),
+      ).toBeEnabled({ timeout: 10_000 });
+
+      // User A starts typing (triggers onTyping callback)
       await inputA.pressSequentially("Hello from Alice", { delay: 50 });
 
       // User B should see a typing indicator showing Alice is typing.
