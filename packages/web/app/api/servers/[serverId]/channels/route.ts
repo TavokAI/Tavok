@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { generateId } from "@/lib/ulid";
+import { ulid } from "ulid";
 import { checkMemberPermission } from "@/lib/check-member-permission";
 import { Permissions } from "@/lib/permissions";
 
@@ -103,9 +104,10 @@ export async function POST(
     });
     const nextPosition = (lastChannel?.position ?? -1) + 1;
 
+    const channelId = generateId();
     const channel = await prisma.channel.create({
       data: {
-        id: generateId(),
+        id: channelId,
         serverId,
         name,
         topic,
@@ -113,6 +115,21 @@ export async function POST(
         position: nextPosition,
       },
     });
+
+    // Auto-assign all active bots in this server to the new channel
+    const serverBots = await prisma.bot.findMany({
+      where: { serverId, isActive: true },
+      select: { id: true },
+    });
+    if (serverBots.length > 0) {
+      await prisma.channelBot.createMany({
+        data: serverBots.map((bot) => ({
+          id: ulid(),
+          channelId: channel.id,
+          botId: bot.id,
+        })),
+      });
+    }
 
     return NextResponse.json(
       {

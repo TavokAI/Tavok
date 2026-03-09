@@ -73,58 +73,59 @@ On failure: socket connection is rejected.
 
 ### Topics
 
-| Topic Pattern | Description | Lifecycle |
-| --- | --- | --- |
-| `room:{channelId}` | Per-channel real-time events | Joined on channel view, left on navigate away |
-| `user:{userId}` | User-specific events (future) | Joined on app load, persists across navigation |
+| Topic Pattern      | Description                   | Lifecycle                                      |
+| ------------------ | ----------------------------- | ---------------------------------------------- |
+| `room:{channelId}` | Per-channel real-time events  | Joined on channel view, left on navigate away  |
+| `user:{userId}`    | User-specific events (future) | Joined on app load, persists across navigation |
 
 ### Events on `room:{channelId}`
 
 #### Client → Server
 
-| Event | Payload | Description |
-| --- | --- | --- |
-| `phx_join` | `{lastSequence?: string}` | Join channel, optionally with last seen sequence for sync |
-| `new_message` | `{content: string}` | User sends a chat message (max 4000 chars) |
-| `message_edit` | `{messageId: string, content: string}` | Edit own message (max 4000 chars, TASK-0014) |
-| `message_delete` | `{messageId: string}` | Delete a message — own or with MANAGE_MESSAGES (TASK-0014) |
-| `typing` | `{}` | User is typing (debounced client-side, 3s cooldown) |
-| `sync` | `{lastSequence: string}` | Request missed messages since sequence N |
-| `history` | `{before?: string, limit?: int}` | Request older messages (before = ULID cursor, limit default 50, max 100) |
-| `stream_start` | `{botId, botName}` | **Agent only** — start streaming, creates placeholder (DEC-0040) |
-| `stream_token` | `{messageId, token, index}` | **Agent only** — send a streaming token |
-| `stream_complete` | `{messageId, finalContent, thinkingTimeline?, metadata?}` | **Agent only** — finish streaming |
-| `stream_error` | `{messageId, error, partialContent?}` | **Agent only** — mark stream as errored |
-| `stream_thinking` | `{messageId, phase, detail?}` | **Agent only** — send thinking/status update |
-| `typed_message` | [TypedMessagePush](#typedmessagepush) | **Agent only** — send structured typed message (TASK-0039) |
+| Event             | Payload                                                   | Description                                                              |
+| ----------------- | --------------------------------------------------------- | ------------------------------------------------------------------------ |
+| `phx_join`        | `{lastSequence?: string}`                                 | Join channel, optionally with last seen sequence for sync                |
+| `new_message`     | `{content: string}`                                       | User sends a chat message (max 4000 chars)                               |
+| `message_edit`    | `{messageId: string, content: string}`                    | Edit own message (max 4000 chars, TASK-0014)                             |
+| `message_delete`  | `{messageId: string}`                                     | Delete a message — own or with MANAGE_MESSAGES (TASK-0014)               |
+| `typing`          | `{}`                                                      | User is typing (debounced client-side, 3s cooldown)                      |
+| `sync`            | `{lastSequence: string}`                                  | Request missed messages since sequence N                                 |
+| `history`         | `{before?: string, limit?: int}`                          | Request older messages (before = ULID cursor, limit default 50, max 100) |
+| `stream_start`    | `{botId, botName}`                                        | **Agent only** — start streaming, creates placeholder (DEC-0040)         |
+| `stream_token`    | `{messageId, token, index}`                               | **Agent only** — send a streaming token                                  |
+| `stream_complete` | `{messageId, finalContent, thinkingTimeline?, metadata?}` | **Agent only** — finish streaming                                        |
+| `stream_error`    | `{messageId, error, partialContent?}`                     | **Agent only** — mark stream as errored                                  |
+| `stream_thinking` | `{messageId, phase, detail?}`                             | **Agent only** — send thinking/status update                             |
+| `typed_message`   | [TypedMessagePush](#typedmessagepush)                     | **Agent only** — send structured typed message (TASK-0039)               |
 
 #### Server → Client (Broadcast to all in channel)
 
-| Event | Payload | Description |
-| --- | --- | --- |
-| `message_new` | [MessagePayload](#messagepayload) | New message (human or bot, non-streaming) |
-| `stream_start` | [StreamStartPayload](#streamstartpayload) | AI streaming response begins |
-| `stream_token` | [StreamTokenPayload](#streamtokenpayload) | Single token from LLM |
-| `stream_complete` | [StreamCompletePayload](#streamcompletepayload) | Streaming finished successfully |
-| `stream_error` | [StreamErrorPayload](#streamerrorpayload) | Streaming failed |
-| `stream_thinking` | [StreamThinkingPayload](#streamthinkingpayload) | Agent thinking phase changed (TASK-0011) |
-| `stream_tool_call` | [StreamToolCallPayload](#streamtoolcallpayload) | Agent requested tool execution (TASK-0018) |
-| `stream_tool_result` | [StreamToolResultPayload](#streamtoolresultpayload) | Tool execution completed (TASK-0018) |
-| `stream_checkpoint` | [StreamCheckpointPayload](#streamcheckpointpayload) | Checkpoint emitted during streaming (TASK-0021) |
-| `message_edited` | [MessageEditedPayload](#messageeditedpayload) | Message content was edited (TASK-0014) |
-| `message_deleted` | [MessageDeletedPayload](#messagedeletedpayload) | Message was soft-deleted (TASK-0014) |
-| `reaction_update` | [ReactionUpdatePayload](#reactionupdatepayload) | Reaction added/removed on a message (TASK-0030) |
-| `typed_message` | [TypedMessagePayload](#typedmessagepayload) | Structured typed message from agent (TASK-0039) |
-| `user_typing` | [TypingPayload](#typingpayload) | Another user is typing |
-| `presence_state` | Phoenix.Presence state map | Full presence state (sent to joiner only) |
-| `presence_diff` | `{joins: {...}, leaves: {...}}` | Presence changes (broadcast) |
+| Event                 | Payload                                               | Description                                     |
+| --------------------- | ----------------------------------------------------- | ----------------------------------------------- |
+| `message_new`         | [MessagePayload](#messagepayload)                     | New message (human or bot, non-streaming)       |
+| `stream_start`        | [StreamStartPayload](#streamstartpayload)             | AI streaming response begins                    |
+| `stream_token`        | [StreamTokenPayload](#streamtokenpayload)             | Single token from LLM                           |
+| `stream_complete`     | [StreamCompletePayload](#streamcompletepayload)       | Streaming finished successfully                 |
+| `stream_error`        | [StreamErrorPayload](#streamerrorpayload)             | Streaming failed                                |
+| `stream_thinking`     | [StreamThinkingPayload](#streamthinkingpayload)       | Agent thinking phase changed (TASK-0011)        |
+| `stream_tool_call`    | [StreamToolCallPayload](#streamtoolcallpayload)       | Agent requested tool execution (TASK-0018)      |
+| `stream_tool_result`  | [StreamToolResultPayload](#streamtoolresultpayload)   | Tool execution completed (TASK-0018)            |
+| `stream_checkpoint`   | [StreamCheckpointPayload](#streamcheckpointpayload)   | Checkpoint emitted during streaming (TASK-0021) |
+| `message_edited`      | [MessageEditedPayload](#messageeditedpayload)         | Message content was edited (TASK-0014)          |
+| `message_deleted`     | [MessageDeletedPayload](#messagedeletedpayload)       | Message was soft-deleted (TASK-0014)            |
+| `reaction_update`     | [ReactionUpdatePayload](#reactionupdatepayload)       | Reaction added/removed on a message (TASK-0030) |
+| `typed_message`       | [TypedMessagePayload](#typedmessagepayload)           | Structured typed message from agent (TASK-0039) |
+| `bot_trigger_skipped` | [BotTriggerSkippedPayload](#bottriggerskippedpayload) | Bot was not triggered (e.g., mention required)  |
+| `user_typing`         | [TypingPayload](#typingpayload)                       | Another user is typing                          |
+| `presence_state`      | Phoenix.Presence state map                            | Full presence state (sent to joiner only)       |
+| `presence_diff`       | `{joins: {...}, leaves: {...}}`                       | Presence changes (broadcast)                    |
 
 #### Server → Client (Direct reply)
 
-| Event | Payload | Description |
-| --- | --- | --- |
-| `sync_response` | `{messages: MessagePayload[], hasMore: boolean}` | Missed messages after reconnect |
-| `history_response` | `{messages: MessagePayload[], hasMore: boolean}` | Older message history page |
+| Event              | Payload                                          | Description                     |
+| ------------------ | ------------------------------------------------ | ------------------------------- |
+| `sync_response`    | `{messages: MessagePayload[], hasMore: boolean}` | Missed messages after reconnect |
+| `history_response` | `{messages: MessagePayload[], hasMore: boolean}` | Older message history page      |
 
 ### Payload Schemas
 
@@ -132,21 +133,21 @@ On failure: socket connection is rejected.
 
 ```json
 {
-  "id": "01HXY...",           // ULID
-  "channelId": "01HXY...",   // ULID
-  "authorId": "01HXY...",    // ULID (User or Bot)
-  "authorType": "USER",      // "USER" | "BOT" | "SYSTEM"
-  "authorName": "alice",     // display name for rendering
-  "authorAvatarUrl": null,   // string or null
+  "id": "01HXY...", // ULID
+  "channelId": "01HXY...", // ULID
+  "authorId": "01HXY...", // ULID (User or Bot)
+  "authorType": "USER", // "USER" | "BOT" | "SYSTEM"
+  "authorName": "alice", // display name for rendering
+  "authorAvatarUrl": null, // string or null
   "content": "Hello world",
-  "type": "STANDARD",        // "STANDARD" | "STREAMING" | "SYSTEM" | "TOOL_CALL" | "TOOL_RESULT" | "CODE_BLOCK" | "ARTIFACT" | "STATUS"
-  "streamingStatus": null,   // null | "ACTIVE" | "COMPLETE" | "ERROR"
-  "sequence": "42",          // per-channel sequence number (BigInt-safe decimal string)
+  "type": "STANDARD", // "STANDARD" | "STREAMING" | "SYSTEM" | "TOOL_CALL" | "TOOL_RESULT" | "CODE_BLOCK" | "ARTIFACT" | "STATUS"
+  "streamingStatus": null, // null | "ACTIVE" | "COMPLETE" | "ERROR"
+  "sequence": "42", // per-channel sequence number (BigInt-safe decimal string)
   "createdAt": "2026-02-23T12:00:00.000Z",
-  "editedAt": null,          // ISO 8601 string or null (TASK-0014)
-  "metadata": null,          // object or null — agent execution metadata (TASK-0039)
-  "tokenHistory": null,      // [{o: number, t: number}] or null — stream rewind data (TASK-0021)
-  "checkpoints": null        // [{index, label, contentOffset, timestamp}] or null — checkpoint resume data (TASK-0021)
+  "editedAt": null, // ISO 8601 string or null (TASK-0014)
+  "metadata": null, // object or null — agent execution metadata (TASK-0039)
+  "tokenHistory": null, // [{o: number, t: number}] or null — stream rewind data (TASK-0021)
+  "checkpoints": null // [{index, label, contentOffset, timestamp}] or null — checkpoint resume data (TASK-0021)
 }
 ```
 
@@ -154,7 +155,7 @@ On failure: socket connection is rejected.
 
 ```json
 {
-  "messageId": "01HXY...",       // ULID of the placeholder message
+  "messageId": "01HXY...", // ULID of the placeholder message
   "botId": "01HXY...",
   "botName": "Claude Assistant",
   "botAvatarUrl": null,
@@ -167,8 +168,8 @@ On failure: socket connection is rejected.
 ```json
 {
   "messageId": "01HXY...",
-  "token": "Hello",             // the text chunk
-  "index": 0                    // monotonically increasing, 0-based
+  "token": "Hello", // the text chunk
+  "index": 0 // monotonically increasing, 0-based
 }
 ```
 
@@ -178,7 +179,10 @@ On failure: socket connection is rejected.
 {
   "messageId": "01HXY...",
   "finalContent": "Hello! How can I help you today?",
-  "thinkingTimeline": [{"phase":"Thinking","timestamp":"..."},{"phase":"Writing","timestamp":"..."}],
+  "thinkingTimeline": [
+    { "phase": "Thinking", "timestamp": "..." },
+    { "phase": "Writing", "timestamp": "..." }
+  ],
   "metadata": {
     "model": "claude-sonnet-4-20250514",
     "provider": "anthropic",
@@ -196,7 +200,7 @@ On failure: socket connection is rejected.
 {
   "messageId": "01HXY...",
   "error": "Provider returned 429: rate limited",
-  "partialContent": "Hello! How can I"   // may be null
+  "partialContent": "Hello! How can I" // may be null
 }
 ```
 
@@ -205,8 +209,8 @@ On failure: socket connection is rejected.
 ```json
 {
   "messageId": "01HXY...",
-  "phase": "Thinking",          // configurable via bot's thinkingSteps
-  "timestamp": "2026-03-01T12:00:00.123Z"  // ISO 8601
+  "phase": "Thinking", // configurable via bot's thinkingSteps
+  "timestamp": "2026-03-01T12:00:00.123Z" // ISO 8601
 }
 ```
 
@@ -272,7 +276,7 @@ Client → Server push from agents to create a typed message. BOT-only — human
   "content": {
     "callId": "search_web",
     "toolName": "search_web",
-    "arguments": {"query": "Elixir BEAM VM"},
+    "arguments": { "query": "Elixir BEAM VM" },
     "status": "running"
   }
 }
@@ -311,7 +315,7 @@ Server → Client broadcast for typed messages. Same structure as [MessagePayloa
 {
   "callId": "search_web_1",
   "toolName": "search_web",
-  "arguments": {"query": "Elixir BEAM VM"},
+  "arguments": { "query": "Elixir BEAM VM" },
   "status": "running"
 }
 ```
@@ -323,7 +327,7 @@ Server → Client broadcast for typed messages. Same structure as [MessagePayloa
 ```json
 {
   "callId": "search_web_1",
-  "result": {"url": "https://...", "title": "..."},
+  "result": { "url": "https://...", "title": "..." },
   "error": null,
   "durationMs": 450
 }
@@ -378,6 +382,19 @@ Optional metadata on agent messages. Persisted in `Message.metadata` (JSONB). Se
 ```
 
 All fields optional. Frontend renders as a collapsible bar: `Claude Sonnet 4 · 843 tokens · 2.3s`.
+
+#### BotTriggerSkippedPayload
+
+Emitted when a bot exists in the channel but was not triggered (e.g., bot requires @mention but was not mentioned). The frontend uses this to show a hint to the user.
+
+```json
+{
+  "botId": "01HXY...",
+  "botName": "Jack",
+  "triggerMode": "MENTION",
+  "reason": "mention_required"
+}
+```
 
 #### TypingPayload
 
@@ -434,16 +451,16 @@ All Redis messages are JSON-encoded strings.
 
 ### Channel Patterns
 
-| Redis Channel | Publisher | Subscriber | Description |
-| --- | --- | --- | --- |
-| `hive:channel:{channelId}:messages` | Gateway | (future: indexer, analytics) | New persisted message notification |
-| `hive:stream:request` | Gateway | Go Proxy | Request AI response for a message |
-| `hive:stream:tokens:{channelId}:{messageId}` | Go Proxy | Gateway | Individual tokens from LLM |
-| `hive:stream:status:{channelId}:{messageId}` | Go Proxy | Gateway | Stream completion or error |
-| `hive:stream:thinking:{channelId}:{messageId}` | Go Proxy | Gateway | Agent thinking phase change (TASK-0011) |
-| `hive:stream:tool_call:{channelId}:{messageId}` | Go Proxy | Gateway | Tool call requested by LLM (TASK-0018) |
-| `hive:stream:tool_result:{channelId}:{messageId}` | Go Proxy | Gateway | Tool execution result (TASK-0018) |
-| `hive:stream:checkpoint:{channelId}:{messageId}` | Go Proxy | Gateway | Stream checkpoint for rewind/resume (TASK-0021) |
+| Redis Channel                                     | Publisher | Subscriber                   | Description                                     |
+| ------------------------------------------------- | --------- | ---------------------------- | ----------------------------------------------- |
+| `hive:channel:{channelId}:messages`               | Gateway   | (future: indexer, analytics) | New persisted message notification              |
+| `hive:stream:request`                             | Gateway   | Go Proxy                     | Request AI response for a message               |
+| `hive:stream:tokens:{channelId}:{messageId}`      | Go Proxy  | Gateway                      | Individual tokens from LLM                      |
+| `hive:stream:status:{channelId}:{messageId}`      | Go Proxy  | Gateway                      | Stream completion or error                      |
+| `hive:stream:thinking:{channelId}:{messageId}`    | Go Proxy  | Gateway                      | Agent thinking phase change (TASK-0011)         |
+| `hive:stream:tool_call:{channelId}:{messageId}`   | Go Proxy  | Gateway                      | Tool call requested by LLM (TASK-0018)          |
+| `hive:stream:tool_result:{channelId}:{messageId}` | Go Proxy  | Gateway                      | Tool execution result (TASK-0018)               |
+| `hive:stream:checkpoint:{channelId}:{messageId}`  | Go Proxy  | Gateway                      | Stream checkpoint for rewind/resume (TASK-0021) |
 
 ### Stream Request Payload
 
@@ -456,9 +473,12 @@ Published by Gateway when a message triggers an AI response:
   "botId": "01HXY...",
   "triggerMessageId": "01HXY...",
   "contextMessages": [
-    {"role": "user", "content": "What is Elixir?"},
-    {"role": "assistant", "content": "Elixir is a functional programming language..."},
-    {"role": "user", "content": "How does it compare to Go?"}
+    { "role": "user", "content": "What is Elixir?" },
+    {
+      "role": "assistant",
+      "content": "Elixir is a functional programming language..."
+    },
+    { "role": "user", "content": "How does it compare to Go?" }
   ]
 }
 ```
@@ -658,6 +678,7 @@ Edit a message's content. Called by Gateway on `message_edit` WebSocket event. (
 ```
 
 **Validations:**
+
 - Message exists and is not deleted
 - `authorType` is not BOT
 - `authorId === userId` (only author can edit)
@@ -751,6 +772,7 @@ First-run setup endpoint. Creates admin user, default server, and enables agent 
 **Auth:** `Authorization: Bearer admin-{TAVOK_ADMIN_TOKEN}` (from `.env`)
 
 **Guards (all must pass):**
+
 1. Valid admin token
 2. User count === 0 (first-run only)
 3. Rate limit: 3 per 60s per IP
@@ -774,11 +796,15 @@ First-run setup endpoint. Creates admin user, default server, and enables agent 
   "admin": { "email": "admin@localhost", "username": "admin" },
   "server": { "id": "01KK...", "name": "Tavok" },
   "channel": { "id": "01KK...", "name": "general" },
-  "urls": { "web": "http://localhost:5555", "gateway": "ws://localhost:4001/socket" }
+  "urls": {
+    "web": "http://localhost:5555",
+    "gateway": "ws://localhost:4001/socket"
+  }
 }
 ```
 
 **Error responses:**
+
 - `401` — Missing or invalid admin token
 - `403` — Already bootstrapped (users exist in database)
 - `429` — Rate limited
@@ -813,6 +839,7 @@ Required: `name`, `serverId`. `connectionMethod` defaults to `WEBSOCKET`.
 ```
 
 **Error responses:**
+
 - `401` — Missing or invalid admin token
 - `400` — Missing name or serverId
 - `404` — Server not found
@@ -890,7 +917,11 @@ Update a streaming message on completion or error. Used by Go Proxy to finalize 
   "content": "Hello! How can I help you today?",
   "streamingStatus": "COMPLETE",
   "thinkingTimeline": "[{\"phase\":\"Thinking\",\"timestamp\":\"...\"},{\"phase\":\"Writing\",\"timestamp\":\"...\"}]",
-  "metadata": {"model": "claude-sonnet-4-20250514", "tokensOut": 843, "latencyMs": 2300}
+  "metadata": {
+    "model": "claude-sonnet-4-20250514",
+    "tokensOut": 843,
+    "latencyMs": 2300
+  }
 }
 ```
 
@@ -1098,12 +1129,12 @@ The Gateway uses a **broadcast-first** pattern for all messages:
 
 ```json
 {
-  "sub": "01HXY...",          // user ID (ULID)
+  "sub": "01HXY...", // user ID (ULID)
   "username": "alice",
   "displayName": "Alice",
   "email": "alice@example.com",
   "iat": 1708700000,
-  "exp": 1708786400           // 24h expiry
+  "exp": 1708786400 // 24h expiry
 }
 ```
 
@@ -1137,12 +1168,14 @@ Total length: 49 characters. Prefix `sk-tvk-` enables quick format validation.
 Agents are created by server owners, not by self-registration.
 
 **Via CLI (`tavok init`):**
+
 1. CLI calls `POST /api/v1/bootstrap/agents` with `{name, serverId}`
 2. Server creates Bot + AgentRegistration, generates API key
 3. API key returned once; CLI saves to `.tavok-agents.json`
 4. SDK auto-discovers credentials: `Agent(name="Jack")` just works
 
 **Via Web UI:**
+
 1. User opens Manage Agents modal, clicks Add Agent
 2. Fills in agent details, selects connection method
 3. Server creates Bot + AgentRegistration via internal API
@@ -1177,14 +1210,14 @@ Tavok supports 6 connection methods for agents. All methods converge to the same
 
 ### 7a. Connection Methods
 
-| # | Method | Direction | Streaming | Use Case |
-| --- | --- | --- | --- | --- |
-| 1 | **WebSocket** | Bidirectional | Native | Python SDK, TS SDK, any WS client (existing) |
-| 2 | **Inbound Webhook** | Agent → Tavok | Yes (batch POST) | curl, CI/CD, n8n, Zapier, monitoring, scripts |
-| 3 | **HTTP Webhook** | Tavok → Agent | Yes (SSE response or async callback) | LangGraph, CrewAI, Slack/Telegram-style bots |
-| 4 | **REST Polling** | Agent polls Tavok | Yes (REST stream endpoint) | Serverless (Lambda), cron, Telegram getUpdates |
-| 5 | **SSE** | Tavok pushes events | Yes (receive via SSE) | Browser agents, restrictive proxies |
-| 6 | **OpenAI-Compatible** | Standard API | Yes (SSE relay) | LiteLLM, LangChain, any OpenAI SDK client |
+| #   | Method                | Direction           | Streaming                            | Use Case                                       |
+| --- | --------------------- | ------------------- | ------------------------------------ | ---------------------------------------------- |
+| 1   | **WebSocket**         | Bidirectional       | Native                               | Python SDK, TS SDK, any WS client (existing)   |
+| 2   | **Inbound Webhook**   | Agent → Tavok       | Yes (batch POST)                     | curl, CI/CD, n8n, Zapier, monitoring, scripts  |
+| 3   | **HTTP Webhook**      | Tavok → Agent       | Yes (SSE response or async callback) | LangGraph, CrewAI, Slack/Telegram-style bots   |
+| 4   | **REST Polling**      | Agent polls Tavok   | Yes (REST stream endpoint)           | Serverless (Lambda), cron, Telegram getUpdates |
+| 5   | **SSE**               | Tavok pushes events | Yes (receive via SSE)                | Browser agents, restrictive proxies            |
+| 6   | **OpenAI-Compatible** | Standard API        | Yes (SSE relay)                      | LiteLLM, LangChain, any OpenAI SDK client      |
 
 ### 7b. Architecture — Adapter Layer
 
@@ -1200,14 +1233,14 @@ The Gateway Broadcast Controller accepts `{topic, event, payload}` and calls `Br
 
 All methods use the same `sk-tvk-...` API key. Inbound webhooks additionally use `whk_...` tokens embedded in URLs.
 
-| Method | Auth | Validated By |
-| --- | --- | --- |
-| WebSocket | `?api_key=sk-tvk-...` | Gateway → internal verify |
-| Inbound Webhook | `whk_...` in URL path | Next.js token lookup |
-| HTTP Webhook (outbound) | `X-Tavok-Signature: sha256=HMAC` | Agent verifies |
-| REST Polling | `Authorization: Bearer sk-tvk-...` | Next.js hash lookup |
-| SSE | Header or `?api_key=sk-tvk-...` | Next.js hash lookup |
-| OpenAI-Compatible | `Authorization: Bearer sk-tvk-...` | Next.js hash lookup |
+| Method                  | Auth                               | Validated By              |
+| ----------------------- | ---------------------------------- | ------------------------- |
+| WebSocket               | `?api_key=sk-tvk-...`              | Gateway → internal verify |
+| Inbound Webhook         | `whk_...` in URL path              | Next.js token lookup      |
+| HTTP Webhook (outbound) | `X-Tavok-Signature: sha256=HMAC`   | Agent verifies            |
+| REST Polling            | `Authorization: Bearer sk-tvk-...` | Next.js hash lookup       |
+| SSE                     | Header or `?api_key=sk-tvk-...`    | Next.js hash lookup       |
+| OpenAI-Compatible       | `Authorization: Bearer sk-tvk-...` | Next.js hash lookup       |
 
 ### 7d. Inbound Webhook API
 
@@ -1271,7 +1304,7 @@ Stream tokens via inbound webhook.
 **Request body:**
 
 ```json
-{"tokens": ["Hello ", "world!"], "done": false}
+{ "tokens": ["Hello ", "world!"], "done": false }
 ```
 
 Final: `{"tokens": ["!"], "done": true, "finalContent": "Hello world!", "metadata": {...}}`
@@ -1286,8 +1319,16 @@ When a WEBHOOK-method agent is triggered by a message, the Gateway calls `WebCli
 {
   "event": "message",
   "channelId": "01HXY...",
-  "triggerMessage": {"id": "...", "content": "...", "authorName": "...", "authorType": "USER"},
-  "contextMessages": [{"role": "user", "content": "..."}, {"role": "assistant", "content": "..."}],
+  "triggerMessage": {
+    "id": "...",
+    "content": "...",
+    "authorName": "...",
+    "authorType": "USER"
+  },
+  "contextMessages": [
+    { "role": "user", "content": "..." },
+    { "role": "assistant", "content": "..." }
+  ],
   "callbackUrl": "http://localhost:5555/api/v1/webhooks/{auto_token}/stream"
 }
 ```
@@ -1359,11 +1400,11 @@ Server-Sent Events stream. Auth via `Authorization: Bearer sk-tvk-...` header or
 
 **Events:**
 
-| Event | Data | Description |
-| --- | --- | --- |
-| `connected` | `{agentId, channels, timestamp}` | Initial connection confirmation |
+| Event         | Data                                                                   | Description                       |
+| ------------- | ---------------------------------------------------------------------- | --------------------------------- |
+| `connected`   | `{agentId, channels, timestamp}`                                       | Initial connection confirmation   |
 | `message_new` | `{id, channelId, content, authorId, authorType, streamingStatus, ...}` | New message in subscribed channel |
-| `heartbeat` | `{timestamp}` | Keepalive (every 15s) |
+| `heartbeat`   | `{timestamp}`                                                          | Keepalive (every 15s)             |
 
 Agent sends responses via REST (POST /api/v1/agents/{id}/messages).
 
@@ -1375,11 +1416,11 @@ Channel must belong to the agent's server.
 
 **Query params:**
 
-| Param | Type | Default | Description |
-| --- | --- | --- | --- |
-| `limit` | int | 50 | Max messages to return (1–100) |
-| `before` | ULID | — | Cursor: return messages older than this ID |
-| `after_sequence` | int | — | Sync cursor: return messages newer than this sequence |
+| Param            | Type | Default | Description                                           |
+| ---------------- | ---- | ------- | ----------------------------------------------------- |
+| `limit`          | int  | 50      | Max messages to return (1–100)                        |
+| `before`         | ULID | —       | Cursor: return messages older than this ID            |
+| `after_sequence` | int  | —       | Sync cursor: return messages newer than this sequence |
 
 When `after_sequence` is set, messages are returned in ascending sequence order (oldest first).
 When `before` is set (or neither cursor), messages are returned in chronological order (oldest first within the page), with `hasMore` indicating older messages exist.
@@ -1460,7 +1501,7 @@ The `model` field encodes the target channel: `tavok-channel-{channelId}`.
 ```json
 {
   "model": "tavok-channel-01HXY...",
-  "messages": [{"role": "user", "content": "Hello"}],
+  "messages": [{ "role": "user", "content": "Hello" }],
   "stream": false
 }
 ```
@@ -1479,7 +1520,13 @@ List available channels as "models" in OpenAI format. Auth: `Authorization: Bear
 {
   "object": "list",
   "data": [
-    {"id": "tavok-channel-01HXY...", "object": "model", "created": 1708700000, "owned_by": "tavok", "permission": []}
+    {
+      "id": "tavok-channel-01HXY...",
+      "object": "model",
+      "created": 1708700000,
+      "owned_by": "tavok",
+      "permission": []
+    }
   ]
 }
 ```
@@ -1516,26 +1563,26 @@ Topic pattern: `dm:{dmChannelId}`
 
 ### 8b. Client → Server Events
 
-| Event | Payload | Description |
-|-------|---------|-------------|
-| `new_message` | `{ content: string }` | Send a DM. Max 4000 chars. |
-| `typing` | `{}` | Typing indicator (2s throttle server-side) |
-| `message_edit` | `{ messageId, content }` | Edit own message |
-| `message_delete` | `{ messageId }` | Delete own message |
-| `sync` | `{ lastSequence }` | Request missed messages |
-| `history` | `{ before?: messageId, limit?: number }` | Load older messages (max 100) |
+| Event            | Payload                                  | Description                                |
+| ---------------- | ---------------------------------------- | ------------------------------------------ |
+| `new_message`    | `{ content: string }`                    | Send a DM. Max 4000 chars.                 |
+| `typing`         | `{}`                                     | Typing indicator (2s throttle server-side) |
+| `message_edit`   | `{ messageId, content }`                 | Edit own message                           |
+| `message_delete` | `{ messageId }`                          | Delete own message                         |
+| `sync`           | `{ lastSequence }`                       | Request missed messages                    |
+| `history`        | `{ before?: messageId, limit?: number }` | Load older messages (max 100)              |
 
 ### 8c. Server → Client Events
 
-| Event | Payload |
-|-------|---------|
-| `message_new` | `{ id, dmId, authorId, authorType:"USER", authorName, content, type:"STANDARD", sequence, createdAt, reactions:[] }` |
-| `typing` | `{ userId, username, displayName }` |
-| `message_edited` | `{ messageId, content, editedAt }` |
-| `message_deleted` | `{ messageId, deletedBy }` |
-| `reaction_update` | `{ messageId, reactions: [{emoji, count, userIds}] }` — DM reaction added/removed (TASK-0030) |
-| `sync_messages` | `{ messages: MessagePayload[] }` |
-| `presence_state` | Phoenix Presence state map |
+| Event             | Payload                                                                                                              |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `message_new`     | `{ id, dmId, authorId, authorType:"USER", authorName, content, type:"STANDARD", sequence, createdAt, reactions:[] }` |
+| `typing`          | `{ userId, username, displayName }`                                                                                  |
+| `message_edited`  | `{ messageId, content, editedAt }`                                                                                   |
+| `message_deleted` | `{ messageId, deletedBy }`                                                                                           |
+| `reaction_update` | `{ messageId, reactions: [{emoji, count, userIds}] }` — DM reaction added/removed (TASK-0030)                        |
+| `sync_messages`   | `{ messages: MessagePayload[] }`                                                                                     |
+| `presence_state`  | Phoenix Presence state map                                                                                           |
 
 ### 8d. DM Internal APIs (Gateway → Web)
 
@@ -1622,8 +1669,8 @@ Broadcasts `reaction_update` to `dm:{dmId}`.
 
 ### 8f. Redis Keys
 
-| Key | Type | Purpose |
-|-----|------|---------|
+| Key                  | Type         | Purpose                         |
+| -------------------- | ------------ | ------------------------------- |
 | `hive:dm:{dmId}:seq` | INCR counter | Message sequence per DM channel |
 
 ---
@@ -1634,15 +1681,15 @@ Multi-agent collaboration modes with human-defined rules, enforced by the Go orc
 
 ### 9a. Swarm Modes
 
-| Mode | Description |
-|------|-------------|
-| `HUMAN_IN_THE_LOOP` | Default. Agents respond only when mentioned/triggered. No charter enforcement. |
-| `LEAD_AGENT` | First agent in order leads. Others assist when asked. |
-| `ROUND_ROBIN` | Agents take turns in defined order. Go rejects out-of-turn requests. |
-| `STRUCTURED_DEBATE` | Agents present opposing viewpoints. |
-| `CODE_REVIEW_SPRINT` | Sequential code review pattern. Go enforces turn order. |
-| `FREEFORM` | Any agent can respond anytime. |
-| `CUSTOM` | User-defined rules via charter text. |
+| Mode                 | Description                                                                    |
+| -------------------- | ------------------------------------------------------------------------------ |
+| `HUMAN_IN_THE_LOOP`  | Default. Agents respond only when mentioned/triggered. No charter enforcement. |
+| `LEAD_AGENT`         | First agent in order leads. Others assist when asked.                          |
+| `ROUND_ROBIN`        | Agents take turns in defined order. Go rejects out-of-turn requests.           |
+| `STRUCTURED_DEBATE`  | Agents present opposing viewpoints.                                            |
+| `CODE_REVIEW_SPRINT` | Sequential code review pattern. Go enforces turn order.                        |
+| `FREEFORM`           | Any agent can respond anytime.                                                 |
+| `CUSTOM`             | User-defined rules via charter text.                                           |
 
 ### 9b. Charter Session Lifecycle
 
@@ -1661,6 +1708,7 @@ INACTIVE → [start] → ACTIVE → [pause] → PAUSED → [resume] → ACTIVE
 **PATCH** `/api/servers/{serverId}/channels/{channelId}`
 
 Extended with charter fields:
+
 - `swarmMode` — enum string (see 9a)
 - `charterGoal` — text (nullable)
 - `charterRules` — text (nullable)
@@ -1672,6 +1720,7 @@ Requires `MANAGE_CHANNELS` permission.
 **POST** `/api/servers/{serverId}/channels/{channelId}/charter`
 
 Charter session control:
+
 - Body: `{ action: "start" | "pause" | "resume" | "end" }`
 - State machine validation (see 9b)
 - Requires `MANAGE_CHANNELS` permission
@@ -1679,6 +1728,7 @@ Charter session control:
 ### 9d. Internal Charter APIs
 
 **GET** `/api/internal/channels/{channelId}` — Extended response:
+
 ```json
 {
   "channelId": "...",
@@ -1695,11 +1745,13 @@ Charter session control:
 ```
 
 **POST** `/api/internal/channels/{channelId}/charter-turn` — Turn increment:
+
 - Atomically increments `charterCurrentTurn`
 - Auto-completes if `maxTurns > 0 && currentTurn >= maxTurns`
 - Response: `{ currentTurn, maxTurns, completed }`
 
 **POST** `/api/internal/channels/{channelId}/charter-control` — Internal charter control:
+
 - Body: `{ action, serverId }`
 - Used by Gateway for WebSocket-initiated charter actions
 
@@ -1707,25 +1759,26 @@ Charter session control:
 
 **Client → Server:**
 
-| Event | Payload | Notes |
-|-------|---------|-------|
+| Event             | Payload                        | Notes                           |
+| ----------------- | ------------------------------ | ------------------------------- |
 | `charter_control` | `{ action: "pause" \| "end" }` | User pauses/ends active charter |
 
 **Server → Client:**
 
-| Event | Payload | Notes |
-|-------|---------|-------|
+| Event            | Payload                                                   | Notes                |
+| ---------------- | --------------------------------------------------------- | -------------------- |
 | `charter_status` | `{ channelId, currentTurn, maxTurns, status, timestamp }` | Charter state change |
 
 ### 9f. Redis Keys
 
-| Key | Type | Purpose |
-|-----|------|---------|
+| Key                                      | Type    | Purpose                            |
+| ---------------------------------------- | ------- | ---------------------------------- |
 | `hive:stream:charter_status:{channelId}` | PUB/SUB | Charter status updates for live UI |
 
 ### 9g. Go Proxy Charter Enforcement
 
 After loading bot config, the Go proxy:
+
 1. Fetches charter config via `GET /api/internal/channels/{channelId}`
 2. If charter is active and mode != `HUMAN_IN_THE_LOOP`:
    - Checks max turns (rejects if exceeded)
@@ -1738,25 +1791,25 @@ After loading bot config, the Go proxy:
 
 ## Changelog
 
-| Date | Version | Change |
-| --- | --- | --- |
-| 2026-02-23 | v1 | Initial protocol definition |
-| 2026-02-28 | v1.1 | Fix finalization endpoint (POST → PUT), add GET single message, add content length constraint, document StreamWatchdog endpoint |
-| 2026-02-28 | v1.2 | Add §4b Message Delivery Semantics (broadcast-first pattern, DEC-0028), update Invariant 1 for concurrent persist |
-| 2026-02-28 | v1.3 | Add stream_thinking event, StreamThinkingPayload, hive:stream:thinking Redis channel (TASK-0011, DEC-0037) |
-| 2026-03-01 | v1.4 | Add GET /api/internal/channels/{id}/bots multi-bot endpoint (TASK-0012, DEC-0038) |
-| 2026-03-01 | v1.5 | Add message_edit/message_delete client events, message_edited/message_deleted broadcasts, PATCH/DELETE internal endpoints, editedAt in MessagePayload (TASK-0014) |
-| 2026-03-01 | v1.6 | Add POST mark-as-read + GET unread state session endpoints, ChannelReadState model, mentionCount increment on message persist (TASK-0015, TASK-0016) |
-| 2026-03-01 | v1.7 | Extend StreamThinkingPayload with timestamp, configurable thinkingSteps per bot, thinkingTimeline persistence in messages, timeline in stream_complete payload (TASK-0011) |
-| 2026-03-01 | v1.8 | Add agent self-registration API (POST/GET/PATCH/DELETE /api/v1/agents), dual WebSocket auth (JWT + API key), GET /api/internal/agents/verify, agent channel authorization (DEC-0040) |
-| 2026-03-01 | v1.9 | Add agent-originated streaming events (stream_start/token/complete/error/thinking as client events for BOT connections), Python SDK (tavok-sdk v0.1.0) |
-| 2026-03-01 | v2.0 | Add typed messages (TOOL_CALL, TOOL_RESULT, CODE_BLOCK, ARTIFACT, STATUS), metadata field on Message, typed_message channel event, metadata in stream_complete (TASK-0039, DEC-0042) |
-| 2026-03-01 | v3.0 | Add §7 Agent Connectivity — 6 connection methods (Inbound Webhook, HTTP Webhook, REST Polling, SSE, OpenAI-Compatible), Gateway Broadcast Controller, adapter layer architecture (DEC-0044 through DEC-0046) |
-| 2026-03-01 | v3.1 | Add MCP-compatible tool interface — stream_tool_call/stream_tool_result events, tool execution loop in Go proxy, enabledTools on Bot, built-in current_time and web_search tools (TASK-0018, DEC-0048) |
-| 2026-03-01 | v3.2 | Add §8 Direct Messages — dm:{dmChannelId} topic, DmChannel module, internal DM APIs, client DM APIs, separate Prisma models (DirectMessageChannel, DmParticipant, DirectMessage), frontend DM hooks and components (TASK-0019, DEC-0049) |
-| 2026-03-01 | v3.3 | Add §9 Channel Charter / Swarm Modes — 7 swarm modes, charter session lifecycle, Go-enforced turn order, charter injection into system prompt, charter_status WebSocket events, frontend swarm settings + live header (TASK-0020, DEC-0050) |
-| 2026-03-02 | v3.4 | Add stream_checkpoint event, StreamCheckpointPayload, hive:stream:checkpoint Redis channel, tokenHistory + checkpoints on MessagePayload, POST /api/internal/stream/resume endpoint (TASK-0021, DEC-0053) |
-| 2026-03-02 | v3.5 | Add reaction_update event for room and DM channels, ReactionUpdatePayload schema, DM reaction CRUD endpoints (GET/POST/DELETE /api/dms/{dmId}/messages/{messageId}/reactions), DmReaction model (TASK-0030) |
-| 2026-03-08 | v3.6 | Add Bootstrap API (POST /api/v1/bootstrap) — first-run setup with admin token auth, creates admin user + server + channel with agent registration enabled (DEC-0051) |
-| 2026-03-09 | v3.7 | Add GET /api/v1/agents/{id}/channels/{channelId}/messages — agent channel history with cursor pagination (before ULID, after_sequence) |
-| 2026-03-09 | v3.8 | Add GET /api/v1/agents/{id}/server — agent server/channel/agent discovery endpoint. Add topicPattern, dmTopicPattern, serverInfoUrl to registration response. CLI init now shows topic pattern and channel discovery URL. |
+| Date       | Version | Change                                                                                                                                                                                                                                      |
+| ---------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-02-23 | v1      | Initial protocol definition                                                                                                                                                                                                                 |
+| 2026-02-28 | v1.1    | Fix finalization endpoint (POST → PUT), add GET single message, add content length constraint, document StreamWatchdog endpoint                                                                                                             |
+| 2026-02-28 | v1.2    | Add §4b Message Delivery Semantics (broadcast-first pattern, DEC-0028), update Invariant 1 for concurrent persist                                                                                                                           |
+| 2026-02-28 | v1.3    | Add stream_thinking event, StreamThinkingPayload, hive:stream:thinking Redis channel (TASK-0011, DEC-0037)                                                                                                                                  |
+| 2026-03-01 | v1.4    | Add GET /api/internal/channels/{id}/bots multi-bot endpoint (TASK-0012, DEC-0038)                                                                                                                                                           |
+| 2026-03-01 | v1.5    | Add message_edit/message_delete client events, message_edited/message_deleted broadcasts, PATCH/DELETE internal endpoints, editedAt in MessagePayload (TASK-0014)                                                                           |
+| 2026-03-01 | v1.6    | Add POST mark-as-read + GET unread state session endpoints, ChannelReadState model, mentionCount increment on message persist (TASK-0015, TASK-0016)                                                                                        |
+| 2026-03-01 | v1.7    | Extend StreamThinkingPayload with timestamp, configurable thinkingSteps per bot, thinkingTimeline persistence in messages, timeline in stream_complete payload (TASK-0011)                                                                  |
+| 2026-03-01 | v1.8    | Add agent self-registration API (POST/GET/PATCH/DELETE /api/v1/agents), dual WebSocket auth (JWT + API key), GET /api/internal/agents/verify, agent channel authorization (DEC-0040)                                                        |
+| 2026-03-01 | v1.9    | Add agent-originated streaming events (stream_start/token/complete/error/thinking as client events for BOT connections), Python SDK (tavok-sdk v0.1.0)                                                                                      |
+| 2026-03-01 | v2.0    | Add typed messages (TOOL_CALL, TOOL_RESULT, CODE_BLOCK, ARTIFACT, STATUS), metadata field on Message, typed_message channel event, metadata in stream_complete (TASK-0039, DEC-0042)                                                        |
+| 2026-03-01 | v3.0    | Add §7 Agent Connectivity — 6 connection methods (Inbound Webhook, HTTP Webhook, REST Polling, SSE, OpenAI-Compatible), Gateway Broadcast Controller, adapter layer architecture (DEC-0044 through DEC-0046)                                |
+| 2026-03-01 | v3.1    | Add MCP-compatible tool interface — stream_tool_call/stream_tool_result events, tool execution loop in Go proxy, enabledTools on Bot, built-in current_time and web_search tools (TASK-0018, DEC-0048)                                      |
+| 2026-03-01 | v3.2    | Add §8 Direct Messages — dm:{dmChannelId} topic, DmChannel module, internal DM APIs, client DM APIs, separate Prisma models (DirectMessageChannel, DmParticipant, DirectMessage), frontend DM hooks and components (TASK-0019, DEC-0049)    |
+| 2026-03-01 | v3.3    | Add §9 Channel Charter / Swarm Modes — 7 swarm modes, charter session lifecycle, Go-enforced turn order, charter injection into system prompt, charter_status WebSocket events, frontend swarm settings + live header (TASK-0020, DEC-0050) |
+| 2026-03-02 | v3.4    | Add stream_checkpoint event, StreamCheckpointPayload, hive:stream:checkpoint Redis channel, tokenHistory + checkpoints on MessagePayload, POST /api/internal/stream/resume endpoint (TASK-0021, DEC-0053)                                   |
+| 2026-03-02 | v3.5    | Add reaction_update event for room and DM channels, ReactionUpdatePayload schema, DM reaction CRUD endpoints (GET/POST/DELETE /api/dms/{dmId}/messages/{messageId}/reactions), DmReaction model (TASK-0030)                                 |
+| 2026-03-08 | v3.6    | Add Bootstrap API (POST /api/v1/bootstrap) — first-run setup with admin token auth, creates admin user + server + channel with agent registration enabled (DEC-0051)                                                                        |
+| 2026-03-09 | v3.7    | Add GET /api/v1/agents/{id}/channels/{channelId}/messages — agent channel history with cursor pagination (before ULID, after_sequence)                                                                                                      |
+| 2026-03-09 | v3.8    | Add GET /api/v1/agents/{id}/server — agent server/channel/agent discovery endpoint. Add topicPattern, dmTopicPattern, serverInfoUrl to registration response. CLI init now shows topic pattern and channel discovery URL.                   |

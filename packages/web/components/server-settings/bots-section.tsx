@@ -2,14 +2,24 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
-import { Bot, CheckCircle, XCircle, Clock, Trash2 } from "lucide-react";
+import {
+  Bot,
+  CheckCircle,
+  XCircle,
+  Trash2,
+  Wifi,
+  Globe,
+  Zap,
+} from "lucide-react";
 
 interface BotData {
   id: string;
   name: string;
   avatarUrl: string | null;
-  status: string;
-  type: string;
+  isActive: boolean;
+  triggerMode: string;
+  connectionMethod: string | null; // null = BYOK
+  capabilities: string[] | null;
   createdAt: string;
 }
 
@@ -17,28 +27,36 @@ interface BotsSectionProps {
   serverId: string;
 }
 
-function statusBadge(status: string) {
-  switch (status) {
-    case "active":
-      return (
-        <span className="inline-flex items-center gap-1 text-xs text-status-success">
-          <CheckCircle className="h-3 w-3" /> Active
-        </span>
-      );
-    case "pending_approval":
-      return (
-        <span className="inline-flex items-center gap-1 text-xs text-status-warning">
-          <Clock className="h-3 w-3" /> Pending
-        </span>
-      );
-    case "inactive":
-      return (
-        <span className="inline-flex items-center gap-1 text-xs text-text-muted">
-          <XCircle className="h-3 w-3" /> Inactive
-        </span>
-      );
+function connectionLabel(method: string | null): string {
+  if (!method) return "BYOK";
+  switch (method) {
+    case "WEBSOCKET":
+      return "WebSocket";
+    case "WEBHOOK":
+      return "Webhook";
+    case "INBOUND_WEBHOOK":
+      return "Inbound Webhook";
+    case "REST_POLL":
+      return "REST Poll";
+    case "SSE":
+      return "SSE";
+    case "OPENAI_COMPAT":
+      return "OpenAI Compatible";
     default:
-      return <span className="text-xs text-text-muted">{status}</span>;
+      return method;
+  }
+}
+
+function ConnectionIcon({ method }: { method: string | null }) {
+  if (!method) return <Globe className="h-3 w-3" />;
+  switch (method) {
+    case "WEBSOCKET":
+      return <Wifi className="h-3 w-3" />;
+    case "WEBHOOK":
+    case "INBOUND_WEBHOOK":
+      return <Zap className="h-3 w-3" />;
+    default:
+      return <Globe className="h-3 w-3" />;
   }
 }
 
@@ -62,7 +80,7 @@ export function BotsSection({ serverId }: BotsSectionProps) {
         );
       }
     } catch {
-      setError("Failed to load bots");
+      setError("Failed to load agents");
     } finally {
       setLoading(false);
     }
@@ -72,33 +90,18 @@ export function BotsSection({ serverId }: BotsSectionProps) {
     fetchBots();
   }, [fetchBots]);
 
-  async function handleApprove(botId: string) {
+  async function handleToggleActive(botId: string, currentlyActive: boolean) {
     setError("");
     try {
-      const res = await fetch(
-        `/api/servers/${serverId}/bots/${botId}/approve`,
-        { method: "POST" },
-      );
-      if (res.ok) await fetchBots();
-      else {
-        const data = await res.json().catch(() => ({}));
-        setError(data.error || "Failed to approve bot");
-      }
-    } catch {
-      setError("Something went wrong");
-    }
-  }
-
-  async function handleReject(botId: string) {
-    setError("");
-    try {
-      const res = await fetch(`/api/servers/${serverId}/bots/${botId}/reject`, {
-        method: "POST",
+      const res = await fetch(`/api/servers/${serverId}/bots/${botId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isActive: !currentlyActive }),
       });
       if (res.ok) await fetchBots();
       else {
         const data = await res.json().catch(() => ({}));
-        setError(data.error || "Failed to reject bot");
+        setError(data.error || "Failed to update agent");
       }
     } catch {
       setError("Something went wrong");
@@ -106,7 +109,7 @@ export function BotsSection({ serverId }: BotsSectionProps) {
   }
 
   async function handleDelete(botId: string) {
-    if (!window.confirm("Delete this bot?")) return;
+    if (!window.confirm("Delete this agent? This cannot be undone.")) return;
     setError("");
     try {
       const res = await fetch(`/api/servers/${serverId}/bots/${botId}`, {
@@ -115,7 +118,7 @@ export function BotsSection({ serverId }: BotsSectionProps) {
       if (res.ok) await fetchBots();
       else {
         const data = await res.json().catch(() => ({}));
-        setError(data.error || "Failed to delete bot");
+        setError(data.error || "Failed to delete agent");
       }
     } catch {
       setError("Something went wrong");
@@ -137,14 +140,26 @@ export function BotsSection({ serverId }: BotsSectionProps) {
       )}
 
       <p className="text-xs text-text-muted">
-        Manage agents and bots in this server. To add new agents, use the Agents
-        panel in the channel view.
+        Manage agents in this server. Add new agents via the CLI (
+        <code className="rounded bg-background-tertiary px-1 py-0.5 text-[11px]">
+          tavok init
+        </code>
+        ) or the Agents panel in the channel view.
       </p>
 
       {bots.length === 0 ? (
         <div className="py-8 text-center">
-          <Bot className="mx-auto h-8 w-8 text-text-dim mb-2" />
-          <p className="text-sm text-text-muted">No bots in this server yet.</p>
+          <Bot className="mx-auto mb-2 h-8 w-8 text-text-dim" />
+          <p className="text-sm text-text-muted">
+            No agents in this server yet.
+          </p>
+          <p className="mt-1 text-xs text-text-dim">
+            Use{" "}
+            <code className="rounded bg-background-tertiary px-1 py-0.5">
+              tavok init
+            </code>{" "}
+            to add your first agent.
+          </p>
         </div>
       ) : (
         <div className="space-y-1">
@@ -154,8 +169,8 @@ export function BotsSection({ serverId }: BotsSectionProps) {
               className="rounded-lg bg-background-secondary px-3 py-2.5"
             >
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent-purple/20 text-accent-purple text-sm font-bold">
+                <div className="flex min-w-0 items-center gap-3">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent-purple/20 text-sm font-bold text-accent-purple">
                     <Bot className="h-4 w-4" />
                   </div>
                   <div className="min-w-0">
@@ -163,38 +178,45 @@ export function BotsSection({ serverId }: BotsSectionProps) {
                       <span className="truncate text-sm font-medium text-text-primary">
                         {bot.name}
                       </span>
-                      {statusBadge(bot.status)}
+                      {bot.isActive ? (
+                        <span className="inline-flex items-center gap-1 text-xs text-status-success">
+                          <CheckCircle className="h-3 w-3" /> Active
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-xs text-text-muted">
+                          <XCircle className="h-3 w-3" /> Inactive
+                        </span>
+                      )}
                     </div>
-                    <p className="text-xs text-text-muted">
-                      {bot.type} · Added{" "}
-                      {new Date(bot.createdAt).toLocaleDateString()}
-                    </p>
+                    <div className="flex items-center gap-1.5 text-xs text-text-muted">
+                      <ConnectionIcon method={bot.connectionMethod} />
+                      <span>{connectionLabel(bot.connectionMethod)}</span>
+                      <span className="text-text-dim">·</span>
+                      <span className="capitalize">
+                        {bot.triggerMode?.toLowerCase() || "mention"}
+                      </span>
+                      <span className="text-text-dim">·</span>
+                      <span>
+                        {new Date(bot.createdAt).toLocaleDateString()}
+                      </span>
+                    </div>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-1 shrink-0 ml-2">
-                  {bot.status === "pending_approval" && (
-                    <>
-                      <Button
-                        variant="ghost"
-                        onClick={() => handleApprove(bot.id)}
-                        className="text-xs text-status-success"
-                      >
-                        Approve
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        onClick={() => handleReject(bot.id)}
-                        className="text-xs text-status-error"
-                      >
-                        Reject
-                      </Button>
-                    </>
-                  )}
+                <div className="ml-2 flex shrink-0 items-center gap-1">
+                  <Button
+                    variant="ghost"
+                    onClick={() => handleToggleActive(bot.id, bot.isActive)}
+                    className={`text-xs ${
+                      bot.isActive ? "text-text-muted" : "text-status-success"
+                    }`}
+                  >
+                    {bot.isActive ? "Disable" : "Enable"}
+                  </Button>
                   <button
                     onClick={() => handleDelete(bot.id)}
-                    className="rounded p-1.5 text-text-muted hover:text-status-error hover:bg-status-error/10 transition"
-                    title="Delete bot"
+                    className="rounded p-1.5 text-text-muted transition hover:bg-status-error/10 hover:text-status-error"
+                    title="Delete agent"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>

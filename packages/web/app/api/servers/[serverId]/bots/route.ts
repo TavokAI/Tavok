@@ -161,9 +161,10 @@ export async function POST(
   // Encrypt the API key
   const apiKeyEncrypted = encrypt(apiKey);
 
+  const botId = ulid();
   const bot = await prisma.bot.create({
     data: {
-      id: ulid(),
+      id: botId,
       name,
       serverId,
       llmProvider,
@@ -178,6 +179,21 @@ export async function POST(
       thinkingSteps: thinkingSteps ? JSON.stringify(thinkingSteps) : undefined,
     },
   });
+
+  // Auto-assign BYOK bot to all channels in the server so Gateway can trigger it
+  const channels = await prisma.channel.findMany({
+    where: { serverId },
+    select: { id: true },
+  });
+  if (channels.length > 0) {
+    await prisma.channelBot.createMany({
+      data: channels.map((ch) => ({
+        id: ulid(),
+        channelId: ch.id,
+        botId: bot.id,
+      })),
+    });
+  }
 
   return NextResponse.json(
     {

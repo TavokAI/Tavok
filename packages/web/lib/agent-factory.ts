@@ -98,6 +98,22 @@ export async function createAgent(
       },
     });
 
+    // Auto-assign agent to all channels in the server so Gateway can trigger it
+    const channels = await tx.channel.findMany({
+      where: { serverId: opts.serverId },
+      select: { id: true },
+    });
+
+    if (channels.length > 0) {
+      await tx.channelBot.createMany({
+        data: channels.map((ch) => ({
+          id: ulid(),
+          channelId: ch.id,
+          botId: bot.id,
+        })),
+      });
+    }
+
     return { bot };
   });
 

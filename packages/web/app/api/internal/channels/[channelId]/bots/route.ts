@@ -87,6 +87,10 @@ export async function GET(
     });
 
     if (!channel || !channel.defaultBot || !channel.defaultBot.isActive) {
+      // BUG-008: Log when no bots found — helps diagnose BYOK trigger failures
+      console.info(
+        `[Internal] No active bots for channel ${channelId} (no ChannelBot records, no active defaultBot)`,
+      );
       return NextResponse.json({ bots: [] });
     }
 

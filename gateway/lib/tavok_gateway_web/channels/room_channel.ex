@@ -233,6 +233,8 @@ defmodule TavokGatewayWeb.RoomChannel do
           # No bots in ChannelBot table — fall back to single defaultBot (backward compat)
           case ConfigCache.get_channel_bot(channel_id) do
             {:ok, nil} ->
+              # BUG-008: Log when no bot is configured — helps diagnose BYOK trigger failures
+              Logger.debug("[TriggerDecision] channel=#{channel_id} no defaultBot configured — no trigger")
               :noop
 
             {:ok, bot_config} ->
@@ -285,59 +287,67 @@ defmodule TavokGatewayWeb.RoomChannel do
 
           :ok ->
             user_id = socket.assigns.user_id
-            display_name = socket.assigns.display_name
 
-            # 1. Generate ULID for the message
-            message_id = Ulid.generate()
+            # 0b. Per-user rate limit check (BUG-005)
+            case RateLimiter.check_user_rate(channel_id, user_id) do
+              {:error, :rate_limited} ->
+                {:reply, {:error, %{reason: "rate_limited"}}, socket}
 
-            # 2. Get next sequence number with Redis-backed monotonic recovery
-            case next_sequence(channel_id) do
-              {:ok, sequence} ->
-                seq_str = Integer.to_string(sequence)
+              :ok ->
+                display_name = socket.assigns.display_name
 
-                # 3. Broadcast immediately — payload built from in-memory data only
-                message_payload = %{
-                  id: message_id,
-                  channelId: channel_id,
-                  authorId: user_id,
-                  authorType: "USER",
-                  authorName: display_name,
-                  authorAvatarUrl: nil,
-                  content: content,
-                  type: "STANDARD",
-                  streamingStatus: nil,
-                  sequence: seq_str,
-                  createdAt: DateTime.utc_now() |> DateTime.to_iso8601()
-                }
+                # 1. Generate ULID for the message
+                message_id = Ulid.generate()
 
-                Broadcast.broadcast_pre_serialized!(socket, "message_new", message_payload)
+                # 2. Get next sequence number with Redis-backed monotonic recovery
+                case next_sequence(channel_id) do
+                  {:ok, sequence} ->
+                    seq_str = Integer.to_string(sequence)
 
-                # 3b. Buffer for reconnection sync gap (DEC-0051)
-                MessageBuffer.buffer_message(channel_id, message_payload)
+                    # 3. Broadcast immediately — payload built from in-memory data only
+                    message_payload = %{
+                      id: message_id,
+                      channelId: channel_id,
+                      authorId: user_id,
+                      authorType: "USER",
+                      authorName: display_name,
+                      authorAvatarUrl: nil,
+                      content: content,
+                      type: "STANDARD",
+                      streamingStatus: nil,
+                      sequence: seq_str,
+                      createdAt: DateTime.utc_now() |> DateTime.to_iso8601()
+                    }
 
-                # 4. Check for bot trigger (async — don't delay the reply)
-                send(self(), {:check_bot_trigger, message_id, content})
+                    Broadcast.broadcast_pre_serialized!(socket, "message_new", message_payload)
 
-                # 5. Persist in background — never blocks the channel process
-                persist_body = %{
-                  id: message_id,
-                  channelId: channel_id,
-                  authorId: user_id,
-                  authorType: "USER",
-                  content: content,
-                  type: "STANDARD",
-                  streamingStatus: nil,
-                  sequence: seq_str
-                }
+                    # 3b. Buffer for reconnection sync gap (DEC-0051)
+                    MessageBuffer.buffer_message(channel_id, message_payload)
 
-                MessagePersistence.persist_async(persist_body, message_id, channel_id)
+                    # 4. Check for bot trigger (async — don't delay the reply)
+                    send(self(), {:check_bot_trigger, message_id, content})
 
-                # 6. Reply to sender immediately
-                {:reply, {:ok, %{id: message_id, sequence: seq_str}}, socket}
+                    # 5. Persist in background — never blocks the channel process
+                    persist_body = %{
+                      id: message_id,
+                      channelId: channel_id,
+                      authorId: user_id,
+                      authorType: "USER",
+                      content: content,
+                      type: "STANDARD",
+                      streamingStatus: nil,
+                      sequence: seq_str
+                    }
 
-              {:error, reason} ->
-                Logger.error("Redis INCR failed: #{inspect(reason)}")
-                {:reply, {:error, %{reason: "sequence_failed"}}, socket}
+                    MessagePersistence.persist_async(persist_body, message_id, channel_id)
+
+                    # 6. Reply to sender immediately
+                    {:reply, {:ok, %{id: message_id, sequence: seq_str}}, socket}
+
+                  {:error, reason} ->
+                    Logger.error("Redis INCR failed: #{inspect(reason)}")
+                    {:reply, {:error, %{reason: "sequence_failed"}}, socket}
+                end
             end
         end
     end

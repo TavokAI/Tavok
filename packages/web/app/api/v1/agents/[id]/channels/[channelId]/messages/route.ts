@@ -135,7 +135,9 @@ export async function GET(
     }
 
     const payload = messages.map((m) => {
-      let authorName = "Unknown";
+      // BUG-002: Use descriptive fallback instead of "Unknown" for deleted authors
+      let authorName =
+        m.authorType === "BOT" ? "Deleted Agent" : "Deleted User";
       let authorAvatarUrl: string | null = null;
 
       if (m.authorType === "BOT") {

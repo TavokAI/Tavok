@@ -122,6 +122,30 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [userPermissions, setUserPermissions] = useState<bigint>(BigInt(0));
   const [isOwner, setIsOwner] = useState(false);
 
+  // BUG-003: Clear stale localStorage when server ID changes (e.g., after `tavok init`)
+  useEffect(() => {
+    if (!serverId) return;
+
+    try {
+      const storedServerId = localStorage.getItem("tavok-server-id");
+      if (storedServerId && storedServerId !== serverId) {
+        // Server ID changed (re-init happened) — clear stale state
+        const keysToRemove: string[] = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && key.startsWith("tavok-") && key !== "tavok-server-id") {
+            keysToRemove.push(key);
+          }
+        }
+        keysToRemove.forEach((key) => localStorage.removeItem(key));
+        console.info("[Tavok] Server ID changed — cleared stale localStorage");
+      }
+      localStorage.setItem("tavok-server-id", serverId);
+    } catch {
+      // localStorage may be unavailable (SSR, privacy mode)
+    }
+  }, [serverId]);
+
   const refreshServers = useCallback(async () => {
     try {
       const res = await fetch("/api/servers");

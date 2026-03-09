@@ -139,6 +139,10 @@ export function useChannel(channelId: string | null): UseChannelReturn {
   const loadingHistoryRef = useRef(false);
   const botHintTimerRef = useRef<NodeJS.Timeout | null>(null);
 
+  // BUG-006: Track last token timestamp per streaming message for timeout detection
+  const streamLastTokenRef = useRef<Map<string, number>>(new Map());
+  const streamTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
   // Streaming: accumulate tokens and flush via rAF for smooth 60fps rendering
   const streamBufferRef = useRef<Map<string, string>>(new Map());
   const rafRef = useRef<number | null>(null);
@@ -358,6 +362,9 @@ export function useChannel(channelId: string | null): UseChannelReturn {
           sequence: payload.sequence,
         });
 
+        // BUG-006: Record stream start time for timeout detection
+        streamLastTokenRef.current.set(payload.messageId, Date.now());
+
         const placeholder: MessagePayload = {
           id: payload.messageId,
           channelId: channelId!,
@@ -385,6 +392,9 @@ export function useChannel(channelId: string | null): UseChannelReturn {
           index: number;
         };
 
+        // BUG-006: Update last token timestamp for timeout detection
+        streamLastTokenRef.current.set(payload.messageId, Date.now());
+
         const existing = streamBufferRef.current.get(payload.messageId) || "";
         streamBufferRef.current.set(
           payload.messageId,
@@ -404,6 +414,7 @@ export function useChannel(channelId: string | null): UseChannelReturn {
         };
 
         pendingStreamMetaRef.current.delete(payload.messageId);
+        streamLastTokenRef.current.delete(payload.messageId); // BUG-006
 
         setMessages((prev) =>
           prev.map((m) =>
@@ -434,6 +445,8 @@ export function useChannel(channelId: string | null): UseChannelReturn {
           error: string;
           partialContent: string | null;
         };
+
+        streamLastTokenRef.current.delete(payload.messageId); // BUG-006
 
         setMessages((prev) => {
           const hasMatch = prev.some((m) => m.id === payload.messageId);
@@ -721,6 +734,36 @@ export function useChannel(channelId: string | null): UseChannelReturn {
 
     joinChannel();
 
+    // BUG-006: Periodic check for stale ACTIVE streams (lost stream_complete events)
+    const STREAM_TIMEOUT_MS = 60_000; // 60s — well above Go Proxy's 30s per-token timeout
+    const streamTimeoutInterval = setInterval(() => {
+      if (!mounted) return;
+      const now = Date.now();
+      const expired: string[] = [];
+
+      streamLastTokenRef.current.forEach((lastToken, messageId) => {
+        if (now - lastToken > STREAM_TIMEOUT_MS) {
+          expired.push(messageId);
+        }
+      });
+
+      if (expired.length > 0) {
+        expired.forEach((id) => streamLastTokenRef.current.delete(id));
+        setMessages((prev) =>
+          prev.map((m) =>
+            expired.includes(m.id) && m.streamingStatus === "ACTIVE"
+              ? {
+                  ...m,
+                  streamingStatus: "ERROR",
+                  content: m.content || "[Stream timed out]",
+                }
+              : m,
+          ),
+        );
+      }
+    }, 10_000); // Check every 10 seconds
+    streamTimeoutRef.current = streamTimeoutInterval;
+
     const typingTimers = typingTimersRef.current;
     const streamBuffer = streamBufferRef.current;
 
@@ -735,6 +778,9 @@ export function useChannel(channelId: string | null): UseChannelReturn {
       typingTimers.clear();
       // Clear stream buffer and cancel rAF
       streamBuffer.clear();
+      // BUG-006: Clear stream timeout interval
+      clearInterval(streamTimeoutInterval);
+      streamLastTokenRef.current.clear();
       if (botHintTimerRef.current) {
         clearTimeout(botHintTimerRef.current);
         botHintTimerRef.current = null;

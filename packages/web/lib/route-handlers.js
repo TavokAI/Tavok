@@ -214,7 +214,8 @@ export function createInternalMessagesPostHandler({ prismaClient }) {
         }
       }
 
-      let authorName = "Unknown";
+      // BUG-002: Use descriptive fallback instead of "Unknown" for deleted authors
+      let authorName = authorType === "BOT" ? "Deleted Agent" : "Deleted User";
       let authorAvatarUrl = null;
 
       if (authorType === "USER") {
