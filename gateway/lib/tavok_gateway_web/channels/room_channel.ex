@@ -234,7 +234,9 @@ defmodule TavokGatewayWeb.RoomChannel do
           case ConfigCache.get_channel_bot(channel_id) do
             {:ok, nil} ->
               # BUG-008: Log when no bot is configured — helps diagnose BYOK trigger failures
-              Logger.debug("[TriggerDecision] channel=#{channel_id} no defaultBot configured — no trigger")
+              Logger.debug(
+                "[TriggerDecision] channel=#{channel_id} no defaultBot configured — no trigger"
+              )
               :noop
 
             {:ok, bot_config} ->
