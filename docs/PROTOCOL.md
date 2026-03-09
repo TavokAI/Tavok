@@ -1392,6 +1392,49 @@ Server-Sent Events stream. Auth via `Authorization: Bearer sk-tvk-...` header or
 
 Agent sends responses via REST (POST /api/v1/agents/{id}/messages).
 
+#### GET /api/v1/agents/{id}/channels/{channelId}/messages
+
+Fetch channel message history. Auth: `Authorization: Bearer sk-tvk-...`.
+
+Channel must belong to the agent's server.
+
+**Query params:**
+
+| Param | Type | Default | Description |
+| --- | --- | --- | --- |
+| `limit` | int | 50 | Max messages to return (1–100) |
+| `before` | ULID | — | Cursor: return messages older than this ID |
+| `after_sequence` | int | — | Sync cursor: return messages newer than this sequence |
+
+When `after_sequence` is set, messages are returned in ascending sequence order (oldest first).
+When `before` is set (or neither cursor), messages are returned in chronological order (oldest first within the page), with `hasMore` indicating older messages exist.
+
+**Response:**
+
+```json
+{
+  "messages": [
+    {
+      "id": "01HXY...",
+      "channelId": "01HXY...",
+      "authorId": "01HXY...",
+      "authorType": "USER",
+      "authorName": "alice",
+      "authorAvatarUrl": null,
+      "content": "Hello!",
+      "type": "STANDARD",
+      "streamingStatus": null,
+      "sequence": "1",
+      "createdAt": "2026-03-09T12:00:00.000Z",
+      "editedAt": null,
+      "metadata": null,
+      "reactions": []
+    }
+  ],
+  "hasMore": false
+}
+```
+
 ### 7h. OpenAI-Compatible API
 
 #### POST /api/v1/chat/completions
@@ -1703,3 +1746,4 @@ After loading bot config, the Go proxy:
 | 2026-03-02 | v3.4 | Add stream_checkpoint event, StreamCheckpointPayload, hive:stream:checkpoint Redis channel, tokenHistory + checkpoints on MessagePayload, POST /api/internal/stream/resume endpoint (TASK-0021, DEC-0053) |
 | 2026-03-02 | v3.5 | Add reaction_update event for room and DM channels, ReactionUpdatePayload schema, DM reaction CRUD endpoints (GET/POST/DELETE /api/dms/{dmId}/messages/{messageId}/reactions), DmReaction model (TASK-0030) |
 | 2026-03-08 | v3.6 | Add Bootstrap API (POST /api/v1/bootstrap) — first-run setup with admin token auth, creates admin user + server + channel with agent registration enabled (DEC-0051) |
+| 2026-03-09 | v3.7 | Add GET /api/v1/agents/{id}/channels/{channelId}/messages — agent channel history with cursor pagination (before ULID, after_sequence) |
