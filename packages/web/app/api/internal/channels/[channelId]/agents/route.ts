@@ -73,7 +73,7 @@ export async function GET(
             thinkingSteps: ca.agent.thinkingSteps
               ? JSON.parse(ca.agent.thinkingSteps)
               : [], // TASK-0011
-            connectionMethod: regMap.get(ca.agent.id) || "WEBSOCKET", // DEC-0043
+            connectionMethod: regMap.get(ca.agent.id) || null, // DEC-0043: null = BYOK (no registration)
           };
         });
 
@@ -127,7 +127,7 @@ export async function GET(
           thinkingSteps: agent.thinkingSteps
             ? JSON.parse(agent.thinkingSteps)
             : [], // TASK-0011
-          connectionMethod: agentReg?.connectionMethod || "WEBSOCKET", // DEC-0043
+          connectionMethod: agentReg?.connectionMethod || null, // DEC-0043: null = BYOK (no registration)
         },
       ],
     });

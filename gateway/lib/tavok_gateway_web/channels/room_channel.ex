@@ -965,7 +965,7 @@ defmodule TavokGatewayWeb.RoomChannel do
     trigger_mode = Map.get(agent_config, "triggerMode", "ALWAYS")
     agent_name = Map.get(agent_config, "name", "")
     agent_id = Map.get(agent_config, "id", "")
-    connection_method = Map.get(agent_config, "connectionMethod", "WEBSOCKET")
+    connection_method = Map.get(agent_config, "connectionMethod")
     has_mention = String.contains?(content, "@#{agent_name}")
 
     should_trigger =
