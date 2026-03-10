@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "tavok-sdk"
-version = "0.1.0"
+version = "0.2.0"
 description = "Python SDK for building Tavok agents — AI-native chat with token streaming"
 readme = "README.md"
 license = "AGPL-3.0-only"
@@ -43,9 +43,9 @@ openai = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/tavok-chat/tavok"
-Documentation = "https://github.com/tavok-chat/tavok/tree/main/sdk/python"
-Repository = "https://github.com/tavok-chat/tavok"
+Homepage = "https://github.com/TavokAI/Tavok"
+Documentation = "https://github.com/TavokAI/Tavok/tree/main/sdk/python"
+Repository = "https://github.com/TavokAI/Tavok"
 
 [tool.hatch.build.targets.wheel]
 packages = ["tavok"]
