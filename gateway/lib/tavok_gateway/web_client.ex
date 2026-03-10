@@ -58,9 +58,7 @@ defmodule TavokGateway.WebClient do
         {:ok, nil}
 
       {:ok, %Req.Response{status: status, body: response_body}} ->
-        Logger.error(
-          "get_channel_agent failed: status=#{status} body=#{inspect(response_body)}"
-        )
+        Logger.error("get_channel_agent failed: status=#{status} body=#{inspect(response_body)}")
 
         {:error, {:http_error, status, response_body}}
 
@@ -89,9 +87,7 @@ defmodule TavokGateway.WebClient do
         {:ok, []}
 
       {:ok, %Req.Response{status: status, body: response_body}} ->
-        Logger.error(
-          "get_channel_agents failed: status=#{status} body=#{inspect(response_body)}"
-        )
+        Logger.error("get_channel_agents failed: status=#{status} body=#{inspect(response_body)}")
 
         {:error, {:http_error, status, response_body}}
 
@@ -303,9 +299,7 @@ defmodule TavokGateway.WebClient do
         {:ok, response_body}
 
       {:ok, %Req.Response{status: status, body: response_body}} ->
-        Logger.warning(
-          "delete_message rejected: status=#{status} body=#{inspect(response_body)}"
-        )
+        Logger.warning("delete_message rejected: status=#{status} body=#{inspect(response_body)}")
 
         {:error, {:http_error, status, response_body}}
 
