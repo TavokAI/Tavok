@@ -97,3 +97,37 @@
   2. Call `POST /api/servers/{serverId}/members`.
   3. Membership is created without invite validation.
 - **Notes**: This is legacy MVP behavior used by discover/join flow and is intentionally left in place for v0.
+
+## BREAK-0014
+
+- **Severity**: `HIGH`
+- **Description**: Python SDK (`tavok-sdk`) is not published to PyPI. `pip install tavok-sdk` fails with "no matching distribution found". README documents it as the primary agent development path.
+- **Status**: `KNOWN` (v0.2.5)
+- **Repro steps**:
+  1. Run `pip install tavok-sdk`.
+  2. Observe "ERROR: No matching distribution found for tavok-sdk".
+- **Notes**: SDK source exists at `sdk/python/`. Needs `python -m build` + `twine upload` or a CI publish workflow. README should mark as "coming soon" until published.
+
+## BREAK-0015
+
+- **Severity**: `MEDIUM`
+- **Description**: `tavok init` does not prompt for agent creation. README shows an interactive "Add agents? (y/n)" flow that does not exist in the CLI.
+- **Status**: `KNOWN` (v0.2.5)
+- **Repro steps**:
+  1. Run `npx tavok init`.
+  2. Observe init completes without agent creation prompt.
+  3. No `.tavok-agents.json` file is created.
+- **Notes**: Agents must be registered manually via `curl POST /api/v1/agents/register`. CLI should add an interactive agent creation step, or README should document the manual path.
+
+## BREAK-0016
+
+- **Severity**: `LOW`
+- **Description**: `tavok init` output does not include payload field names or SDK examples. Developers must visit the GitHub repo to learn the wire format.
+- **Status**: `KNOWN` (v0.2.5)
+- **Notes**: Init should print a "Send your first message" example showing `{content: "..."}` field name and V2 wire format `[join_ref, ref, topic, event, payload]`.
+
+## BREAK-0017
+
+- **Severity**: `LOW`
+- **Description**: `npx tavok init` exits with SIGTERM instead of exit code 0. Automation checking exit codes may interpret this as failure.
+- **Status**: `KNOWN` (v0.2.5)

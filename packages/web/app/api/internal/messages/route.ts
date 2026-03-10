@@ -119,10 +119,15 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // BUG-005: Also include USER-typed authorIds in bot lookup — messages
+    // persisted before BUG-003 fix have authorType=USER with a Bot authorId.
     const botAuthorIds = [
       ...new Set(
         messages
-          .filter((m: (typeof messages)[number]) => m.authorType === "BOT")
+          .filter(
+            (m: (typeof messages)[number]) =>
+              m.authorType === "BOT" || m.authorType === "USER",
+          )
           .map((m: (typeof messages)[number]) => m.authorId),
       ),
     ];
@@ -158,7 +163,18 @@ export async function GET(request: NextRequest) {
         if (user) {
           authorName = user.displayName;
           authorAvatarUrl = user.avatarUrl;
+        } else {
+          // BUG-005: Messages persisted with authorType=USER but a Bot authorId
+          // (caused by BUG-003) — fall back to bot lookup so history isn't broken
+          const bot = botMap.get(m.authorId);
+          if (bot) {
+            authorName = bot.name;
+            authorAvatarUrl = bot.avatarUrl;
+          }
         }
+      } else if (m.authorType === "SYSTEM") {
+        authorName = "System";
+        authorAvatarUrl = null;
       }
 
       const reactionMap = new Map<string, string[]>();

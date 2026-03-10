@@ -308,11 +308,13 @@ defmodule TavokGatewayWeb.RoomChannel do
                     seq_str = Integer.to_string(sequence)
 
                     # 3. Broadcast immediately — payload built from in-memory data only
+                    author_type = socket.assigns[:author_type] || "USER"
+
                     message_payload = %{
                       id: message_id,
                       channelId: channel_id,
                       authorId: user_id,
-                      authorType: "USER",
+                      authorType: author_type,
                       authorName: display_name,
                       authorAvatarUrl: nil,
                       content: content,
@@ -335,7 +337,7 @@ defmodule TavokGatewayWeb.RoomChannel do
                       id: message_id,
                       channelId: channel_id,
                       authorId: user_id,
-                      authorType: "USER",
+                      authorType: author_type,
                       content: content,
                       type: "STANDARD",
                       streamingStatus: nil,

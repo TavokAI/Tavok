@@ -8,7 +8,7 @@ import {
   useCallback,
   type ReactNode,
 } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { hasPermission as hasPermissionBit } from "@/lib/permissions";
 import { useUnread } from "@/lib/hooks/use-unread";
 import type { UnreadState } from "@/lib/hooks/use-unread";
@@ -104,6 +104,7 @@ function parsePathIds(pathname: string) {
 
 export function ChatProvider({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const { serverId, channelId } = parsePathIds(pathname);
 
   const [servers, setServers] = useState<ServerData[]>([]);
@@ -398,6 +399,22 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     refreshServers();
   }, [refreshServers]);
+
+  // BUG-001: Redirect to a valid server when the URL contains a stale serverId.
+  // This happens after `tavok init --force` when the browser still has the old
+  // server URL bookmarked or in history. All API calls return 403 because the
+  // admin's Member record points to the new server, not the stale one in the URL.
+  useEffect(() => {
+    if (!serverId || servers.length === 0) return;
+    const isMember = servers.some((s) => s.id === serverId);
+    if (!isMember) {
+      const first = servers[0];
+      console.warn(
+        `[Tavok] Server ${serverId} not found in user's servers — redirecting to ${first.id}`,
+      );
+      router.replace(`/servers/${first.id}`);
+    }
+  }, [serverId, servers, router]);
 
   // TASK-0016: Derive current server's aggregate unread from the channel-level unreadMap
   // (which is already kept fresh by useUnread) instead of double-fetching.
