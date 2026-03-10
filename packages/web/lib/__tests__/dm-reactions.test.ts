@@ -101,9 +101,8 @@ describe("DM reactions — emoji validation", () => {
     expect(json.error).toBe("Invalid emoji");
   });
 
-  it("rejects emoji string longer than 32 characters", async () => {
-    const longEmoji = "a".repeat(33);
-    const res = await POST(makeRequest({ emoji: longEmoji }), routeParams);
+  it("rejects emoji not in allowed set", async () => {
+    const res = await POST(makeRequest({ emoji: "🔥" }), routeParams);
     expect(res.status).toBe(400);
     const json = await res.json();
     expect(json.error).toBe("Invalid emoji");
@@ -115,11 +114,12 @@ describe("DM reactions — emoji validation", () => {
     expect(res.status).toBe(200);
   });
 
-  it("accepts emoji at exactly 32 characters", async () => {
-    const exactEmoji = "a".repeat(32);
+  it("accepts all five allowed emojis", async () => {
     mockPrisma.dmReaction.upsert.mockResolvedValue({});
-    const res = await POST(makeRequest({ emoji: exactEmoji }), routeParams);
-    expect(res.status).toBe(200);
+    for (const emoji of ["👍", "👎", "✅", "❌", "🚀"]) {
+      const res = await POST(makeRequest({ emoji }), routeParams);
+      expect(res.status).toBe(200);
+    }
   });
 
   it("rejects missing emoji field", async () => {
@@ -136,12 +136,8 @@ describe("DM reactions — emoji validation", () => {
     expect(json.error).toBe("Invalid emoji");
   });
 
-  it("DELETE also rejects emoji longer than 32 chars", async () => {
-    const longEmoji = "x".repeat(33);
-    const res = await DELETE(
-      makeDeleteRequest({ emoji: longEmoji }),
-      routeParams,
-    );
+  it("DELETE also rejects emoji not in allowed set", async () => {
+    const res = await DELETE(makeDeleteRequest({ emoji: "🔥" }), routeParams);
     expect(res.status).toBe(400);
     const json = await res.json();
     expect(json.error).toBe("Invalid emoji");
@@ -235,14 +231,8 @@ describe("DM reactions — idempotency", () => {
   it("upsert returns 200 on the second add (not 201)", async () => {
     mockPrisma.dmReaction.upsert.mockResolvedValue({});
 
-    const res1 = await POST(
-      makeRequest({ emoji: "\u{2764}\u{FE0F}" }),
-      routeParams,
-    );
-    const res2 = await POST(
-      makeRequest({ emoji: "\u{2764}\u{FE0F}" }),
-      routeParams,
-    );
+    const res1 = await POST(makeRequest({ emoji: "✅" }), routeParams);
+    const res2 = await POST(makeRequest({ emoji: "✅" }), routeParams);
 
     // Both should succeed with 200
     expect(res1.status).toBe(200);
