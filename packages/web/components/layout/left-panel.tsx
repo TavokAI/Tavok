@@ -31,6 +31,7 @@ export function LeftPanel() {
     isOwner,
     hasPermission,
     refreshServers,
+    unreadMap,
   } = useChatContext();
   const { openPanel, panels, activeStreams } = useWorkspaceContext();
   const [activeTab, setActiveTab] = useState<
@@ -230,6 +231,8 @@ export function LeftPanel() {
                     {channels.map((channel) => {
                       const isOpen = openChannelIds.has(channel.id);
                       const isStreaming = activeStreams.has(channel.id);
+                      const unread = unreadMap?.get(channel.id);
+                      const hasUnread = !isOpen && !!unread?.hasUnread;
                       return (
                         <button
                           key={channel.id}
@@ -247,7 +250,9 @@ export function LeftPanel() {
                           className={`group flex w-full items-center justify-between rounded-2xl border px-3 py-2 text-sm font-medium transition-all ${
                             isOpen
                               ? "border-brand/20 bg-brand/10 text-orange-100 shadow-[0_14px_24px_rgba(255,155,69,0.08)]"
-                              : "border-transparent text-text-secondary hover:border-white/5 hover:bg-background-floating/55 hover:text-text-primary"
+                              : hasUnread
+                                ? "border-transparent text-text-primary hover:border-white/5 hover:bg-background-floating/55"
+                                : "border-transparent text-text-secondary hover:border-white/5 hover:bg-background-floating/55 hover:text-text-primary"
                           }`}
                         >
                           <div className="flex items-center gap-2.5 truncate">
@@ -258,7 +263,7 @@ export function LeftPanel() {
                                   : "text-text-muted group-hover:text-text-primary"
                               }`}
                             />
-                            <span className="truncate">{channel.name}</span>
+                            <span className={`truncate ${hasUnread ? "font-semibold" : ""}`}>{channel.name}</span>
                           </div>
                           {isStreaming && (
                             <span className="relative mr-1 flex h-2.5 w-2.5 shrink-0">
