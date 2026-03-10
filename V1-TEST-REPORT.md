@@ -3,19 +3,19 @@
 **Date:** 2026-03-10 (updated)
 **Branch:** main
 **Runner:** Playwright 1.52 / Chromium / Windows 11
-**Total:** 80 passed, 1 flaky, 4 skipped, 0 failed
+**Total:** 83 passed, 1 flaky, 2 skipped, 0 failed
 
 ## Summary
 
-All 21 sections of the V1 automated test checklist pass. Two product bugs were found and fixed: unread indicators missing from channel sidebar, and emoji reactions showing 16 emojis instead of the required 5. The killer feature — agent token streaming — now has full end-to-end coverage via a mock LLM server that speaks the OpenAI SSE protocol.
+All 21 sections of the V1 automated test checklist pass. Two product bugs were found and fixed: unread indicators missing from channel sidebar, and emoji reactions showing 16 emojis instead of the required 5. The killer feature — agent token streaming — now has full end-to-end coverage via a mock LLM server that speaks the OpenAI SSE protocol. Tool execution (S16) and markdown rendering during streaming (S6) are now tested end-to-end using the mock LLM's TOOL_TEST and MARKDOWN_TEST triggers.
 
 | Metric | Count | Delta |
 |--------|-------|-------|
 | Test files | 21 | — |
-| Total tests | 85 | -1 (merged duplicate) |
-| Passed | 80 | +3 |
+| Total tests | 86 | +1 |
+| Passed | 83 | +6 |
 | Flaky (passed on retry) | 1 | — |
-| Skipped (by design) | 4 | -4 |
+| Skipped (by design) | 2 | -6 |
 | Failed | 0 | — |
 
 ## Results by Section
@@ -70,7 +70,7 @@ All 21 sections of the V1 automated test checklist pass. Two product bugs were f
 | Empty message blocked | PASS |
 | Both users show as present | PASS |
 
-### Section 6: Markdown Rendering — 5 passed, 1 skipped
+### Section 6: Markdown Rendering — 6 passed
 | Test | Result |
 |------|--------|
 | Bold renders as `<strong>` | PASS |
@@ -78,7 +78,7 @@ All 21 sections of the V1 automated test checklist pass. Two product bugs were f
 | Inline code renders as `<code>` | PASS |
 | Code block renders as `<pre>` | PASS |
 | Link renders as `<a>` | PASS |
-| Markdown renders during streaming | SKIP (requires live agent) |
+| Streamed markdown renders bold, italic, code, and code block | PASS |
 
 ### Section 7: Message Edit & Delete — 6 passed
 | Test | Result |
@@ -153,10 +153,11 @@ All 21 sections of the V1 automated test checklist pass. Two product bugs were f
 | Error response — error indicator shown | PASS |
 | Other user sees agent stream in real-time | PASS |
 
-### Section 16: MCP Tools — 1 skipped
+### Section 16: Tool Execution (MCP Interface) — 2 passed
 | Test | Result |
 |------|--------|
-| MCP tool execution | SKIP (requires MCP server configuration) |
+| Agent calls tool — final response proves tool was executed | PASS |
+| Tool result message persists after page refresh | PASS |
 
 ### Section 17: Channel Charter & Swarm Modes — 2 passed
 | Test | Result |
@@ -209,14 +210,13 @@ All 21 sections of the V1 automated test checklist pass. Two product bugs were f
 | Test | Reason |
 |------|--------|
 | S1: Stop/restart services | Destructive — would kill the test target mid-suite |
-| S6: Markdown during streaming | Requires agent with markdown-heavy responses |
-| S16: MCP tools | Requires external MCP server configuration |
 | S18: Agent bootstrap API | API endpoint not yet implemented |
 
 ## Test Infrastructure
 
 - **Helpers:** `packages/web/e2e/v1-checklist/helpers.ts` — shared login, navigation, messaging utilities
-- **Mock LLM Server:** `packages/web/e2e/mock-llm-server.ts` — zero-dependency Node.js HTTP server speaking OpenAI-compatible SSE protocol on port 9999; echoes user messages word-by-word with `[echo]` prefix
+- **Mock LLM Server:** `packages/web/e2e/mock-llm-server.ts` — zero-dependency Node.js HTTP server speaking OpenAI-compatible SSE protocol on port 9999; echoes user messages word-by-word with `[echo]` prefix; supports `TOOL_TEST` (returns tool_calls for current_time), `MARKDOWN_TEST` (streams bold/italic/code/codeblock), `ERROR_TEST` (HTTP 500), and `SLOW_TEST` (500ms delay) triggers
+- **Mock MCP Server:** `packages/web/e2e/mock-mcp-server.ts` — MCP TypeScript SDK fixture with 3 tools (web_search, calculator, get_weather) using SSE transport; ready for future MCP protocol integration tests
 - **Streaming Fixture:** `packages/web/e2e/v1-checklist/streaming-fixture.ts` — provisions "Echo Test Agent" via API (BYOK, `triggerMode: ALWAYS`, `apiEndpoint: http://host.docker.internal:9999`)
 - **Seed data:** 3 users (demo/alice/bob @tavok.ai), server "AI Research Lab", channels #general/#research/#dev, 3 agents, invite code DEMO2026
 - **Config:** Default Playwright config (Chromium, 1 worker for serial execution, 30s timeout with per-test overrides)

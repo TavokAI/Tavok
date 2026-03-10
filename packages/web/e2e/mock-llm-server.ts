@@ -7,8 +7,12 @@
  *
  * Behavior:
  *   - Echoes the last user message word-by-word (100ms delay per token)
- *   - "ERROR_TEST" trigger → HTTP 500
- *   - "SLOW_TEST" trigger  → 500ms delay between tokens
+ *   - "ERROR_TEST"    trigger → HTTP 500
+ *   - "SLOW_TEST"     trigger → 500ms delay between tokens
+ *   - "TOOL_TEST"     trigger → Returns tool_call for current_time, then
+ *                                 final text on the follow-up (with tool result)
+ *   - "MARKDOWN_TEST" trigger → Streams markdown-formatted content
+ *                                 (bold, italic, inline code, code block)
  *
  * Zero dependencies — uses only Node.js built-in `http` module.
  */
@@ -67,6 +71,147 @@ export function startMockLLM(port = 9999): Promise<void> {
                   },
                 }),
               );
+              return;
+            }
+
+            // TOOL_TEST trigger: return a tool_call for current_time
+            // On the second call (with tool result in context), return final text.
+            // Note: The Go proxy sends tool results as role:"user" with
+            // content like "[Tool result for current_time (call ...)]:"
+            if (userContent.includes("TOOL_TEST")) {
+              const hasToolResult = messages.some(
+                (m: { role: string; content: string }) =>
+                  m.role === "tool" ||
+                  (m.content && m.content.includes("[Tool result for")),
+              );
+
+              res.writeHead(200, {
+                "Content-Type": "text/event-stream",
+                "Cache-Control": "no-cache",
+                Connection: "keep-alive",
+              });
+
+              if (!hasToolResult) {
+                // First call: return tool_call for current_time
+                const toolCallChunk = {
+                  id: `chatcmpl-mock-${Date.now()}`,
+                  object: "chat.completion.chunk",
+                  choices: [
+                    {
+                      index: 0,
+                      delta: {
+                        tool_calls: [
+                          {
+                            index: 0,
+                            id: "call_mock_001",
+                            type: "function",
+                            function: {
+                              name: "current_time",
+                              arguments: "",
+                            },
+                          },
+                        ],
+                      },
+                      finish_reason: null,
+                    },
+                  ],
+                };
+                res.write(`data: ${JSON.stringify(toolCallChunk)}\n\n`);
+                await sleep(50);
+
+                // Finish with tool_calls reason
+                const stopChunk = {
+                  id: `chatcmpl-mock-${Date.now()}`,
+                  object: "chat.completion.chunk",
+                  choices: [
+                    { index: 0, delta: {}, finish_reason: "tool_calls" },
+                  ],
+                };
+                res.write(`data: ${JSON.stringify(stopChunk)}\n\n`);
+                res.write("data: [DONE]\n\n");
+                res.end();
+              } else {
+                // Second call: stream final text referencing the tool result
+                const finalTokens = [
+                  "[tool-done] ",
+                  "The ",
+                  "current_time ",
+                  "tool ",
+                  "returned ",
+                  "successfully.",
+                ];
+                for (const token of finalTokens) {
+                  const chunk = {
+                    id: `chatcmpl-mock-${Date.now()}`,
+                    object: "chat.completion.chunk",
+                    choices: [
+                      {
+                        index: 0,
+                        delta: { content: token },
+                        finish_reason: null,
+                      },
+                    ],
+                  };
+                  res.write(`data: ${JSON.stringify(chunk)}\n\n`);
+                  await sleep(50);
+                }
+                const stopChunk = {
+                  id: `chatcmpl-mock-${Date.now()}`,
+                  object: "chat.completion.chunk",
+                  choices: [{ index: 0, delta: {}, finish_reason: "stop" }],
+                };
+                res.write(`data: ${JSON.stringify(stopChunk)}\n\n`);
+                res.write("data: [DONE]\n\n");
+                res.end();
+              }
+              return;
+            }
+
+            // MARKDOWN_TEST trigger: stream markdown-formatted content
+            if (userContent.includes("MARKDOWN_TEST")) {
+              res.writeHead(200, {
+                "Content-Type": "text/event-stream",
+                "Cache-Control": "no-cache",
+                Connection: "keep-alive",
+              });
+
+              const mdTokens = [
+                "Here is ",
+                "**bold text** ",
+                "and ",
+                "*italic text* ",
+                "and ",
+                "`inline_code`",
+                " in one response.\n\n",
+                "```js\n",
+                "const x = 42;\n",
+                "```",
+              ];
+
+              for (const token of mdTokens) {
+                const chunk = {
+                  id: `chatcmpl-mock-${Date.now()}`,
+                  object: "chat.completion.chunk",
+                  choices: [
+                    {
+                      index: 0,
+                      delta: { content: token },
+                      finish_reason: null,
+                    },
+                  ],
+                };
+                res.write(`data: ${JSON.stringify(chunk)}\n\n`);
+                await sleep(80);
+              }
+
+              const stopChunk = {
+                id: `chatcmpl-mock-${Date.now()}`,
+                object: "chat.completion.chunk",
+                choices: [{ index: 0, delta: {}, finish_reason: "stop" }],
+              };
+              res.write(`data: ${JSON.stringify(stopChunk)}\n\n`);
+              res.write("data: [DONE]\n\n");
+              res.end();
               return;
             }
 
