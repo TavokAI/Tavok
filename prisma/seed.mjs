@@ -1,8 +1,8 @@
 /**
  * Seed script for Tavok demo data.
  *
- * Creates a demo workspace with channels, bots, messages (including
- * completed bot messages with thinking timelines), reactions, mentions,
+ * Creates a demo workspace with channels, agents, messages (including
+ * completed agent messages with thinking timelines), reactions, mentions,
  * and unread state — everything needed for a compelling demo screenshot.
  *
  * Run: node prisma/seed.mjs
@@ -89,10 +89,10 @@ const IDS = {
   researchChannel: generateId(),
   devChannel: generateId(),
 
-  // Bots
-  claudeBot: generateId(),
-  gptBot: generateId(),
-  llamaBot: generateId(),
+  // Agents
+  claudeAgent: generateId(),
+  gptAgent: generateId(),
+  llamaAgent: generateId(),
 
   // Members
   demoMember: generateId(),
@@ -103,12 +103,12 @@ const IDS = {
   adminRole: generateId(),
   memberRole: generateId(),
 
-  // ChannelBots
-  cbClaudeGeneral: generateId(),
-  cbGptGeneral: generateId(),
-  cbClaudeResearch: generateId(),
-  cbLlamaResearch: generateId(),
-  cbGptDev: generateId(),
+  // ChannelAgents
+  caClaudeGeneral: generateId(),
+  caGptGeneral: generateId(),
+  caClaudeResearch: generateId(),
+  caLlamaResearch: generateId(),
+  caGptDev: generateId(),
 
   // Messages (we need stable IDs for reactions/mentions)
   msg1: generateId(),
@@ -161,7 +161,7 @@ async function main() {
 
   if (existingUsers.length > 0) {
     const userIds = existingUsers.map((u) => u.id);
-    // Delete servers owned by seed users (cascades channels, messages, bots, etc.)
+    // Delete servers owned by seed users (cascades channels, messages, agents, etc.)
     const deleted = await prisma.server.deleteMany({
       where: { ownerId: { in: userIds } },
     });
@@ -297,15 +297,15 @@ async function main() {
   console.log("  ✓ Members: Demo User (Admin), Alice, Bob");
 
   // -----------------------------------------------------------------------
-  // 5. Bots
+  // 5. Agents
   // -----------------------------------------------------------------------
   const placeholderKey = encrypt("sk-demo-placeholder-key-not-real");
 
-  const claudeBot = await prisma.bot.upsert({
-    where: { id: IDS.claudeBot },
+  const claudeAgent = await prisma.agent.upsert({
+    where: { id: IDS.claudeAgent },
     update: {},
     create: {
-      id: IDS.claudeBot,
+      id: IDS.claudeAgent,
       name: "Claude",
       serverId: server.id,
       llmProvider: "anthropic",
@@ -327,11 +327,11 @@ async function main() {
     },
   });
 
-  const gptBot = await prisma.bot.upsert({
-    where: { id: IDS.gptBot },
+  const gptAgent = await prisma.agent.upsert({
+    where: { id: IDS.gptAgent },
     update: {},
     create: {
-      id: IDS.gptBot,
+      id: IDS.gptAgent,
       name: "GPT-4",
       serverId: server.id,
       llmProvider: "openai",
@@ -352,11 +352,11 @@ async function main() {
     },
   });
 
-  const llamaBot = await prisma.bot.upsert({
-    where: { id: IDS.llamaBot },
+  const llamaAgent = await prisma.agent.upsert({
+    where: { id: IDS.llamaAgent },
     update: {},
     create: {
-      id: IDS.llamaBot,
+      id: IDS.llamaAgent,
       name: "Llama 3",
       serverId: server.id,
       llmProvider: "ollama",
@@ -372,7 +372,7 @@ async function main() {
       thinkingSteps: JSON.stringify(["Processing", "Writing"]),
     },
   });
-  console.log("  ✓ Bots: Claude (always), GPT-4 (mention), Llama 3 (mention)");
+  console.log("  ✓ Agents: Claude (always), GPT-4 (mention), Llama 3 (mention)");
 
   // -----------------------------------------------------------------------
   // 6. Channels
@@ -386,7 +386,7 @@ async function main() {
       name: "general",
       topic: "General discussion with AI agents",
       position: 0,
-      defaultBotId: claudeBot.id,
+      defaultAgentId: claudeAgent.id,
       lastSequence: BigInt(10),
     },
   });
@@ -400,7 +400,7 @@ async function main() {
       name: "research",
       topic: "AI research papers and experiments",
       position: 1,
-      defaultBotId: claudeBot.id,
+      defaultAgentId: claudeAgent.id,
       lastSequence: BigInt(5),
     },
   });
@@ -414,48 +414,48 @@ async function main() {
       name: "dev",
       topic: "Development and coding help",
       position: 2,
-      defaultBotId: gptBot.id,
+      defaultAgentId: gptAgent.id,
       lastSequence: BigInt(3),
     },
   });
   console.log("  ✓ Channels: #general, #research, #dev");
 
   // -----------------------------------------------------------------------
-  // 7. ChannelBots (multi-bot assignment)
+  // 7. ChannelAgents (multi-agent assignment)
   // -----------------------------------------------------------------------
-  const channelBotData = [
+  const channelAgentData = [
     {
-      id: IDS.cbClaudeGeneral,
+      id: IDS.caClaudeGeneral,
       channelId: generalChannel.id,
-      botId: claudeBot.id,
+      agentId: claudeAgent.id,
     },
     {
-      id: IDS.cbGptGeneral,
+      id: IDS.caGptGeneral,
       channelId: generalChannel.id,
-      botId: gptBot.id,
+      agentId: gptAgent.id,
     },
     {
-      id: IDS.cbClaudeResearch,
+      id: IDS.caClaudeResearch,
       channelId: researchChannel.id,
-      botId: claudeBot.id,
+      agentId: claudeAgent.id,
     },
     {
-      id: IDS.cbLlamaResearch,
+      id: IDS.caLlamaResearch,
       channelId: researchChannel.id,
-      botId: llamaBot.id,
+      agentId: llamaAgent.id,
     },
-    { id: IDS.cbGptDev, channelId: devChannel.id, botId: gptBot.id },
+    { id: IDS.caGptDev, channelId: devChannel.id, agentId: gptAgent.id },
   ];
 
-  for (const cb of channelBotData) {
-    await prisma.channelBot.upsert({
-      where: { channelId_botId: { channelId: cb.channelId, botId: cb.botId } },
+  for (const ca of channelAgentData) {
+    await prisma.channelAgent.upsert({
+      where: { channelId_agentId: { channelId: ca.channelId, agentId: ca.agentId } },
       update: {},
-      create: cb,
+      create: ca,
     });
   }
   console.log(
-    "  ✓ ChannelBots: #general(Claude+GPT), #research(Claude+Llama), #dev(GPT)"
+    "  ✓ ChannelAgents: #general(Claude+GPT), #research(Claude+Llama), #dev(GPT)"
   );
 
   // -----------------------------------------------------------------------
@@ -464,7 +464,7 @@ async function main() {
   const now = Date.now();
   const minute = 60_000;
 
-  // Human conversation + bot responses with thinking timelines
+  // Human conversation + agent responses with thinking timelines
   const messages = [
     {
       id: IDS.msg1,
@@ -500,8 +500,8 @@ async function main() {
     {
       id: IDS.msg4,
       channelId: generalChannel.id,
-      authorId: claudeBot.id,
-      authorType: "BOT",
+      authorId: claudeAgent.id,
+      authorType: "AGENT",
       content:
         "Great question! Here are the top 3 approaches to reduce LLM hallucination:\n\n**1. Retrieval-Augmented Generation (RAG)**\nGround responses in retrieved documents rather than relying solely on parametric knowledge. This provides verifiable sources and reduces confabulation.\n\n**2. Chain-of-Thought Verification**\nForce the model to show reasoning steps, then verify each step against known facts. Self-consistency checks across multiple generations also help.\n\n**3. Constrained Decoding + Structured Output**\nUse schema-constrained output (JSON schema, grammar-guided decoding) to prevent free-form hallucination. Tools like Outlines and Instructor implement this.\n\nThe most effective approach combines all three: retrieve context, reason step-by-step over it, and constrain the output format.",
       type: "STREAMING",
@@ -518,8 +518,8 @@ async function main() {
     {
       id: IDS.msg5,
       channelId: generalChannel.id,
-      authorId: gptBot.id,
-      authorType: "BOT",
+      authorId: gptAgent.id,
+      authorType: "AGENT",
       content:
         "Here are my top 3 approaches to reducing LLM hallucination:\n\n**1. Fine-tuning on Verified Data**\nTrain or fine-tune on curated, fact-checked datasets. RLHF with human evaluators who specifically flag hallucinations has shown significant improvement.\n\n**2. Retrieval-Augmented Generation**\nSimilar to Claude's suggestion — I'd emphasize using dense retrieval (ColBERT, DPR) over sparse methods for better precision.\n\n**3. Uncertainty Quantification**\nHave the model express confidence levels. When uncertainty is high, defer to retrieval or flag for human review. This is underexplored but highly promising.\n\nI'd also add: prompt engineering (explicit instructions to say \"I don't know\") is a simple but effective zero-cost intervention.",
       type: "STREAMING",
@@ -557,8 +557,8 @@ async function main() {
     {
       id: IDS.msg8,
       channelId: generalChannel.id,
-      authorId: claudeBot.id,
-      authorType: "BOT",
+      authorId: claudeAgent.id,
+      authorType: "AGENT",
       content:
         "Constrained decoding restricts the model's output space at inference time. Instead of freely generating any token, you define a grammar or schema that the output must conform to.\n\n**How it works:**\n- At each decoding step, mask logits for tokens that would violate the schema\n- The model can only produce syntactically valid output\n- Works with any model without retraining\n\n**Libraries:**\n- `outlines` (Python) — grammar-guided generation\n- `instructor` — Pydantic model validation for LLM outputs  \n- `guidance` (Microsoft) — template-based constrained generation\n\nThis doesn't prevent semantic hallucination (wrong facts in the right format), but it eliminates structural hallucination and makes the output reliably parseable.",
       type: "STREAMING",
@@ -658,14 +658,14 @@ async function main() {
       create: r,
     });
   }
-  console.log("  ✓ Reactions: 4 reactions on bot messages");
+  console.log("  ✓ Reactions: 4 reactions on agent messages");
 
   // -----------------------------------------------------------------------
   // 10. Mentions
   // -----------------------------------------------------------------------
-  // MessageMention.userId references User.id — bots aren't Users,
-  // so bot @mentions are text-only in content (e.g. "@Claude").
-  console.log("  ✓ Mentions: bot @mentions are text-only (bots are not Users)");
+  // MessageMention.userId references User.id — agents aren't Users,
+  // so agent @mentions are text-only in content (e.g. "@Claude").
+  console.log("  ✓ Mentions: agent @mentions are text-only (agents are not Users)");
 
   // -----------------------------------------------------------------------
   // 11. Channel Read States (create unread badges for demo)
@@ -774,7 +774,7 @@ async function main() {
   console.log("  Channels: #general (Claude+GPT), #research (Claude+Llama), #dev (GPT)");
   console.log("  Invite:   DEMO2026\n");
   console.log(
-    "  Note: Bot API keys are placeholders. Replace them in the UI to enable streaming.\n"
+    "  Note: Agent API keys are placeholders. Replace them in the UI to enable streaming.\n"
   );
 }
 
