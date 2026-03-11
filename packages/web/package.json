@@ -17,7 +17,6 @@
     "db:migrate": "prisma migrate dev",
     "db:migrate:deploy": "prisma migrate deploy",
     "db:studio": "prisma studio",
-    "db:seed": "prisma db seed",
     "db:generate": "prisma generate",
     "debug:automate": "node scripts/automation-full-cycle.mjs",
     "debug:multi-actor": "node scripts/automation-multi-actor.mjs"
@@ -58,7 +57,6 @@
     "vitest": "^4.0.18"
   },
   "prisma": {
-    "schema": "../../prisma/schema.prisma",
-    "seed": "node ../../prisma/seed.mjs"
+    "schema": "../../prisma/schema.prisma"
   }
 }

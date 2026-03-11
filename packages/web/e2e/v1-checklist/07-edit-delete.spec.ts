@@ -3,6 +3,7 @@ import {
   login,
   ALICE,
   BOB,
+  DEMO_USER,
   selectServer,
   openChannel,
   waitForWebSocket,
@@ -10,14 +11,47 @@ import {
   uniqueMsg,
   createTwoUserContexts,
   cleanupContexts,
+  createServerViaAPI,
+  createInviteViaAPI,
+  joinServerViaAPI,
 } from "./helpers";
+
+let serverName: string;
+let serverId: string;
+
+test.beforeAll(async ({ browser }) => {
+  serverName = `Test-S07-${Date.now()}`;
+
+  // Owner creates server + invite
+  const ctxOwner = await browser.newContext();
+  const pgOwner = await ctxOwner.newPage();
+  await login(pgOwner, DEMO_USER.email, DEMO_USER.password);
+  const result = await createServerViaAPI(pgOwner, serverName);
+  serverId = result.serverId;
+  const inviteCode = await createInviteViaAPI(pgOwner, serverId);
+  await ctxOwner.close();
+
+  // Alice joins
+  const ctxA = await browser.newContext();
+  const pgA = await ctxA.newPage();
+  await login(pgA, ALICE.email, ALICE.password);
+  await joinServerViaAPI(pgA, inviteCode);
+  await ctxA.close();
+
+  // Bob joins
+  const ctxB = await browser.newContext();
+  const pgB = await ctxB.newPage();
+  await login(pgB, BOB.email, BOB.password);
+  await joinServerViaAPI(pgB, inviteCode);
+  await ctxB.close();
+});
 
 test.describe("Section 7: Message Edit & Delete", () => {
   test("send message, edit it — updated text appears with (edited)", async ({
     page,
   }) => {
     await login(page, ALICE.email, ALICE.password);
-    await selectServer(page);
+    await selectServer(page, serverName);
     await openChannel(page, "general");
     await waitForWebSocket(page, "general");
 
@@ -66,8 +100,8 @@ test.describe("Section 7: Message Edit & Delete", () => {
     );
 
     try {
-      await selectServer(pageA);
-      await selectServer(pageB);
+      await selectServer(pageA, serverName);
+      await selectServer(pageB, serverName);
       await openChannel(pageA, "general");
       await openChannel(pageB, "general");
       await waitForWebSocket(pageA, "general");
@@ -101,7 +135,7 @@ test.describe("Section 7: Message Edit & Delete", () => {
 
   test("delete a message — disappears", async ({ page }) => {
     await login(page, ALICE.email, ALICE.password);
-    await selectServer(page);
+    await selectServer(page, serverName);
     await openChannel(page, "general");
     await waitForWebSocket(page, "general");
 
@@ -142,8 +176,8 @@ test.describe("Section 7: Message Edit & Delete", () => {
     );
 
     try {
-      await selectServer(pageA);
-      await selectServer(pageB);
+      await selectServer(pageA, serverName);
+      await selectServer(pageB, serverName);
       await openChannel(pageA, "general");
       await openChannel(pageB, "general");
       await waitForWebSocket(pageA, "general");
@@ -188,8 +222,8 @@ test.describe("Section 7: Message Edit & Delete", () => {
     );
 
     try {
-      await selectServer(pageA);
-      await selectServer(pageB);
+      await selectServer(pageA, serverName);
+      await selectServer(pageB, serverName);
       await openChannel(pageA, "general");
       await openChannel(pageB, "general");
       await waitForWebSocket(pageA, "general");
@@ -222,8 +256,8 @@ test.describe("Section 7: Message Edit & Delete", () => {
     );
 
     try {
-      await selectServer(pageA);
-      await selectServer(pageB);
+      await selectServer(pageA, serverName);
+      await selectServer(pageB, serverName);
       await openChannel(pageA, "general");
       await openChannel(pageB, "general");
       await waitForWebSocket(pageA, "general");

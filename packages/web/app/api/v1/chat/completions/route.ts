@@ -2,7 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { ulid } from "ulid";
 import { authenticateAgentRequest } from "@/lib/agent-auth";
-import { broadcastMessageNew } from "@/lib/gateway-client";
+import {
+  broadcastMessageNew,
+  fetchChannelSequence,
+} from "@/lib/gateway-client";
 
 /**
  * POST /api/v1/chat/completions — OpenAI-compatible chat completions (DEC-0046)
@@ -138,7 +141,7 @@ export async function POST(request: NextRequest) {
 
   // Inject user message into channel
   const userMessageId = ulid();
-  const sequence = String(Date.now());
+  const sequence = await fetchChannelSequence(channelId);
   const completionId = `chatcmpl-${ulid()}`;
   const created = Math.floor(Date.now() / 1000);
 

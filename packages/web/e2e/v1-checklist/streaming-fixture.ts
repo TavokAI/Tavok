@@ -3,10 +3,10 @@
  * the mock LLM server on the host machine.
  *
  * Exported helpers:
- *   ensureMockLLM()        — starts the mock OpenAI server (singleton)
- *   ensureMockAgent(page)  — creates "Echo Test Agent" via API if needed
- *   cleanupMockLLM()       — stops the mock server
- *   MOCK_AGENT_NAME        — the agent display name to check in the UI
+ *   ensureMockLLM()              — starts the mock OpenAI server (singleton)
+ *   ensureMockAgent(page, sid)   — creates "Echo Test Agent" on given server
+ *   cleanupMockLLM()             — stops the mock server
+ *   MOCK_AGENT_NAME              — the agent display name to check in the UI
  */
 
 import type { Page } from "@playwright/test";
@@ -19,7 +19,7 @@ const MOCK_LLM_PORT = 9999;
 const MOCK_LLM_ENDPOINT = `http://host.docker.internal:${MOCK_LLM_PORT}`;
 
 let mockLLMStarted = false;
-let mockAgentCreated = false;
+const mockAgentServers = new Set<string>();
 
 /**
  * Start the mock LLM server. Idempotent — only starts once per process.
@@ -31,7 +31,7 @@ export async function ensureMockLLM(): Promise<void> {
 }
 
 /**
- * Create the "Echo Test Agent" on the seed server via the authenticated
+ * Create the "Echo Test Agent" on the given server via the authenticated
  * Next.js API. Uses the current page's session cookies for auth.
  *
  * The agent is created with:
@@ -39,33 +39,19 @@ export async function ensureMockLLM(): Promise<void> {
  *   - apiEndpoint: host.docker.internal:9999 (mock server on host)
  *   - triggerMode: "ALWAYS" (no @mention needed)
  *
- * Idempotent — only creates once per process.
+ * Idempotent per server — only creates once per serverId per process.
  */
-export async function ensureMockAgent(page: Page): Promise<void> {
-  if (mockAgentCreated) return;
+export async function ensureMockAgent(
+  page: Page,
+  serverId: string,
+): Promise<void> {
+  if (mockAgentServers.has(serverId)) return;
 
-  // Get the server ID from the API
-  const serversRes = await page.evaluate(async () => {
-    const res = await fetch("/api/servers");
-    return res.json();
-  });
-
-  const servers = serversRes.servers || serversRes;
-  const server = Array.isArray(servers)
-    ? servers.find((s: { name: string }) => s.name === "AI Research Lab")
-    : null;
-
-  if (!server) {
-    throw new Error(
-      "Could not find 'AI Research Lab' server. Is the database seeded?",
-    );
-  }
-
-  // Check if agent already exists
+  // Check if agent already exists on this server
   const agentsRes = await page.evaluate(async (sid: string) => {
     const res = await fetch(`/api/servers/${sid}/agents`);
     return res.json();
-  }, server.id);
+  }, serverId);
 
   const agents = agentsRes.agents || agentsRes;
   const existing = Array.isArray(agents)
@@ -73,7 +59,7 @@ export async function ensureMockAgent(page: Page): Promise<void> {
     : null;
 
   if (existing) {
-    mockAgentCreated = true;
+    mockAgentServers.add(serverId);
     return;
   }
 
@@ -98,7 +84,7 @@ export async function ensureMockAgent(page: Page): Promise<void> {
       });
       return { status: res.status, body: await res.json() };
     },
-    { serverId: server.id, endpoint: MOCK_LLM_ENDPOINT },
+    { serverId, endpoint: MOCK_LLM_ENDPOINT },
   );
 
   if (createRes.status !== 201 && createRes.status !== 200) {
@@ -107,7 +93,7 @@ export async function ensureMockAgent(page: Page): Promise<void> {
     );
   }
 
-  mockAgentCreated = true;
+  mockAgentServers.add(serverId);
 }
 
 /**

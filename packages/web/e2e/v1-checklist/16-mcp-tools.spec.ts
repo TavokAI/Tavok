@@ -6,6 +6,8 @@ import {
   openChannel,
   waitForWebSocket,
   uniqueMsg,
+  createServerViaAPI,
+  createChannelViaAPI,
 } from "./helpers";
 import {
   ensureMockLLM,
@@ -14,8 +16,20 @@ import {
 } from "./streaming-fixture";
 
 test.describe("Section 16: Tool Execution (MCP Interface)", () => {
-  test.beforeAll(async () => {
+  let serverName: string;
+  let serverId: string;
+
+  test.beforeAll(async ({ browser }) => {
     await ensureMockLLM();
+    const ctx = await browser.newContext();
+    const page = await ctx.newPage();
+    await login(page, DEMO_USER.email, DEMO_USER.password);
+    serverName = `Test-S16-${Date.now()}`;
+    const result = await createServerViaAPI(page, serverName);
+    serverId = result.serverId;
+    await createChannelViaAPI(page, serverId, "dev");
+    await ensureMockAgent(page, serverId);
+    await ctx.close();
   });
 
   test.afterAll(async () => {
@@ -26,8 +40,7 @@ test.describe("Section 16: Tool Execution (MCP Interface)", () => {
     page,
   }) => {
     await login(page, DEMO_USER.email, DEMO_USER.password);
-    await selectServer(page);
-    await ensureMockAgent(page);
+    await selectServer(page, serverName);
 
     await openChannel(page, "dev");
     await waitForWebSocket(page, "dev");
@@ -44,7 +57,7 @@ test.describe("Section 16: Tool Execution (MCP Interface)", () => {
     await expect(page.getByText(msg)).toBeVisible({ timeout: 10_000 });
 
     // Wait for agent's final response after tool execution
-    // This proves: LLM requested tool → proxy executed → LLM got result → responded
+    // This proves: LLM requested tool -> proxy executed -> LLM got result -> responded
     await expect(page.getByText("[tool-done]").first()).toBeVisible({
       timeout: 30_000,
     });
@@ -61,8 +74,7 @@ test.describe("Section 16: Tool Execution (MCP Interface)", () => {
 
   test("tool result message persists after page refresh", async ({ page }) => {
     await login(page, DEMO_USER.email, DEMO_USER.password);
-    await selectServer(page);
-    await ensureMockAgent(page);
+    await selectServer(page, serverName);
 
     await openChannel(page, "dev");
     await waitForWebSocket(page, "dev");
@@ -83,7 +95,7 @@ test.describe("Section 16: Tool Execution (MCP Interface)", () => {
 
     // Refresh and verify persistence
     await page.reload();
-    await selectServer(page);
+    await selectServer(page, serverName);
     await openChannel(page, "dev");
     await waitForWebSocket(page, "dev");
 

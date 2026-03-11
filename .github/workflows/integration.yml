@@ -59,15 +59,25 @@ jobs:
             sleep 1
           done
 
-      - name: Seed database
+      - name: Register test users
         run: |
-          # The prisma.seed config lives in packages/web/package.json, not the root.
-          # Run from /app/packages/web so Prisma finds the seed command.
-          docker compose exec -T -w /app/packages/web web npx prisma db seed
+          # Register test users via the API (no seed script needed).
+          # These are the same users created by e2e/global-setup.ts.
+          for USER_JSON in \
+            '{"email":"demo@tavok.ai","username":"demouser","displayName":"Demo User","password":"DemoPass123!"}' \
+            '{"email":"alice@tavok.ai","username":"alice","displayName":"Alice Chen","password":"DemoPass123!"}' \
+            '{"email":"bob@tavok.ai","username":"bob","displayName":"Bob Martinez","password":"DemoPass123!"}'; do
+            EMAIL=$(echo "$USER_JSON" | python3 -c "import sys,json; print(json.load(sys.stdin)['email'])")
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+              -X POST http://localhost:5555/api/auth/register \
+              -H "Content-Type: application/json" \
+              -d "$USER_JSON")
+            echo "Register $EMAIL: HTTP $STATUS"
+          done
 
-      - name: Verify seed data and auth
+      - name: Verify auth works
         run: |
-          echo "=== Checking seeded users in database ==="
+          echo "=== Checking registered users in database ==="
           docker compose exec -T db psql -U tavok -d tavok -c \
             "SELECT email, username, length(password) as pw_hash_len FROM \"User\" WHERE email IN ('demo@tavok.ai','alice@tavok.ai','bob@tavok.ai')"
 
@@ -80,7 +90,7 @@ jobs:
           CSRF_TOKEN=$(echo "$CSRF_RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin)['csrfToken'])" 2>/dev/null || echo "PARSE_FAILED")
           echo "CSRF token (first 20 chars): ${CSRF_TOKEN:0:20}..."
 
-          # Authenticate with seeded user
+          # Authenticate with registered user
           AUTH_RESPONSE=$(curl -s -b "$COOKIE_JAR" -c "$COOKIE_JAR" \
             -X POST http://localhost:5555/api/auth/callback/credentials \
             -d "email=demo@tavok.ai&password=DemoPass123!&csrfToken=$CSRF_TOKEN&json=true")

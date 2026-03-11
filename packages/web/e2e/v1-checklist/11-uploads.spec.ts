@@ -5,6 +5,7 @@ import {
   selectServer,
   openChannel,
   waitForWebSocket,
+  createServerViaAPI,
 } from "./helpers";
 import path from "path";
 import fs from "fs";
@@ -13,8 +14,10 @@ import os from "os";
 test.describe("Section 11: File Uploads", () => {
   let testImagePath: string;
   let testFilePath: string;
+  let serverName: string;
+  let serverId: string;
 
-  test.beforeAll(() => {
+  test.beforeAll(async ({ browser }) => {
     // Create temporary test files
     const tmpDir = os.tmpdir();
 
@@ -96,6 +99,15 @@ test.describe("Section 11: File Uploads", () => {
     // Create a text file
     testFilePath = path.join(tmpDir, "test-upload.txt");
     fs.writeFileSync(testFilePath, "Test file content for upload testing");
+
+    // Provision server via API
+    const ctx = await browser.newContext();
+    const page = await ctx.newPage();
+    await login(page, DEMO_USER.email, DEMO_USER.password);
+    serverName = `Test-S11-${Date.now()}`;
+    const result = await createServerViaAPI(page, serverName);
+    serverId = result.serverId;
+    await ctx.close();
   });
 
   test.afterAll(() => {
@@ -110,7 +122,7 @@ test.describe("Section 11: File Uploads", () => {
 
   test("upload button visible in message input", async ({ page }) => {
     await login(page, DEMO_USER.email, DEMO_USER.password);
-    await selectServer(page);
+    await selectServer(page, serverName);
     await openChannel(page, "general");
 
     // Look for file upload button (usually a paperclip or + icon)
@@ -133,7 +145,7 @@ test.describe("Section 11: File Uploads", () => {
 
   test("upload an image — appears inline", async ({ page }) => {
     await login(page, DEMO_USER.email, DEMO_USER.password);
-    await selectServer(page);
+    await selectServer(page, serverName);
     await openChannel(page, "general");
     await waitForWebSocket(page, "general");
 
@@ -160,7 +172,7 @@ test.describe("Section 11: File Uploads", () => {
 
   test("upload non-image file — shows as file card", async ({ page }) => {
     await login(page, DEMO_USER.email, DEMO_USER.password);
-    await selectServer(page);
+    await selectServer(page, serverName);
     await openChannel(page, "general");
     await waitForWebSocket(page, "general");
 
@@ -180,7 +192,7 @@ test.describe("Section 11: File Uploads", () => {
 
   test("file persists after refresh", async ({ page }) => {
     await login(page, DEMO_USER.email, DEMO_USER.password);
-    await selectServer(page);
+    await selectServer(page, serverName);
     await openChannel(page, "general");
     await waitForWebSocket(page, "general");
 
@@ -199,7 +211,7 @@ test.describe("Section 11: File Uploads", () => {
 
     // Refresh page
     await page.reload({ waitUntil: "domcontentloaded" });
-    await selectServer(page);
+    await selectServer(page, serverName);
     await openChannel(page, "general");
 
     // File should still be visible after refresh

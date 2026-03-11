@@ -111,6 +111,10 @@ export async function POST(
   if (sequenceResponse?.ok) {
     const seqData = await sequenceResponse.json();
     sequence = String(seqData.sequence);
+  } else {
+    console.warn(
+      `[Webhook] Gateway sequence unavailable for channel ${webhook.channelId}, using timestamp fallback`,
+    );
   }
 
   try {

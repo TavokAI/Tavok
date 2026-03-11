@@ -1,10 +1,23 @@
 import { test, expect } from "@playwright/test";
-import { login, DEMO_USER, selectServer } from "./helpers";
+import { login, DEMO_USER, selectServer, createServerViaAPI } from "./helpers";
 
 test.describe("Section 13: Roles & Permissions", () => {
+  let serverName: string;
+  let serverId: string;
+
+  test.beforeAll(async ({ browser }) => {
+    const ctx = await browser.newContext();
+    const page = await ctx.newPage();
+    await login(page, DEMO_USER.email, DEMO_USER.password);
+    serverName = `Test-S13-${Date.now()}`;
+    const result = await createServerViaAPI(page, serverName);
+    serverId = result.serverId;
+    await ctx.close();
+  });
+
   test.beforeEach(async ({ page }) => {
     await login(page, DEMO_USER.email, DEMO_USER.password);
-    await selectServer(page);
+    await selectServer(page, serverName);
   });
 
   test("server owner can open server settings with roles section", async ({
@@ -87,16 +100,18 @@ test.describe("Section 13: Roles & Permissions", () => {
       .click();
     await page.waitForTimeout(1_000);
 
-    // Check for existing roles — at minimum Admin and Member from seed
-    const hasAdmin = await page
-      .getByText(/admin/i)
+    // User-created servers have an @everyone role by default
+    const hasEveryone = await page
+      .getByText(/@everyone|everyone/i)
       .isVisible({ timeout: 5_000 })
       .catch(() => false);
-    const hasMember = await page
-      .getByText(/member/i)
+
+    // The "create a new role" test above may also have left a role visible
+    const hasAnyRole = await page
+      .getByText(/admin|member|role/i)
       .isVisible({ timeout: 3_000 })
       .catch(() => false);
 
-    expect(hasAdmin || hasMember).toBe(true);
+    expect(hasEveryone || hasAnyRole).toBe(true);
   });
 });

@@ -1,16 +1,33 @@
 import { test, expect } from "@playwright/test";
 import {
+  login,
   registerUser,
-  SEED_SERVER,
+  DEMO_USER,
   selectServer,
   openChannel,
   waitForWebSocket,
   sendMessage,
   uniqueMsg,
+  createServerViaAPI,
+  createInviteViaAPI,
 } from "./helpers";
 
 test.describe("Section 4: Invite Links", () => {
   const ts = Date.now();
+  let serverName: string;
+  let inviteCode: string;
+
+  test.beforeAll(async ({ browser }) => {
+    serverName = `Test-S04-${Date.now()}`;
+
+    // Owner creates server + invite
+    const ctxOwner = await browser.newContext();
+    const pgOwner = await ctxOwner.newPage();
+    await login(pgOwner, DEMO_USER.email, DEMO_USER.password);
+    const result = await createServerViaAPI(pgOwner, serverName);
+    inviteCode = await createInviteViaAPI(pgOwner, result.serverId);
+    await ctxOwner.close();
+  });
 
   test("full invite flow: register, accept invite, interact", async ({
     browser,
@@ -34,8 +51,8 @@ test.describe("Section 4: Invite Links", () => {
         timeout: 15_000,
       });
 
-      // Navigate to invite URL using seeded invite code
-      await pageB.goto("/invite/DEMO2026");
+      // Navigate to invite URL using the dynamically created invite code
+      await pageB.goto(`/invite/${inviteCode}`);
       await pageB.waitForTimeout(2_000);
 
       // Look for "Join" button or auto-accept
@@ -47,12 +64,12 @@ test.describe("Section 4: Invite Links", () => {
 
       // User B should now be in the server
       await pageB.getByRole("tab", { name: "SERVERS" }).click();
-      await expect(pageB.getByText(SEED_SERVER).first()).toBeVisible({
+      await expect(pageB.getByText(serverName).first()).toBeVisible({
         timeout: 10_000,
       });
 
       // User B can see channels
-      await selectServer(pageB);
+      await selectServer(pageB, serverName);
       await pageB.getByRole("tab", { name: "CHANNELS" }).click();
       await expect(
         pageB.locator("button").filter({ hasText: "general" }),

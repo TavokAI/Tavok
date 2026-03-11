@@ -10,6 +10,10 @@ import {
   uniqueMsg,
   createTwoUserContexts,
   cleanupContexts,
+  createServerViaAPI,
+  createChannelViaAPI,
+  createInviteViaAPI,
+  joinServerViaAPI,
 } from "./helpers";
 import {
   ensureMockLLM,
@@ -19,13 +23,42 @@ import {
 } from "./streaming-fixture";
 
 test.describe("Section 15: Agent Streaming", () => {
+  let serverName: string;
+  let serverId: string;
+
+  test.beforeAll(async ({ browser }) => {
+    await ensureMockLLM();
+    const ctx = await browser.newContext();
+    const page = await ctx.newPage();
+    await login(page, DEMO_USER.email, DEMO_USER.password);
+    serverName = `Test-S15-${Date.now()}`;
+    const result = await createServerViaAPI(page, serverName);
+    serverId = result.serverId;
+    await createChannelViaAPI(page, serverId, "dev");
+    await ensureMockAgent(page, serverId);
+
+    // Invite ALICE so multi-user tests work
+    const inviteCode = await createInviteViaAPI(page, serverId);
+    await ctx.close();
+
+    const ctxAlice = await browser.newContext();
+    const pageAlice = await ctxAlice.newPage();
+    await login(pageAlice, ALICE.email, ALICE.password);
+    await joinServerViaAPI(pageAlice, inviteCode);
+    await ctxAlice.close();
+  });
+
+  test.afterAll(async () => {
+    await cleanupMockLLM();
+  });
+
   // -----------------------------------------------------------------------
   // Existing UI tests (no mock needed)
   // -----------------------------------------------------------------------
 
   test("navigate to agent management UI", async ({ page }) => {
     await login(page, DEMO_USER.email, DEMO_USER.password);
-    await selectServer(page);
+    await selectServer(page, serverName);
 
     // Open server settings
     const settingsButton = page
@@ -46,9 +79,9 @@ test.describe("Section 15: Agent Streaming", () => {
     });
   });
 
-  test("seeded agents are visible in server settings", async ({ page }) => {
+  test("created agents are visible in server settings", async ({ page }) => {
     await login(page, DEMO_USER.email, DEMO_USER.password);
-    await selectServer(page);
+    await selectServer(page, serverName);
 
     const settingsButton = page
       .locator('button[title*="etting"]')
@@ -63,17 +96,17 @@ test.describe("Section 15: Agent Streaming", () => {
       .click();
     await page.waitForTimeout(1_000);
 
-    // Check for seeded agents: Claude, GPT-4, Llama 3
-    const hasClaude = await page
-      .getByText(/claude/i)
+    // Check for the mock agent we created
+    const hasAgent = await page
+      .getByText(MOCK_AGENT_NAME)
       .isVisible({ timeout: 5_000 })
       .catch(() => false);
-    expect(hasClaude).toBe(true);
+    expect(hasAgent).toBe(true);
   });
 
   test("create an agent via BYOK form", async ({ page }) => {
     await login(page, DEMO_USER.email, DEMO_USER.password);
-    await selectServer(page);
+    await selectServer(page, serverName);
 
     // Open server settings
     await page.locator('button[title="Server Settings"]').click();
@@ -103,11 +136,11 @@ test.describe("Section 15: Agent Streaming", () => {
 
   test("agent appears in channel when assigned", async ({ page }) => {
     await login(page, DEMO_USER.email, DEMO_USER.password);
-    await selectServer(page);
+    await selectServer(page, serverName);
     await openChannel(page, "general");
 
-    // The seeded server has Claude assigned to #general
-    await expect(page.getByText("Claude").first()).toBeVisible({
+    // The mock agent we created should be visible
+    await expect(page.getByText(MOCK_AGENT_NAME).first()).toBeVisible({
       timeout: 10_000,
     });
   });
@@ -117,20 +150,11 @@ test.describe("Section 15: Agent Streaming", () => {
   // -----------------------------------------------------------------------
 
   test.describe("live streaming", () => {
-    test.beforeAll(async () => {
-      await ensureMockLLM();
-    });
-
-    test.afterAll(async () => {
-      await cleanupMockLLM();
-    });
-
     test("send message — agent echoes back via streaming", async ({ page }) => {
       await login(page, DEMO_USER.email, DEMO_USER.password);
-      await selectServer(page);
-      await ensureMockAgent(page);
+      await selectServer(page, serverName);
 
-      // Use #dev — GPT-4 is MENTION-only there, so only our ALWAYS-trigger mock fires
+      // Use #dev — only our ALWAYS-trigger mock fires
       await openChannel(page, "dev");
       await waitForWebSocket(page, "dev");
 
@@ -159,8 +183,7 @@ test.describe("Section 15: Agent Streaming", () => {
 
     test("completed agent message persists after refresh", async ({ page }) => {
       await login(page, DEMO_USER.email, DEMO_USER.password);
-      await selectServer(page);
-      await ensureMockAgent(page);
+      await selectServer(page, serverName);
 
       await openChannel(page, "dev");
       await waitForWebSocket(page, "dev");
@@ -179,7 +202,7 @@ test.describe("Section 15: Agent Streaming", () => {
 
       // Refresh
       await page.reload();
-      await selectServer(page);
+      await selectServer(page, serverName);
       await openChannel(page, "dev");
       await waitForWebSocket(page, "dev");
 
@@ -193,8 +216,7 @@ test.describe("Section 15: Agent Streaming", () => {
 
     test("error response — error indicator shown", async ({ page }) => {
       await login(page, DEMO_USER.email, DEMO_USER.password);
-      await selectServer(page);
-      await ensureMockAgent(page);
+      await selectServer(page, serverName);
 
       await openChannel(page, "dev");
       await waitForWebSocket(page, "dev");
@@ -223,9 +245,8 @@ test.describe("Section 15: Agent Streaming", () => {
       );
 
       try {
-        await selectServer(pageA);
-        await selectServer(pageB);
-        await ensureMockAgent(pageA);
+        await selectServer(pageA, serverName);
+        await selectServer(pageB, serverName);
 
         await openChannel(pageA, "dev");
         await openChannel(pageB, "dev");

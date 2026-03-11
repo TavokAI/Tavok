@@ -1,10 +1,51 @@
 import { test, expect } from "@playwright/test";
-import { login, DEMO_USER, selectServer, openChannel } from "./helpers";
+import {
+  login,
+  DEMO_USER,
+  selectServer,
+  openChannel,
+  createServerViaAPI,
+} from "./helpers";
+import { ensureMockAgent, MOCK_AGENT_NAME } from "./streaming-fixture";
 
 test.describe("Section 17: Channel Charter & Swarm Modes", () => {
+  let serverName: string;
+  let serverId: string;
+
+  test.beforeAll(async ({ browser }) => {
+    const ctx = await browser.newContext();
+    const page = await ctx.newPage();
+    await login(page, DEMO_USER.email, DEMO_USER.password);
+    serverName = `Test-S17-${Date.now()}`;
+    const result = await createServerViaAPI(page, serverName);
+    serverId = result.serverId;
+    await ensureMockAgent(page, serverId);
+
+    // Create second agent for swarm mode (doesn't need working LLM)
+    await page.evaluate(async (args: { serverId: string }) => {
+      await fetch(`/api/servers/${args.serverId}/agents`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: "Dummy Agent",
+          llmProvider: "custom",
+          llmModel: "dummy",
+          apiEndpoint: "http://localhost:1",
+          apiKey: "dummy-key",
+          systemPrompt: "Dummy agent for swarm mode testing",
+          temperature: 0,
+          maxTokens: 256,
+          triggerMode: "MENTION",
+        }),
+      });
+    }, { serverId });
+
+    await ctx.close();
+  });
+
   test.beforeEach(async ({ page }) => {
     await login(page, DEMO_USER.email, DEMO_USER.password);
-    await selectServer(page);
+    await selectServer(page, serverName);
   });
 
   test("open channel settings — swarm mode visible", async ({ page }) => {
@@ -15,7 +56,7 @@ test.describe("Section 17: Channel Charter & Swarm Modes", () => {
     await expect(settingsBtn).toBeVisible({ timeout: 5_000 });
     await settingsBtn.click();
 
-    // The modal should show "Swarm Mode" label (#general has 2+ agents: Claude + GPT-4)
+    // The modal should show "Swarm Mode" label (#general has 2+ agents)
     await expect(page.getByText("Swarm Mode")).toBeVisible({ timeout: 5_000 });
   });
 

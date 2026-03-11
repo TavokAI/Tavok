@@ -2,11 +2,17 @@ import { test, expect } from "@playwright/test";
 import {
   login,
   DEMO_USER,
+  ALICE,
+  BOB,
   selectServer,
   openChannel,
   waitForWebSocket,
   sendMessage,
   uniqueMsg,
+  createServerViaAPI,
+  createChannelViaAPI,
+  createInviteViaAPI,
+  joinServerViaAPI,
 } from "./helpers";
 import {
   ensureMockLLM,
@@ -16,9 +22,46 @@ import {
 } from "./streaming-fixture";
 
 test.describe("Section 8: @Mentions", () => {
+  let serverName: string;
+  let serverId: string;
+
+  test.beforeAll(async ({ browser }) => {
+    await ensureMockLLM();
+
+    // --- Create server as DEMO_USER ---
+    const ctxDemo = await browser.newContext();
+    const pageDemo = await ctxDemo.newPage();
+    await login(pageDemo, DEMO_USER.email, DEMO_USER.password);
+    serverName = `Test-S08-${Date.now()}`;
+    const result = await createServerViaAPI(pageDemo, serverName);
+    serverId = result.serverId;
+    await createChannelViaAPI(pageDemo, serverId, "dev");
+    await ensureMockAgent(pageDemo, serverId);
+
+    // --- Create invite and have ALICE + BOB join ---
+    const inviteCode = await createInviteViaAPI(pageDemo, serverId);
+    await ctxDemo.close();
+
+    const ctxAlice = await browser.newContext();
+    const pageAlice = await ctxAlice.newPage();
+    await login(pageAlice, ALICE.email, ALICE.password);
+    await joinServerViaAPI(pageAlice, inviteCode);
+    await ctxAlice.close();
+
+    const ctxBob = await browser.newContext();
+    const pageBob = await ctxBob.newPage();
+    await login(pageBob, BOB.email, BOB.password);
+    await joinServerViaAPI(pageBob, inviteCode);
+    await ctxBob.close();
+  });
+
+  test.afterAll(async () => {
+    await cleanupMockLLM();
+  });
+
   test.beforeEach(async ({ page }) => {
     await login(page, DEMO_USER.email, DEMO_USER.password);
-    await selectServer(page);
+    await selectServer(page, serverName);
     await openChannel(page, "general");
     await waitForWebSocket(page, "general");
   });
@@ -79,17 +122,7 @@ test.describe("Section 8: @Mentions", () => {
   });
 
   test.describe("agent mention triggers response", () => {
-    test.beforeAll(async () => {
-      await ensureMockLLM();
-    });
-
-    test.afterAll(async () => {
-      await cleanupMockLLM();
-    });
-
     test("@mention Echo Test Agent — agent responds", async ({ page }) => {
-      await ensureMockAgent(page);
-
       // Navigate to #dev where the mock agent is available with ALWAYS trigger
       await openChannel(page, "dev");
       await waitForWebSocket(page, "dev");

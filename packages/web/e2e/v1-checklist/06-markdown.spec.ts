@@ -6,6 +6,8 @@ import {
   openChannel,
   waitForWebSocket,
   uniqueMsg,
+  createServerViaAPI,
+  createChannelViaAPI,
 } from "./helpers";
 import {
   ensureMockLLM,
@@ -13,10 +15,24 @@ import {
   cleanupMockLLM,
 } from "./streaming-fixture";
 
+// -------------------------------------------------------------------------
+// Markdown in user messages — no agent needed, just a fresh server
+// -------------------------------------------------------------------------
 test.describe("Section 6: Markdown Rendering", () => {
+  let serverName: string;
+
+  test.beforeAll(async ({ browser }) => {
+    const ctx = await browser.newContext();
+    const page = await ctx.newPage();
+    await login(page, DEMO_USER.email, DEMO_USER.password);
+    serverName = `Test-S06a-${Date.now()}`;
+    await createServerViaAPI(page, serverName);
+    await ctx.close();
+  });
+
   test.beforeEach(async ({ page }) => {
     await login(page, DEMO_USER.email, DEMO_USER.password);
-    await selectServer(page);
+    await selectServer(page, serverName);
     await openChannel(page, "general");
     await waitForWebSocket(page, "general");
   });
@@ -81,8 +97,20 @@ test.describe("Section 6: Markdown Rendering", () => {
 // Markdown during streaming — requires mock LLM agent
 // -------------------------------------------------------------------------
 test.describe("Section 6: Markdown During Streaming", () => {
-  test.beforeAll(async () => {
+  let serverName: string;
+  let serverId: string;
+
+  test.beforeAll(async ({ browser }) => {
     await ensureMockLLM();
+    const ctx = await browser.newContext();
+    const page = await ctx.newPage();
+    await login(page, DEMO_USER.email, DEMO_USER.password);
+    serverName = `Test-S06b-${Date.now()}`;
+    const result = await createServerViaAPI(page, serverName);
+    serverId = result.serverId;
+    await createChannelViaAPI(page, serverId, "dev");
+    await ensureMockAgent(page, serverId);
+    await ctx.close();
   });
 
   test.afterAll(async () => {
@@ -93,8 +121,7 @@ test.describe("Section 6: Markdown During Streaming", () => {
     page,
   }) => {
     await login(page, DEMO_USER.email, DEMO_USER.password);
-    await selectServer(page);
-    await ensureMockAgent(page);
+    await selectServer(page, serverName);
 
     // Use #dev so only our ALWAYS-trigger mock agent fires
     await openChannel(page, "dev");

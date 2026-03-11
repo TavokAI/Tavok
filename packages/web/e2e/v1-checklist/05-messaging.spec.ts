@@ -11,12 +11,45 @@ import {
   uniqueMsg,
   createTwoUserContexts,
   cleanupContexts,
+  createServerViaAPI,
+  createInviteViaAPI,
+  joinServerViaAPI,
 } from "./helpers";
+
+let serverName: string;
+let serverId: string;
+
+test.beforeAll(async ({ browser }) => {
+  serverName = `Test-S05-${Date.now()}`;
+
+  // Owner creates server + invite
+  const ctxOwner = await browser.newContext();
+  const pgOwner = await ctxOwner.newPage();
+  await login(pgOwner, DEMO_USER.email, DEMO_USER.password);
+  const result = await createServerViaAPI(pgOwner, serverName);
+  serverId = result.serverId;
+  const inviteCode = await createInviteViaAPI(pgOwner, serverId);
+  await ctxOwner.close();
+
+  // Alice joins
+  const ctxA = await browser.newContext();
+  const pgA = await ctxA.newPage();
+  await login(pgA, ALICE.email, ALICE.password);
+  await joinServerViaAPI(pgA, inviteCode);
+  await ctxA.close();
+
+  // Bob joins
+  const ctxB = await browser.newContext();
+  const pgB = await ctxB.newPage();
+  await login(pgB, BOB.email, BOB.password);
+  await joinServerViaAPI(pgB, inviteCode);
+  await ctxB.close();
+});
 
 test.describe("Section 5: Real-Time Messaging", () => {
   test("User A sends message — appears immediately", async ({ page }) => {
     await login(page, ALICE.email, ALICE.password);
-    await selectServer(page);
+    await selectServer(page, serverName);
     await openChannel(page, "general");
     await waitForWebSocket(page, "general");
 
@@ -33,8 +66,8 @@ test.describe("Section 5: Real-Time Messaging", () => {
     );
 
     try {
-      await selectServer(pageA);
-      await selectServer(pageB);
+      await selectServer(pageA, serverName);
+      await selectServer(pageB, serverName);
       await openChannel(pageA, "general");
       await openChannel(pageB, "general");
       await waitForWebSocket(pageA, "general");
@@ -58,8 +91,8 @@ test.describe("Section 5: Real-Time Messaging", () => {
     );
 
     try {
-      await selectServer(pageA);
-      await selectServer(pageB);
+      await selectServer(pageA, serverName);
+      await selectServer(pageB, serverName);
       await openChannel(pageA, "general");
       await openChannel(pageB, "general");
       await waitForWebSocket(pageA, "general");
@@ -79,7 +112,7 @@ test.describe("Section 5: Real-Time Messaging", () => {
 
   test("messages persist after page refresh", async ({ page }) => {
     await login(page, ALICE.email, ALICE.password);
-    await selectServer(page);
+    await selectServer(page, serverName);
     await openChannel(page, "general");
     await waitForWebSocket(page, "general");
 
@@ -88,7 +121,7 @@ test.describe("Section 5: Real-Time Messaging", () => {
 
     // Refresh page
     await page.reload({ waitUntil: "domcontentloaded" });
-    await selectServer(page);
+    await selectServer(page, serverName);
     await openChannel(page, "general");
 
     // Message should still be there
@@ -97,7 +130,7 @@ test.describe("Section 5: Real-Time Messaging", () => {
 
   test("messages in correct chronological order", async ({ page }) => {
     await login(page, ALICE.email, ALICE.password);
-    await selectServer(page);
+    await selectServer(page, serverName);
     await openChannel(page, "general");
     await waitForWebSocket(page, "general");
 
@@ -122,7 +155,7 @@ test.describe("Section 5: Real-Time Messaging", () => {
 
   test("long messages (500+ chars) render correctly", async ({ page }) => {
     await login(page, ALICE.email, ALICE.password);
-    await selectServer(page);
+    await selectServer(page, serverName);
     await openChannel(page, "general");
     await waitForWebSocket(page, "general");
 
@@ -143,8 +176,8 @@ test.describe("Section 5: Real-Time Messaging", () => {
     );
 
     try {
-      await selectServer(pageA);
-      await selectServer(pageB);
+      await selectServer(pageA, serverName);
+      await selectServer(pageB, serverName);
       await openChannel(pageA, "general");
       await openChannel(pageB, "general");
       await waitForWebSocket(pageA, "general");
@@ -189,7 +222,7 @@ test.describe("Section 5: Real-Time Messaging", () => {
 
   test("empty message cannot be sent", async ({ page }) => {
     await login(page, ALICE.email, ALICE.password);
-    await selectServer(page);
+    await selectServer(page, serverName);
     await openChannel(page, "general");
     await waitForWebSocket(page, "general");
 
@@ -212,8 +245,8 @@ test.describe("Section 5: Real-Time Messaging", () => {
     );
 
     try {
-      await selectServer(pageA);
-      await selectServer(pageB);
+      await selectServer(pageA, serverName);
+      await selectServer(pageB, serverName);
       await openChannel(pageA, "general");
       await openChannel(pageB, "general");
       await waitForWebSocket(pageA, "general");

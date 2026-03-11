@@ -10,14 +10,40 @@ import {
   uniqueMsg,
   createTwoUserContexts,
   cleanupContexts,
+  createServerViaAPI,
+  createInviteViaAPI,
+  joinServerViaAPI,
 } from "./helpers";
+
+let serverName: string;
+let serverId: string;
+
+test.beforeAll(async ({ browser }) => {
+  serverName = `Test-S14-${Date.now()}`;
+
+  // Owner creates server + invite
+  const ctxOwner = await browser.newContext();
+  const pgOwner = await ctxOwner.newPage();
+  await login(pgOwner, DEMO_USER.email, DEMO_USER.password);
+  const result = await createServerViaAPI(pgOwner, serverName);
+  serverId = result.serverId;
+  const inviteCode = await createInviteViaAPI(pgOwner, serverId);
+  await ctxOwner.close();
+
+  // Alice joins
+  const ctxA = await browser.newContext();
+  const pgA = await ctxA.newPage();
+  await login(pgA, ALICE.email, ALICE.password);
+  await joinServerViaAPI(pgA, inviteCode);
+  await ctxA.close();
+});
 
 test.describe("Section 14: Reconnection & Resilience", () => {
   test("refresh page mid-conversation — reconnects and loads history", async ({
     page,
   }) => {
     await login(page, ALICE.email, ALICE.password);
-    await selectServer(page);
+    await selectServer(page, serverName);
     await openChannel(page, "general");
     await waitForWebSocket(page, "general");
 
@@ -29,7 +55,7 @@ test.describe("Section 14: Reconnection & Resilience", () => {
     await page.reload({ waitUntil: "domcontentloaded" });
 
     // Re-navigate to the same channel
-    await selectServer(page);
+    await selectServer(page, serverName);
     await openChannel(page, "general");
     await waitForWebSocket(page, "general");
 
@@ -41,13 +67,13 @@ test.describe("Section 14: Reconnection & Resilience", () => {
     page,
   }) => {
     await login(page, ALICE.email, ALICE.password);
-    await selectServer(page);
+    await selectServer(page, serverName);
     await openChannel(page, "general");
     await waitForWebSocket(page, "general");
 
     // Refresh
     await page.reload({ waitUntil: "domcontentloaded" });
-    await selectServer(page);
+    await selectServer(page, serverName);
     await openChannel(page, "general");
     await waitForWebSocket(page, "general");
 
@@ -69,8 +95,8 @@ test.describe("Section 14: Reconnection & Resilience", () => {
     );
 
     try {
-      await selectServer(pageA);
-      await selectServer(pageB);
+      await selectServer(pageA, serverName);
+      await selectServer(pageB, serverName);
       await openChannel(pageA, "general");
       await openChannel(pageB, "general");
       await waitForWebSocket(pageA, "general");
@@ -78,7 +104,7 @@ test.describe("Section 14: Reconnection & Resilience", () => {
 
       // Bob (pageB) reloads — simulates reconnection
       await pageB.reload({ waitUntil: "domcontentloaded" });
-      await selectServer(pageB);
+      await selectServer(pageB, serverName);
       await openChannel(pageB, "general");
       await waitForWebSocket(pageB, "general");
 

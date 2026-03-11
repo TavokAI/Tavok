@@ -7,9 +7,26 @@ import {
   waitForWebSocket,
   sendMessage,
   uniqueMsg,
+  createServerViaAPI,
+  createChannelViaAPI,
 } from "./helpers";
 
 test.describe("Section 20: Browser Compatibility (Chromium)", () => {
+  let serverName: string;
+  let serverId: string;
+
+  test.beforeAll(async ({ browser }) => {
+    const ctx = await browser.newContext();
+    const page = await ctx.newPage();
+    await login(page, DEMO_USER.email, DEMO_USER.password);
+    serverName = `Test-S20-${Date.now()}`;
+    const result = await createServerViaAPI(page, serverName);
+    serverId = result.serverId;
+    // Create a "research" channel for channel-switching test
+    await createChannelViaAPI(page, serverId, "research");
+    await ctx.close();
+  });
+
   test("no critical console errors on page load", async ({ page }) => {
     const consoleErrors: string[] = [];
     page.on("console", (msg) => {
@@ -60,7 +77,7 @@ test.describe("Section 20: Browser Compatibility (Chromium)", () => {
     });
 
     await login(page, DEMO_USER.email, DEMO_USER.password);
-    await selectServer(page);
+    await selectServer(page, serverName);
     await openChannel(page, "general");
     await waitForWebSocket(page, "general");
 

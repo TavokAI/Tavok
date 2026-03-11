@@ -13,7 +13,14 @@ import {
  *
  * Auth: Authorization: Bearer sk-tvk-...
  *
- * Send tokens: {"tokens": ["Hello ", "world!"], "done": false}
+ * Send tokens (any of these field names work):
+ *   {"tokens": ["Hello ", "world!"], "done": false}   — array of strings (canonical)
+ *   {"token": "Hello world", "done": false}            — singular string
+ *   {"text": "Hello world"}                            — alias
+ *   {"content": "Hello world"}                         — alias
+ *   {"chunk": "Hello world"}                           — alias
+ *   {"delta": "Hello world"}                           — alias
+ *
  * Complete:    {"tokens": ["last"], "done": true, "finalContent": "...", "metadata": {...}}
  * Thinking:    {"thinking": {"phase": "Searching", "detail": "..."}}
  * Error:       {"error": "Something went wrong"}
@@ -39,9 +46,8 @@ export async function POST(
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const { tokens, done, finalContent, metadata, thinking, error, tokenOffset } =
+  const { done, finalContent, metadata, thinking, error, tokenOffset } =
     body as {
-      tokens?: string[];
       done?: boolean;
       finalContent?: string;
       metadata?: Record<string, unknown>;
@@ -49,6 +55,36 @@ export async function POST(
       error?: string;
       tokenOffset?: number;
     };
+
+  // Accept multiple token field names — agents naturally use different names.
+  // Normalize everything to string[] for processing.
+  let tokens: string[] | undefined;
+  if (Array.isArray(body.tokens)) {
+    tokens = body.tokens;
+  } else if (typeof body.tokens === "string") {
+    tokens = [body.tokens];
+  } else if (typeof body.token === "string") {
+    tokens = [body.token];
+  } else if (typeof body.text === "string") {
+    tokens = [body.text];
+  } else if (typeof body.content === "string") {
+    tokens = [body.content];
+  } else if (typeof body.chunk === "string") {
+    tokens = [body.chunk];
+  } else if (typeof body.delta === "string") {
+    tokens = [body.delta];
+  }
+
+  // Reject requests with no recognized fields (prevent silent data loss)
+  if (!tokens && !done && !thinking && !error) {
+    return NextResponse.json(
+      {
+        error:
+          'No recognized field. Send tokens via: "tokens" (string[]), "token", "text", "content", "chunk", or "delta" (string). Or use "done", "thinking", or "error".',
+      },
+      { status: 400 },
+    );
+  }
 
   // Verify message ownership and resolve channelId from DB (not from request body)
   const ownership = await verifyMessageOwnership(messageId, agent.agentId);

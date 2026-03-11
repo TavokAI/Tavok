@@ -2,7 +2,7 @@
 # Run `make help` to see all available commands.
 
 .PHONY: help dev up up-build down logs logs-web logs-gateway logs-stream \
-        db-migrate db-studio db-seed clean health build regression-harness \
+        db-migrate db-studio clean health build regression-harness \
         test-cli test-web test-gateway test-streaming test-hooks test-unit test-sdk test-e2e test-load test-all demo \
         lint format lint-fix
 
@@ -147,9 +147,6 @@ db-migrate: ## Run Prisma migrations
 
 db-studio: ## Open Prisma Studio (database browser)
 	docker-compose exec web npx prisma studio
-
-db-seed: ## Seed database with demo data
-	docker-compose exec web npx prisma db seed
 
 db-reset: ## Reset database (WARNING: destroys all data)
 	docker-compose exec web npx prisma migrate reset --schema=./prisma/schema.prisma

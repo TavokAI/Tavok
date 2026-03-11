@@ -6,7 +6,7 @@ import { login } from "../helpers";
 export { login };
 
 // ---------------------------------------------------------------------------
-// Seed data — must match prisma/seed.mjs
+// Shared test users — registered by global-setup.ts before tests run
 // ---------------------------------------------------------------------------
 export const DEMO_USER = {
   email: "demo@tavok.ai",
@@ -27,9 +27,6 @@ export const BOB = {
   displayName: "Bob Martinez",
 };
 
-export const SEED_SERVER = "AI Research Lab";
-export const SEED_CHANNELS = ["general", "research", "dev"];
-
 // ---------------------------------------------------------------------------
 // Navigation helpers
 // ---------------------------------------------------------------------------
@@ -37,7 +34,7 @@ export const SEED_CHANNELS = ["general", "research", "dev"];
 /** Select a server by name from the SERVERS tab in the sidebar. */
 export async function selectServer(
   page: Page,
-  serverName: string = SEED_SERVER,
+  serverName: string,
 ): Promise<void> {
   await page.getByRole("tab", { name: "SERVERS" }).click();
   await page.getByText(serverName).first().click();
@@ -193,4 +190,107 @@ export async function cleanupContexts(
 ): Promise<void> {
   await contextA.close();
   await contextB.close();
+}
+
+// ---------------------------------------------------------------------------
+// API-based provisioning helpers (faster than UI for test setup)
+// ---------------------------------------------------------------------------
+
+/** Create a server via API. Returns server ID and default channel info. */
+export async function createServerViaAPI(
+  page: Page,
+  name: string,
+): Promise<{
+  serverId: string;
+  defaultChannelId: string;
+  defaultChannelName: string;
+}> {
+  const result = await page.evaluate(async (serverName: string) => {
+    const res = await fetch("/api/servers", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: serverName }),
+    });
+    return { status: res.status, body: await res.json() };
+  }, name);
+
+  if (result.status !== 201) {
+    throw new Error(
+      `Failed to create server "${name}": ${result.status} — ${JSON.stringify(result.body)}`,
+    );
+  }
+
+  return {
+    serverId: result.body.id,
+    defaultChannelId: result.body.defaultChannelId,
+    defaultChannelName: "general",
+  };
+}
+
+/** Create a channel via API. Returns channel ID and name. */
+export async function createChannelViaAPI(
+  page: Page,
+  serverId: string,
+  name: string,
+): Promise<{ channelId: string; channelName: string }> {
+  const result = await page.evaluate(
+    async (args: { serverId: string; name: string }) => {
+      const res = await fetch(`/api/servers/${args.serverId}/channels`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: args.name }),
+      });
+      return { status: res.status, body: await res.json() };
+    },
+    { serverId, name },
+  );
+
+  if (result.status !== 201) {
+    throw new Error(
+      `Failed to create channel "${name}": ${result.status} — ${JSON.stringify(result.body)}`,
+    );
+  }
+
+  return { channelId: result.body.id, channelName: result.body.name };
+}
+
+/** Create an invite via API. Returns the invite code. */
+export async function createInviteViaAPI(
+  page: Page,
+  serverId: string,
+): Promise<string> {
+  const result = await page.evaluate(async (sid: string) => {
+    const res = await fetch(`/api/servers/${sid}/invites`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    return { status: res.status, body: await res.json() };
+  }, serverId);
+
+  if (result.status !== 201) {
+    throw new Error(
+      `Failed to create invite: ${result.status} — ${JSON.stringify(result.body)}`,
+    );
+  }
+
+  return result.body.invite.code;
+}
+
+/** Join a server by accepting an invite via API. */
+export async function joinServerViaAPI(
+  page: Page,
+  inviteCode: string,
+): Promise<void> {
+  const result = await page.evaluate(async (code: string) => {
+    const res = await fetch(`/api/invites/${code}/accept`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+    });
+    return { status: res.status };
+  }, inviteCode);
+
+  if (result.status !== 200 && result.status !== 201) {
+    throw new Error(`Failed to accept invite: ${result.status}`);
+  }
 }

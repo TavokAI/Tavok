@@ -10,7 +10,33 @@ import {
   uniqueMsg,
   createTwoUserContexts,
   cleanupContexts,
+  createServerViaAPI,
+  createInviteViaAPI,
+  joinServerViaAPI,
 } from "./helpers";
+
+let serverName: string;
+let serverId: string;
+
+test.beforeAll(async ({ browser }) => {
+  serverName = `Test-S10-${Date.now()}`;
+
+  // Owner creates server + invite
+  const ctxOwner = await browser.newContext();
+  const pgOwner = await ctxOwner.newPage();
+  await login(pgOwner, DEMO_USER.email, DEMO_USER.password);
+  const result = await createServerViaAPI(pgOwner, serverName);
+  serverId = result.serverId;
+  const inviteCode = await createInviteViaAPI(pgOwner, serverId);
+  await ctxOwner.close();
+
+  // Alice joins
+  const ctxA = await browser.newContext();
+  const pgA = await ctxA.newPage();
+  await login(pgA, ALICE.email, ALICE.password);
+  await joinServerViaAPI(pgA, inviteCode);
+  await ctxA.close();
+});
 
 /** Open the emoji picker on a specific message. */
 async function openEmojiPicker(
@@ -35,7 +61,7 @@ async function openEmojiPicker(
 test.describe("Section 10: Emoji Reactions", () => {
   test("click reaction button — emoji picker opens", async ({ page }) => {
     await login(page, DEMO_USER.email, DEMO_USER.password);
-    await selectServer(page);
+    await selectServer(page, serverName);
     await openChannel(page, "general");
     await waitForWebSocket(page, "general");
 
@@ -52,7 +78,7 @@ test.describe("Section 10: Emoji Reactions", () => {
     page,
   }) => {
     await login(page, DEMO_USER.email, DEMO_USER.password);
-    await selectServer(page);
+    await selectServer(page, serverName);
     await openChannel(page, "general");
     await waitForWebSocket(page, "general");
 
@@ -87,8 +113,8 @@ test.describe("Section 10: Emoji Reactions", () => {
     );
 
     try {
-      await selectServer(pageA);
-      await selectServer(pageB);
+      await selectServer(pageA, serverName);
+      await selectServer(pageB, serverName);
       await openChannel(pageA, "general");
       await openChannel(pageB, "general");
       await waitForWebSocket(pageA, "general");
@@ -128,7 +154,7 @@ test.describe("Section 10: Emoji Reactions", () => {
 
   test("click own reaction again — toggles off", async ({ page }) => {
     await login(page, DEMO_USER.email, DEMO_USER.password);
-    await selectServer(page);
+    await selectServer(page, serverName);
     await openChannel(page, "general");
     await waitForWebSocket(page, "general");
 
