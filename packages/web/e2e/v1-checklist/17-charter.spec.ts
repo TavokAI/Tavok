@@ -22,23 +22,26 @@ test.describe("Section 17: Channel Charter & Swarm Modes", () => {
     await ensureMockAgent(page, serverId);
 
     // Create second agent for swarm mode (doesn't need working LLM)
-    await page.evaluate(async (args: { serverId: string }) => {
-      await fetch(`/api/servers/${args.serverId}/agents`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: "Dummy Agent",
-          llmProvider: "custom",
-          llmModel: "dummy",
-          apiEndpoint: "http://localhost:1",
-          apiKey: "dummy-key",
-          systemPrompt: "Dummy agent for swarm mode testing",
-          temperature: 0,
-          maxTokens: 256,
-          triggerMode: "MENTION",
-        }),
-      });
-    }, { serverId });
+    await page.evaluate(
+      async (args: { serverId: string }) => {
+        await fetch(`/api/servers/${args.serverId}/agents`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: "Dummy Agent",
+            llmProvider: "custom",
+            llmModel: "dummy",
+            apiEndpoint: "http://localhost:1",
+            apiKey: "dummy-key",
+            systemPrompt: "Dummy agent for swarm mode testing",
+            temperature: 0,
+            maxTokens: 256,
+            triggerMode: "MENTION",
+          }),
+        });
+      },
+      { serverId },
+    );
 
     await ctx.close();
   });

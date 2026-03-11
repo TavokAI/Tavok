@@ -1235,14 +1235,14 @@ services:
 
   $dmReactionUrl = "$webUrl/api/dms/$dmChannelId/messages/$dmMessageId/reactions"
 
-  # User A adds +1 reaction
-  $addReaction = Invoke-AuthenticatedApi -Url $dmReactionUrl -Method POST -SessionCookie $sessionA -Body @{ emoji = "+1" }
+  # User A adds thumbs-up reaction
+  $addReaction = Invoke-AuthenticatedApi -Url $dmReactionUrl -Method POST -SessionCookie $sessionA -Body @{ emoji = "👍" }
   Assert "K-009 POST reaction returns 200" ($addReaction.StatusCode -eq 200) ("status=" + $addReaction.StatusCode + " body=" + $addReaction.BodyText)
   $addBody = $addReaction.BodyText | ConvertFrom-Json
   $addReactions = @($addBody.reactions)
   Assert "K-009 POST reaction response has reactions array" ($addReactions.Count -ge 1)
-  $thumbsUp = @($addReactions | Where-Object { $_.emoji -eq "+1" })
-  Assert "K-009 POST finds +1 emoji in reactions" ($thumbsUp.Count -eq 1) ("found=" + $thumbsUp.Count + " emojis=" + ($addReactions | ForEach-Object { $_.emoji }) -join ",")
+  $thumbsUp = @($addReactions | Where-Object { $_.emoji -eq "👍" })
+  Assert "K-009 POST finds thumbs-up emoji in reactions" ($thumbsUp.Count -eq 1) ("found=" + $thumbsUp.Count + " emojis=" + ($addReactions | ForEach-Object { $_.emoji }) -join ",")
   Assert "K-009 POST reaction count is 1" ([int]$thumbsUp[0].count -eq 1) ("count=" + $thumbsUp[0].count)
 
   # GET reactions to verify
@@ -1250,33 +1250,33 @@ services:
   Assert "K-009 GET reactions returns 200" ($getReactions.StatusCode -eq 200)
   $getBody = $getReactions.BodyText | ConvertFrom-Json
   $getReactionsArr = @($getBody.reactions)
-  $thumbsUpGet = @($getReactionsArr | Where-Object { $_.emoji -eq "+1" })
-  Assert "K-009 GET reactions shows +1 with count 1" ($thumbsUpGet.Count -eq 1 -and [int]$thumbsUpGet[0].count -eq 1)
+  $thumbsUpGet = @($getReactionsArr | Where-Object { $_.emoji -eq "👍" })
+  Assert "K-009 GET reactions shows thumbs-up with count 1" ($thumbsUpGet.Count -eq 1 -and [int]$thumbsUpGet[0].count -eq 1)
 
   # User B adds same emoji — count should become 2
-  $addReactionB = Invoke-AuthenticatedApi -Url $dmReactionUrl -Method POST -SessionCookie $sessionB -Body @{ emoji = "+1" }
+  $addReactionB = Invoke-AuthenticatedApi -Url $dmReactionUrl -Method POST -SessionCookie $sessionB -Body @{ emoji = "👍" }
   Assert "K-009 User B POST reaction returns 200" ($addReactionB.StatusCode -eq 200)
   $addBodyB = $addReactionB.BodyText | ConvertFrom-Json
-  $thumbsUpB = @(@($addBodyB.reactions) | Where-Object { $_.emoji -eq "+1" })
+  $thumbsUpB = @(@($addBodyB.reactions) | Where-Object { $_.emoji -eq "👍" })
   Assert "K-009 After user B reacts, count is 2" ($thumbsUpB.Count -eq 1 -and [int]$thumbsUpB[0].count -eq 2) ("count=" + $thumbsUpB[0].count)
 
   # User A removes reaction
-  $removeReaction = Invoke-AuthenticatedApi -Url $dmReactionUrl -Method DELETE -SessionCookie $sessionA -Body @{ emoji = "+1" }
+  $removeReaction = Invoke-AuthenticatedApi -Url $dmReactionUrl -Method DELETE -SessionCookie $sessionA -Body @{ emoji = "👍" }
   Assert "K-009 DELETE reaction returns 200" ($removeReaction.StatusCode -eq 200)
   $removeBody = $removeReaction.BodyText | ConvertFrom-Json
-  $thumbsUpAfterRemove = @(@($removeBody.reactions) | Where-Object { $_.emoji -eq "+1" })
+  $thumbsUpAfterRemove = @(@($removeBody.reactions) | Where-Object { $_.emoji -eq "👍" })
   Assert "K-009 After user A removes, count is 1" ($thumbsUpAfterRemove.Count -eq 1 -and [int]$thumbsUpAfterRemove[0].count -eq 1)
 
   # Idempotency: User B POSTs same emoji again — count should still be 1, not 2
-  $idempotentReaction = Invoke-AuthenticatedApi -Url $dmReactionUrl -Method POST -SessionCookie $sessionB -Body @{ emoji = "+1" }
+  $idempotentReaction = Invoke-AuthenticatedApi -Url $dmReactionUrl -Method POST -SessionCookie $sessionB -Body @{ emoji = "👍" }
   Assert "K-009 idempotent POST returns 200" ($idempotentReaction.StatusCode -eq 200)
   $idempotentBody = $idempotentReaction.BodyText | ConvertFrom-Json
-  $thumbsUpIdempotent = @(@($idempotentBody.reactions) | Where-Object { $_.emoji -eq "+1" })
+  $thumbsUpIdempotent = @(@($idempotentBody.reactions) | Where-Object { $_.emoji -eq "👍" })
   Assert "K-009 idempotent POST keeps count at 1" ([int]$thumbsUpIdempotent[0].count -eq 1) ("count=" + $thumbsUpIdempotent[0].count)
 
   # Verify non-participant cannot react
   $sessionC = Get-SessionCookie -Email "$testPrefix-c@example.com" -Password $testPassword
-  $rejectReaction = Invoke-AuthenticatedApi -Url $dmReactionUrl -Method POST -SessionCookie $sessionC -Body @{ emoji = "+1" }
+  $rejectReaction = Invoke-AuthenticatedApi -Url $dmReactionUrl -Method POST -SessionCookie $sessionC -Body @{ emoji = "👍" }
   Assert "K-009 non-participant POST reaction rejected (403)" ($rejectReaction.StatusCode -eq 403)
 
   # Invalid emoji (empty string)
@@ -1524,36 +1524,36 @@ services:
   $roomReactionUrl = "$webUrl/api/messages/$k13MsgId/reactions"
 
   # User A adds a reaction
-  $k15AddA = Invoke-AuthenticatedApi -Url $roomReactionUrl -Method POST -SessionCookie $sessionA -Body @{ emoji = "fire" }
+  $k15AddA = Invoke-AuthenticatedApi -Url $roomReactionUrl -Method POST -SessionCookie $sessionA -Body @{ emoji = "🚀" }
   Assert "K-015 user A POST reaction returns 200" ($k15AddA.StatusCode -eq 200) ("status=" + $k15AddA.StatusCode + " body=" + $k15AddA.BodyText)
   $k15AddABody = $k15AddA.BodyText | ConvertFrom-Json
-  $k15FireA = @(@($k15AddABody.reactions) | Where-Object { $_.emoji -eq "fire" })
+  $k15FireA = @(@($k15AddABody.reactions) | Where-Object { $_.emoji -eq "🚀" })
   Assert "K-015 fire reaction has count 1" ($k15FireA.Count -eq 1 -and [int]$k15FireA[0].count -eq 1)
 
   # User B adds same reaction
-  $k15AddB = Invoke-AuthenticatedApi -Url $roomReactionUrl -Method POST -SessionCookie $sessionB -Body @{ emoji = "fire" }
+  $k15AddB = Invoke-AuthenticatedApi -Url $roomReactionUrl -Method POST -SessionCookie $sessionB -Body @{ emoji = "🚀" }
   Assert "K-015 user B POST reaction returns 200" ($k15AddB.StatusCode -eq 200)
   $k15AddBBody = $k15AddB.BodyText | ConvertFrom-Json
-  $k15FireB = @(@($k15AddBBody.reactions) | Where-Object { $_.emoji -eq "fire" })
+  $k15FireB = @(@($k15AddBBody.reactions) | Where-Object { $_.emoji -eq "🚀" })
   Assert "K-015 fire reaction count is 2 after user B" ([int]$k15FireB[0].count -eq 2) ("count=" + $k15FireB[0].count)
 
   # GET reactions
   $k15Get = Invoke-AuthenticatedApi -Url $roomReactionUrl -Method GET -SessionCookie $sessionA
   Assert "K-015 GET reactions returns 200" ($k15Get.StatusCode -eq 200)
   $k15GetBody = $k15Get.BodyText | ConvertFrom-Json
-  $k15GetFire = @(@($k15GetBody.reactions) | Where-Object { $_.emoji -eq "fire" })
+  $k15GetFire = @(@($k15GetBody.reactions) | Where-Object { $_.emoji -eq "🚀" })
   Assert "K-015 GET confirms fire count 2" ([int]$k15GetFire[0].count -eq 2)
   Assert "K-015 GET has hasReacted=true for user A" ($k15GetFire[0].hasReacted -eq $true)
 
   # User A removes reaction
-  $k15RemoveA = Invoke-AuthenticatedApi -Url $roomReactionUrl -Method DELETE -SessionCookie $sessionA -Body @{ emoji = "fire" }
+  $k15RemoveA = Invoke-AuthenticatedApi -Url $roomReactionUrl -Method DELETE -SessionCookie $sessionA -Body @{ emoji = "🚀" }
   Assert "K-015 DELETE reaction returns 200" ($k15RemoveA.StatusCode -eq 200)
   $k15RemoveABody = $k15RemoveA.BodyText | ConvertFrom-Json
-  $k15FireAfterRemove = @(@($k15RemoveABody.reactions) | Where-Object { $_.emoji -eq "fire" })
+  $k15FireAfterRemove = @(@($k15RemoveABody.reactions) | Where-Object { $_.emoji -eq "🚀" })
   Assert "K-015 fire count down to 1 after user A removes" ([int]$k15FireAfterRemove[0].count -eq 1)
 
   # Non-member (User C) cannot react to room messages
-  $k15NonMember = Invoke-AuthenticatedApi -Url $roomReactionUrl -Method POST -SessionCookie $sessionC -Body @{ emoji = "fire" }
+  $k15NonMember = Invoke-AuthenticatedApi -Url $roomReactionUrl -Method POST -SessionCookie $sessionC -Body @{ emoji = "🚀" }
   Assert "K-015 non-member reaction rejected (403)" ($k15NonMember.StatusCode -eq 403) ("status=" + $k15NonMember.StatusCode)
 
   # Invalid empty emoji

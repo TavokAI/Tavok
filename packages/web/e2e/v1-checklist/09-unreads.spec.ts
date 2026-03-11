@@ -97,7 +97,9 @@ test.describe("Section 9: Unread Indicators", () => {
 
       // Also check if the wrapper div has text-text-primary (unread styling)
       // vs text-text-secondary (read styling) — a broader check
-      const channelWrapper = pageB.locator("div").filter({ hasText: "general" });
+      const channelWrapper = pageB
+        .locator("div")
+        .filter({ hasText: "general" });
       const hasUnreadColor = await channelWrapper
         .locator(".text-text-primary")
         .first()
