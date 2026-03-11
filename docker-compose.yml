@@ -132,6 +132,13 @@ services:
       context: ./streaming
       dockerfile: Dockerfile
     restart: unless-stopped
+    extra_hosts:
+      # Allow the Go proxy to reach the host machine (for BYOK agents
+      # whose LLM endpoint points at host.docker.internal, e.g. local
+      # dev servers or the mock LLM used in E2E tests).
+      # On Docker Desktop (Mac/Win) this is already available; on Linux
+      # it requires this explicit mapping.
+      - "host.docker.internal:host-gateway"
     ports:
       - "${BIND_ADDRESS:-127.0.0.1}:${STREAMING_PORT:-4002}:4002"
     environment:
