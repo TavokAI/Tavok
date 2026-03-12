@@ -87,25 +87,25 @@ test.describe("Section 21: Final Sanity", () => {
     const serverName = `Fresh Server ${ts}`;
 
     // After a full wipe, the fresh user has zero servers so the onboarding
-    // flow appears. Rather than fighting onboarding UI timing, create the
-    // server directly via API (same endpoint the onboarding calls) and
-    // then reload so the workspace renders normally with a server.
-    const createRes = await page.request.post(
-      "http://localhost:5555/api/servers",
-      {
-        data: {
-          name: serverName,
+    // flow appears. Create the server via page.evaluate (uses the page's
+    // fetch with proper auth cookies) rather than fighting onboarding UI timing.
+    const serverData = await page.evaluate(async (name: string) => {
+      const res = await fetch("/api/servers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name,
           defaultChannelName: "general",
           defaultChannelTopic: null,
-        },
-      },
-    );
-    if (!createRes.ok()) {
-      const body = await createRes.text().catch(() => "no body");
-      throw new Error(
-        `Server creation failed: ${createRes.status()} ${createRes.statusText()} — ${body}`,
-      );
-    }
+        }),
+      });
+      if (!res.ok) {
+        const text = await res.text().catch(() => "no body");
+        throw new Error(`${res.status} ${res.statusText}: ${text}`);
+      }
+      return res.json();
+    }, serverName);
+    expect(serverData.id).toBeTruthy();
 
     // Reload so the workspace sees the new server and exits onboarding
     await page.reload({ waitUntil: "domcontentloaded" });
