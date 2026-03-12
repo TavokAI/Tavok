@@ -185,8 +185,18 @@ export async function POST(
       metadata: { resetAt: rateCheck.resetAt },
     });
     return NextResponse.json(
-      { error: "Rate limit exceeded", retryAfterMs: rateCheck.resetAt - Date.now() },
-      { status: 429, headers: { "Retry-After": String(Math.ceil((rateCheck.resetAt - Date.now()) / 1000)) } },
+      {
+        error: "Rate limit exceeded",
+        retryAfterMs: rateCheck.resetAt - Date.now(),
+      },
+      {
+        status: 429,
+        headers: {
+          "Retry-After": String(
+            Math.ceil((rateCheck.resetAt - Date.now()) / 1000),
+          ),
+        },
+      },
     );
   }
 

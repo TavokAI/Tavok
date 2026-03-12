@@ -60,9 +60,6 @@ export async function POST(
     });
   } catch (error) {
     console.error("[v1/agents/rotate-key] Key rotation failed:", error);
-    return NextResponse.json(
-      { error: "Key rotation failed" },
-      { status: 500 },
-    );
+    return NextResponse.json({ error: "Key rotation failed" }, { status: 500 });
   }
 }
