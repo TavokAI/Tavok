@@ -39,6 +39,50 @@ const channelPatchSchema = z
 type ChannelPatchBody = z.infer<typeof channelPatchSchema>;
 
 /**
+ * GET /api/servers/{serverId}/channels/{channelId}
+ *
+ * Retrieve a single channel by ID. Requires server membership.
+ */
+export async function GET(
+  _request: NextRequest,
+  { params }: { params: Promise<{ serverId: string; channelId: string }> },
+) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { serverId, channelId } = await params;
+
+  const check = await checkMemberPermission(
+    session.user.id,
+    serverId,
+    Permissions.SEND_MESSAGES,
+  );
+  if (!check.allowed) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  try {
+    const channel = await prisma.channel.findFirst({
+      where: { id: channelId, serverId },
+    });
+
+    if (!channel) {
+      return NextResponse.json({ error: "Channel not found" }, { status: 404 });
+    }
+
+    return NextResponse.json({
+      ...channel,
+      lastSequence: serializeSequence(channel.lastSequence),
+    });
+  } catch (error) {
+    console.error("[channels] Failed to get channel:", error);
+    return NextResponse.json({ error: "Internal error" }, { status: 500 });
+  }
+}
+
+/**
  * PATCH /api/servers/{serverId}/channels/{channelId}
  *
  * Update channel settings (assign agents, topic, etc.).
