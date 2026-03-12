@@ -38,8 +38,8 @@ type timelineEntry struct {
 
 // tokenHistoryEntry records a token batch boundary for stream rewind. (TASK-0021)
 type tokenHistoryEntry struct {
-	ContentOffset int   `json:"contentOffset"`
-	ElapsedMs     int64 `json:"elapsedMs"`
+	ContentOffset int   `json:"o"`
+	ElapsedMs     int64 `json:"t"`
 }
 
 // checkpointEntry records a stream checkpoint for resume. (TASK-0021)

@@ -4,8 +4,8 @@ import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { MarkdownContent } from "./markdown-content";
 
 interface TokenHistoryEntry {
-  contentOffset: number;
-  elapsedMs: number;
+  o: number; // contentOffset — compact wire format from Go proxy
+  t: number; // elapsedMs — compact wire format from Go proxy
 }
 
 interface CheckpointEntry {
@@ -46,7 +46,7 @@ export function RewindSlider({
   const visibleContent = useMemo(() => {
     if (position >= tokenHistory.length - 1) return content;
     if (position < 0) return "";
-    return content.substring(0, tokenHistory[position].contentOffset);
+    return content.substring(0, tokenHistory[position].o);
   }, [content, tokenHistory, position]);
 
   // Compute checkpoint positions as percentages on the slider
@@ -56,7 +56,7 @@ export function RewindSlider({
       // Find the closest token history entry to this checkpoint's content offset
       let closest = 0;
       for (let i = 0; i < tokenHistory.length; i++) {
-        if (tokenHistory[i].contentOffset >= cp.contentOffset) {
+        if (tokenHistory[i].o >= cp.contentOffset) {
           closest = i;
           break;
         }
@@ -73,7 +73,7 @@ export function RewindSlider({
   // Duration of the original stream in ms
   const totalDuration = useMemo(() => {
     if (tokenHistory.length === 0) return 0;
-    return tokenHistory[tokenHistory.length - 1].elapsedMs;
+    return tokenHistory[tokenHistory.length - 1].t;
   }, [tokenHistory]);
 
   // Play animation using requestAnimationFrame
@@ -81,13 +81,13 @@ export function RewindSlider({
     if (!playStartRef.current) return;
 
     const elapsed = (performance.now() - playStartRef.current.time) * speed;
-    const startT = tokenHistory[playStartRef.current.position]?.elapsedMs || 0;
+    const startT = tokenHistory[playStartRef.current.position]?.t || 0;
     const targetT = startT + elapsed;
 
     // Find the position that corresponds to targetT
     let newPos = playStartRef.current.position;
     for (let i = playStartRef.current.position; i < tokenHistory.length; i++) {
-      if (tokenHistory[i].elapsedMs <= targetT) {
+      if (tokenHistory[i].t <= targetT) {
         newPos = i;
       } else {
         break;
@@ -156,7 +156,7 @@ export function RewindSlider({
     [isPlaying],
   );
 
-  const currentTime = tokenHistory[position]?.elapsedMs || 0;
+  const currentTime = tokenHistory[position]?.t || 0;
   const progressPercent =
     tokenHistory.length > 1
       ? (position / (tokenHistory.length - 1)) * 100
