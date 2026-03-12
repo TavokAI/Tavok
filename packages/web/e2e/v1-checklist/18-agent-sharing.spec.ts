@@ -126,7 +126,7 @@ test.describe("Section 18: Agent Sharing via Config Templates", () => {
     await openChannel(page, "general");
 
     // The "Manage Agents" button is in the channel sidebar
-    const manageBtn = page.getByText("Manage Agents");
+    const manageBtn = page.locator('button[title="Manage Agents"]');
     await expect(manageBtn.first()).toBeVisible({ timeout: 10_000 });
     await manageBtn.first().click();
     await page.waitForTimeout(1_000);
@@ -165,7 +165,7 @@ test.describe("Section 18: Agent Sharing via Config Templates", () => {
 
     try {
       // Open manage agents modal from sidebar
-      const manageBtn = page.getByText("Manage Agents");
+      const manageBtn = page.locator('button[title="Manage Agents"]');
       await expect(manageBtn.first()).toBeVisible({ timeout: 10_000 });
       await manageBtn.first().click();
       await page.waitForTimeout(1_000);
