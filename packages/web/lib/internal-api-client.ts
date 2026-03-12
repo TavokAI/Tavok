@@ -21,9 +21,7 @@ export interface PersistMessageData {
  * Persist a new message via POST /api/internal/messages.
  * Ignores 409 (duplicate) — all other errors throw.
  */
-export async function persistMessage(
-  data: PersistMessageData,
-) {
+export async function persistMessage(data: PersistMessageData) {
   const internalUrl = getInternalBaseUrl();
 
   const response = await fetch(`${internalUrl}/api/internal/messages`, {
@@ -67,8 +65,6 @@ export async function updateMessage(
 
   if (!response.ok) {
     const errorBody = await response.text().catch(() => "unknown");
-    throw new Error(
-      `Message update failed: ${response.status} ${errorBody}`,
-    );
+    throw new Error(`Message update failed: ${response.status} ${errorBody}`);
   }
 }

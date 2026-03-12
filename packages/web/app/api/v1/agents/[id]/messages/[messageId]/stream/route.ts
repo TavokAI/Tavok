@@ -226,4 +226,3 @@ async function verifyMessageOwnership(
 
   return { valid: true, channelId: message.channelId };
 }
-

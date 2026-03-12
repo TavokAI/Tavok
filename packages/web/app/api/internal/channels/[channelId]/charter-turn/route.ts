@@ -58,7 +58,10 @@ export async function POST(
       completed,
     });
   } catch (error) {
-    console.error("[internal/charter-turn] Failed to increment charter turn:", error);
+    console.error(
+      "[internal/charter-turn] Failed to increment charter turn:",
+      error,
+    );
     return NextResponse.json({ error: "Internal error" }, { status: 500 });
   }
 }
@@ -197,7 +200,10 @@ export async function PUT(
       completed: result.completed,
     });
   } catch (error) {
-    console.error("[internal/charter-turn] Failed to claim charter turn:", error);
+    console.error(
+      "[internal/charter-turn] Failed to claim charter turn:",
+      error,
+    );
     return NextResponse.json({ error: "Internal error" }, { status: 500 });
   }
 }

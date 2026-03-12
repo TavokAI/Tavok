@@ -68,8 +68,7 @@ describe("createAgent", () => {
       connectionMethod: "WEBSOCKET",
     });
 
-    const storedHash =
-      mockRegistrationCreate.mock.calls[0][0].data.apiKeyHash;
+    const storedHash = mockRegistrationCreate.mock.calls[0][0].data.apiKeyHash;
     expect(storedHash).not.toBe(result.apiKey);
     expect(storedHash).toMatch(/^[a-f0-9]{64}$/); // SHA-256 hex
   });

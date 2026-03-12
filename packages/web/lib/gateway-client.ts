@@ -106,17 +106,14 @@ export async function broadcastToChannel<T extends object>(
   }
 
   const gatewayUrl = getGatewayInternalUrl();
-  const response = await fetch(
-    `${gatewayUrl}/api/internal/broadcast`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-internal-secret": secret,
-      },
-      body: JSON.stringify({ topic, event, payload }),
+  const response = await fetch(`${gatewayUrl}/api/internal/broadcast`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-internal-secret": secret,
     },
-  );
+    body: JSON.stringify({ topic, event, payload }),
+  });
 
   if (!response.ok) {
     const body = await response.text().catch(() => "unknown");

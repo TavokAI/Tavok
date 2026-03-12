@@ -132,7 +132,10 @@ export async function GET(
       ],
     });
   } catch (error) {
-    console.error("[internal/channels/agents] Failed to get channel agents:", error);
+    console.error(
+      "[internal/channels/agents] Failed to get channel agents:",
+      error,
+    );
     return NextResponse.json(
       { error: "Failed to get channel agents" },
       { status: 500 },

@@ -200,7 +200,10 @@ export async function GET(
         { status: 400 },
       );
     }
-    console.error("[v1/agents/channels/messages] Channel history fetch failed:", error);
+    console.error(
+      "[v1/agents/channels/messages] Channel history fetch failed:",
+      error,
+    );
     return NextResponse.json(
       { error: "Failed to fetch messages" },
       { status: 500 },

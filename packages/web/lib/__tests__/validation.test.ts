@@ -8,7 +8,9 @@ describe("parseLimit", () => {
   });
 
   it("rejects malformed values", () => {
-    expect(() => parseLimit("bad")).toThrow(/limit must be a number between 1 and 100/);
+    expect(() => parseLimit("bad")).toThrow(
+      /limit must be a number between 1 and 100/,
+    );
     expect(() => parseLimit("0")).toThrow(/between 1 and 100/);
     expect(() => parseLimit("101")).toThrow(/between 1 and 100/);
   });

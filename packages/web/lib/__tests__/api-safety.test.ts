@@ -19,13 +19,17 @@ describe("canMutateServerScopedResource", () => {
 
   it("returns false for non-string routeServerId", () => {
     expect(canMutateServerScopedResource(null as any, "server-1")).toBe(false);
-    expect(canMutateServerScopedResource(undefined as any, "server-1")).toBe(false);
+    expect(canMutateServerScopedResource(undefined as any, "server-1")).toBe(
+      false,
+    );
     expect(canMutateServerScopedResource(123 as any, "server-1")).toBe(false);
   });
 
   it("returns false for non-string targetServerId", () => {
     expect(canMutateServerScopedResource("server-1", null as any)).toBe(false);
-    expect(canMutateServerScopedResource("server-1", undefined as any)).toBe(false);
+    expect(canMutateServerScopedResource("server-1", undefined as any)).toBe(
+      false,
+    );
     expect(canMutateServerScopedResource("server-1", 123 as any)).toBe(false);
   });
 

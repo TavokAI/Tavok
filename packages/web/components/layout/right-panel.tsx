@@ -28,7 +28,10 @@ export function RightPanel() {
 
   const openPanels = useMemo(() => panels.filter((p) => !p.isClosed), [panels]);
   const openServerIds = useMemo(
-    () => Array.from(new Set(openPanels.map((p) => p.serverId))).sort((a, b) => a.localeCompare(b)),
+    () =>
+      Array.from(new Set(openPanels.map((p) => p.serverId))).sort((a, b) =>
+        a.localeCompare(b),
+      ),
     [openPanels],
   );
 

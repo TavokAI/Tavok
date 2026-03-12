@@ -14,8 +14,7 @@ interface MessageMetadataProps {
 export function MessageMetadata({ metadata }: MessageMetadataProps) {
   const [expanded, setExpanded] = useState(false);
 
-  const model =
-    typeof metadata.model === "string" ? metadata.model : undefined;
+  const model = typeof metadata.model === "string" ? metadata.model : undefined;
   const provider =
     typeof metadata.provider === "string" ? metadata.provider : undefined;
   const tokensIn =

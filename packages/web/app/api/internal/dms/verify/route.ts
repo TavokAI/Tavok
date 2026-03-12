@@ -58,7 +58,10 @@ export async function GET(request: NextRequest) {
       otherUser: otherParticipant?.user || null,
     });
   } catch (error) {
-    console.error("[internal/dms/verify] Failed to verify DM participant:", error);
+    console.error(
+      "[internal/dms/verify] Failed to verify DM participant:",
+      error,
+    );
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 },

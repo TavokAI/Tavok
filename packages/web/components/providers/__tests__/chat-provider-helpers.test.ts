@@ -84,9 +84,7 @@ describe("fetchAndSet", () => {
       vi.fn().mockResolvedValue({ ok: false, status: 500 }),
     );
     const onSuccess = vi.fn();
-    const consoleSpy = vi
-      .spyOn(console, "error")
-      .mockImplementation(() => {});
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
     const result = await fetchAndSet("/api/fail", "data", onSuccess);
 
@@ -103,9 +101,7 @@ describe("fetchAndSet", () => {
       vi.fn().mockRejectedValue(new Error("Network failure")),
     );
     const onSuccess = vi.fn();
-    const consoleSpy = vi
-      .spyOn(console, "error")
-      .mockImplementation(() => {});
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
     const result = await fetchAndSet("/api/boom", "items", onSuccess);
 

@@ -3,7 +3,10 @@ import { parseSseChunk } from "@/app/api/internal/agents/[agentId]/dispatch/rout
 
 describe("parseSseChunk", () => {
   it("parses a complete SSE data line with token", () => {
-    const { events, remaining } = parseSseChunk("", 'data: {"token":"Hello"}\n');
+    const { events, remaining } = parseSseChunk(
+      "",
+      'data: {"token":"Hello"}\n',
+    );
     expect(events).toEqual([{ token: "Hello" }]);
     expect(remaining).toBe("");
   });
@@ -17,7 +20,10 @@ describe("parseSseChunk", () => {
   });
 
   it("preserves incomplete lines as remaining buffer", () => {
-    const { events, remaining } = parseSseChunk("", 'data: {"token":"A"}\ndata: {"tok');
+    const { events, remaining } = parseSseChunk(
+      "",
+      'data: {"token":"A"}\ndata: {"tok',
+    );
     expect(events).toHaveLength(1);
     expect(remaining).toBe('data: {"tok');
   });
@@ -34,19 +40,26 @@ describe("parseSseChunk", () => {
   });
 
   it("skips non-data lines", () => {
-    const { events } = parseSseChunk("", "event: message\nid: 123\ndata: {\"token\":\"X\"}\n");
+    const { events } = parseSseChunk(
+      "",
+      'event: message\nid: 123\ndata: {"token":"X"}\n',
+    );
     expect(events).toHaveLength(1);
     expect(events[0].token).toBe("X");
   });
 
   it("skips malformed JSON gracefully", () => {
-    const { events } = parseSseChunk("", "data: not-json\ndata: {\"token\":\"OK\"}\n");
+    const { events } = parseSseChunk(
+      "",
+      'data: not-json\ndata: {"token":"OK"}\n',
+    );
     expect(events).toHaveLength(1);
     expect(events[0].token).toBe("OK");
   });
 
   it("parses done event with finalContent and metadata", () => {
-    const chunk = 'data: {"done":true,"finalContent":"complete text","metadata":{"model":"gpt-4"}}\n';
+    const chunk =
+      'data: {"done":true,"finalContent":"complete text","metadata":{"model":"gpt-4"}}\n';
     const { events } = parseSseChunk("", chunk);
     expect(events).toHaveLength(1);
     expect(events[0].done).toBe(true);

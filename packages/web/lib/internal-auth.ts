@@ -17,9 +17,7 @@ import { NextRequest, NextResponse } from "next/server";
  * Fails closed: returns false if INTERNAL_API_SECRET env var is missing or empty.
  */
 export function validateInternalSecret(request: NextRequest): boolean {
-  return validateInternalSecretValue(
-    request.headers.get("x-internal-secret"),
-  );
+  return validateInternalSecretValue(request.headers.get("x-internal-secret"));
 }
 
 /**

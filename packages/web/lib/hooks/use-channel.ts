@@ -114,7 +114,15 @@ interface HandlerDeps {
   setHasMoreHistory: React.Dispatch<React.SetStateAction<boolean>>;
   loadingHistoryRef: React.MutableRefObject<boolean>;
   pendingStreamMetaRef: React.MutableRefObject<
-    Map<string, { agentId: string; agentName: string; agentAvatarUrl: string | null; sequence: string }>
+    Map<
+      string,
+      {
+        agentId: string;
+        agentName: string;
+        agentAvatarUrl: string | null;
+        sequence: string;
+      }
+    >
   >;
   streamLastTokenRef: React.MutableRefObject<Map<string, number>>;
   streamBufferRef: React.MutableRefObject<Map<string, string>>;
@@ -152,9 +160,16 @@ function registerMessageHandlers(channel: Channel, deps: HandlerDeps) {
 
   channel.on("agent_trigger_skipped", (raw: unknown) => {
     if (!deps.mounted()) return;
-    const payload = raw as { agentId: string; agentName: string; reason: string; triggerMode: string };
+    const payload = raw as {
+      agentId: string;
+      agentName: string;
+      reason: string;
+      triggerMode: string;
+    };
     if (payload.reason === "mention_required" && payload.agentName) {
-      deps.setAgentTriggerHint(`Action needed: no agent triggered. Mention @${payload.agentName} to trigger it.`);
+      deps.setAgentTriggerHint(
+        `Action needed: no agent triggered. Mention @${payload.agentName} to trigger it.`,
+      );
     }
   });
 }
@@ -175,7 +190,9 @@ function registerTypingHandlers(channel: Channel, deps: HandlerDeps) {
       payload.userId,
       setTimeout(() => {
         if (!deps.mounted()) return;
-        deps.setTypingUsers((prev) => prev.filter((t) => t.userId !== payload.userId));
+        deps.setTypingUsers((prev) =>
+          prev.filter((t) => t.userId !== payload.userId),
+        );
         deps.typingTimersRef.current.delete(payload.userId);
       }, 3000),
     );
@@ -217,7 +234,8 @@ export function applyStreamError(
   if (msg.id !== payload.messageId) return msg;
   return {
     ...msg,
-    content: payload.partialContent || msg.content || `[Error: ${payload.error}]`,
+    content:
+      payload.partialContent || msg.content || `[Error: ${payload.error}]`,
     type: "STREAMING",
     streamingStatus: "ERROR",
     thinkingPhase: undefined,
@@ -235,7 +253,10 @@ export function applyStreamThinking(
     thinkingPhase: payload.phase,
     thinkingTimeline: [
       ...(msg.thinkingTimeline || []),
-      { phase: payload.phase, timestamp: payload.timestamp || new Date().toISOString() },
+      {
+        phase: payload.phase,
+        timestamp: payload.timestamp || new Date().toISOString(),
+      },
     ],
   };
 }
@@ -243,7 +264,13 @@ export function applyStreamThinking(
 /** Apply a stream_tool_call payload to a single message. */
 export function applyStreamToolCall(
   msg: MessagePayload,
-  payload: { messageId: string; callId: string; toolName: string; arguments: Record<string, unknown>; timestamp: string },
+  payload: {
+    messageId: string;
+    callId: string;
+    toolName: string;
+    arguments: Record<string, unknown>;
+    timestamp: string;
+  },
 ): MessagePayload {
   if (msg.id !== payload.messageId) return msg;
   return {
@@ -251,7 +278,12 @@ export function applyStreamToolCall(
     thinkingPhase: `Using ${payload.toolName}`,
     toolCalls: [
       ...(msg.toolCalls || []),
-      { callId: payload.callId, toolName: payload.toolName, arguments: payload.arguments, timestamp: payload.timestamp },
+      {
+        callId: payload.callId,
+        toolName: payload.toolName,
+        arguments: payload.arguments,
+        timestamp: payload.timestamp,
+      },
     ],
   };
 }
@@ -259,14 +291,27 @@ export function applyStreamToolCall(
 /** Apply a stream_tool_result payload to a single message. */
 export function applyStreamToolResult(
   msg: MessagePayload,
-  payload: { messageId: string; callId: string; toolName: string; content: string; isError: boolean; timestamp: string },
+  payload: {
+    messageId: string;
+    callId: string;
+    toolName: string;
+    content: string;
+    isError: boolean;
+    timestamp: string;
+  },
 ): MessagePayload {
   if (msg.id !== payload.messageId) return msg;
   return {
     ...msg,
     toolResults: [
       ...(msg.toolResults || []),
-      { callId: payload.callId, toolName: payload.toolName, content: payload.content, isError: payload.isError, timestamp: payload.timestamp },
+      {
+        callId: payload.callId,
+        toolName: payload.toolName,
+        content: payload.content,
+        isError: payload.isError,
+        timestamp: payload.timestamp,
+      },
     ],
   };
 }
@@ -275,7 +320,14 @@ export function applyStreamToolResult(
 export function buildStreamErrorFallback(
   channelId: string,
   payload: { messageId: string; error: string; partialContent: string | null },
-  streamMeta: { agentId: string; agentName: string; agentAvatarUrl: string | null; sequence: string } | undefined,
+  streamMeta:
+    | {
+        agentId: string;
+        agentName: string;
+        agentAvatarUrl: string | null;
+        sequence: string;
+      }
+    | undefined,
   lastSequence: string,
 ): MessagePayload {
   return {
@@ -298,22 +350,34 @@ function registerStreamingHandlers(channel: Channel, deps: HandlerDeps) {
   channel.on("stream_start", (raw: unknown) => {
     if (!deps.mounted()) return;
     const payload = raw as {
-      messageId: string; agentId: string; agentName: string;
-      agentAvatarUrl: string | null; sequence: string;
+      messageId: string;
+      agentId: string;
+      agentName: string;
+      agentAvatarUrl: string | null;
+      sequence: string;
     };
 
     deps.pendingStreamMetaRef.current.set(payload.messageId, {
-      agentId: payload.agentId, agentName: payload.agentName,
-      agentAvatarUrl: payload.agentAvatarUrl, sequence: payload.sequence,
+      agentId: payload.agentId,
+      agentName: payload.agentName,
+      agentAvatarUrl: payload.agentAvatarUrl,
+      sequence: payload.sequence,
     });
     deps.streamLastTokenRef.current.set(payload.messageId, Date.now());
 
     const placeholder: MessagePayload = {
-      id: payload.messageId, channelId: deps.channelId,
-      authorId: payload.agentId, authorType: "AGENT", authorName: payload.agentName,
-      authorAvatarUrl: payload.agentAvatarUrl, content: "", type: "STREAMING",
-      streamingStatus: "ACTIVE", sequence: payload.sequence,
-      createdAt: new Date().toISOString(), reactions: [],
+      id: payload.messageId,
+      channelId: deps.channelId,
+      authorId: payload.agentId,
+      authorType: "AGENT",
+      authorName: payload.agentName,
+      authorAvatarUrl: payload.agentAvatarUrl,
+      content: "",
+      type: "STREAMING",
+      streamingStatus: "ACTIVE",
+      sequence: payload.sequence,
+      createdAt: new Date().toISOString(),
+      reactions: [],
     };
     deps.addMessages([placeholder]);
   });
@@ -323,30 +387,42 @@ function registerStreamingHandlers(channel: Channel, deps: HandlerDeps) {
     const payload = raw as { messageId: string; token: string; index: number };
     deps.streamLastTokenRef.current.set(payload.messageId, Date.now());
     const existing = deps.streamBufferRef.current.get(payload.messageId) || "";
-    deps.streamBufferRef.current.set(payload.messageId, existing + payload.token);
+    deps.streamBufferRef.current.set(
+      payload.messageId,
+      existing + payload.token,
+    );
     deps.flushStreamBuffer();
   });
 
   channel.on("stream_complete", (raw: unknown) => {
     if (!deps.mounted()) return;
     const payload = raw as {
-      messageId: string; finalContent: string;
+      messageId: string;
+      finalContent: string;
       thinkingTimeline?: Array<{ phase: string; timestamp: string }>;
       metadata?: Record<string, unknown>;
     };
     deps.pendingStreamMetaRef.current.delete(payload.messageId);
     deps.streamLastTokenRef.current.delete(payload.messageId);
-    deps.setMessages((prev) => prev.map((m) => applyStreamComplete(m, payload)));
+    deps.setMessages((prev) =>
+      prev.map((m) => applyStreamComplete(m, payload)),
+    );
     deps.streamBufferRef.current.delete(payload.messageId);
   });
 
   channel.on("stream_error", (raw: unknown) => {
     if (!deps.mounted()) return;
-    const payload = raw as { messageId: string; error: string; partialContent: string | null };
+    const payload = raw as {
+      messageId: string;
+      error: string;
+      partialContent: string | null;
+    };
     deps.streamLastTokenRef.current.delete(payload.messageId);
     deps.setMessages((prev) => {
       const hasMatch = prev.some((m) => m.id === payload.messageId);
-      const streamMeta = deps.pendingStreamMetaRef.current.get(payload.messageId);
+      const streamMeta = deps.pendingStreamMetaRef.current.get(
+        payload.messageId,
+      );
 
       if (hasMatch) {
         deps.pendingStreamMetaRef.current.delete(payload.messageId);
@@ -354,42 +430,88 @@ function registerStreamingHandlers(channel: Channel, deps: HandlerDeps) {
       }
 
       const fallback = buildStreamErrorFallback(
-        deps.channelId, payload, streamMeta, deps.lastSequenceRef.current,
+        deps.channelId,
+        payload,
+        streamMeta,
+        deps.lastSequenceRef.current,
       );
       deps.messageIdsRef.current.add(payload.messageId);
       deps.pendingStreamMetaRef.current.delete(payload.messageId);
-      return [...prev, fallback].sort((a, b) => compareSequences(a.sequence, b.sequence));
+      return [...prev, fallback].sort((a, b) =>
+        compareSequences(a.sequence, b.sequence),
+      );
     });
     deps.streamBufferRef.current.delete(payload.messageId);
     const errorText = (payload.error || "").trim();
-    if (errorText) deps.setAgentTriggerHint(`Agent response failed: ${errorText}`);
+    if (errorText)
+      deps.setAgentTriggerHint(`Agent response failed: ${errorText}`);
   });
 
   channel.on("stream_thinking", (raw: unknown) => {
     if (!deps.mounted()) return;
-    const payload = raw as { messageId: string; phase: string; timestamp?: string };
-    deps.setMessages((prev) => prev.map((m) => applyStreamThinking(m, payload)));
+    const payload = raw as {
+      messageId: string;
+      phase: string;
+      timestamp?: string;
+    };
+    deps.setMessages((prev) =>
+      prev.map((m) => applyStreamThinking(m, payload)),
+    );
   });
 
   channel.on("stream_tool_call", (raw: unknown) => {
     if (!deps.mounted()) return;
-    const payload = raw as { messageId: string; callId: string; toolName: string; arguments: Record<string, unknown>; timestamp: string };
-    deps.setMessages((prev) => prev.map((m) => applyStreamToolCall(m, payload)));
+    const payload = raw as {
+      messageId: string;
+      callId: string;
+      toolName: string;
+      arguments: Record<string, unknown>;
+      timestamp: string;
+    };
+    deps.setMessages((prev) =>
+      prev.map((m) => applyStreamToolCall(m, payload)),
+    );
   });
 
   channel.on("stream_tool_result", (raw: unknown) => {
     if (!deps.mounted()) return;
-    const payload = raw as { messageId: string; callId: string; toolName: string; content: string; isError: boolean; timestamp: string };
-    deps.setMessages((prev) => prev.map((m) => applyStreamToolResult(m, payload)));
+    const payload = raw as {
+      messageId: string;
+      callId: string;
+      toolName: string;
+      content: string;
+      isError: boolean;
+      timestamp: string;
+    };
+    deps.setMessages((prev) =>
+      prev.map((m) => applyStreamToolResult(m, payload)),
+    );
   });
 
   channel.on("stream_checkpoint", (raw: unknown) => {
     if (!deps.mounted()) return;
-    const payload = raw as { messageId: string; index: number; label: string; contentOffset: number; timestamp: string };
+    const payload = raw as {
+      messageId: string;
+      index: number;
+      label: string;
+      contentOffset: number;
+      timestamp: string;
+    };
     deps.setMessages((prev) =>
       prev.map((m) =>
         m.id === payload.messageId
-          ? { ...m, checkpoints: [...(m.checkpoints || []), { index: payload.index, label: payload.label, contentOffset: payload.contentOffset, timestamp: payload.timestamp }] }
+          ? {
+              ...m,
+              checkpoints: [
+                ...(m.checkpoints || []),
+                {
+                  index: payload.index,
+                  label: payload.label,
+                  contentOffset: payload.contentOffset,
+                  timestamp: payload.timestamp,
+                },
+              ],
+            }
           : m,
       ),
     );
@@ -401,24 +523,44 @@ function registerMutationHandlers(channel: Channel, deps: HandlerDeps) {
     if (!deps.mounted()) return;
     const payload = raw as { messageId: string; reactions: ReactionData[] };
     deps.setMessages((prev) =>
-      prev.map((m) => m.id === payload.messageId ? { ...m, reactions: payload.reactions || [] } : m),
+      prev.map((m) =>
+        m.id === payload.messageId
+          ? { ...m, reactions: payload.reactions || [] }
+          : m,
+      ),
     );
   });
 
   channel.on("charter_status", (raw: unknown) => {
     if (!deps.mounted()) return;
-    const payload = raw as { channelId: string; currentTurn: number; maxTurns: number; status: string; swarmMode?: string };
+    const payload = raw as {
+      channelId: string;
+      currentTurn: number;
+      maxTurns: number;
+      status: string;
+      swarmMode?: string;
+    };
     deps.setCharterState((prev) => ({
       swarmMode: payload.swarmMode || prev?.swarmMode || "HUMAN_IN_THE_LOOP",
-      currentTurn: payload.currentTurn, maxTurns: payload.maxTurns, status: payload.status,
+      currentTurn: payload.currentTurn,
+      maxTurns: payload.maxTurns,
+      status: payload.status,
     }));
   });
 
   channel.on("message_edited", (raw: unknown) => {
     if (!deps.mounted()) return;
-    const payload = raw as { messageId: string; content: string; editedAt: string };
+    const payload = raw as {
+      messageId: string;
+      content: string;
+      editedAt: string;
+    };
     deps.setMessages((prev) =>
-      prev.map((m) => m.id === payload.messageId ? { ...m, content: payload.content, editedAt: payload.editedAt } : m),
+      prev.map((m) =>
+        m.id === payload.messageId
+          ? { ...m, content: payload.content, editedAt: payload.editedAt }
+          : m,
+      ),
     );
   });
 
@@ -426,7 +568,9 @@ function registerMutationHandlers(channel: Channel, deps: HandlerDeps) {
     if (!deps.mounted()) return;
     const payload = raw as { messageId: string; deletedBy: string };
     deps.setMessages((prev) =>
-      prev.map((m) => m.id === payload.messageId ? { ...m, isDeleted: true } : m),
+      prev.map((m) =>
+        m.id === payload.messageId ? { ...m, isDeleted: true } : m,
+      ),
     );
   });
 }

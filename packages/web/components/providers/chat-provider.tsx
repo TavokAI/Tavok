@@ -54,7 +54,11 @@ interface ServerScopedData {
   agents: AgentData[];
 }
 
-const EMPTY_SERVER_DATA: ServerScopedData = { channels: [], members: [], agents: [] };
+const EMPTY_SERVER_DATA: ServerScopedData = {
+  channels: [],
+  members: [],
+  agents: [],
+};
 
 /** Merge a partial update into a single server's scoped data entry. */
 export function mergeServerData(
@@ -80,7 +84,9 @@ export async function fetchAndSet<T>(
   try {
     const res = await fetch(url);
     if (!res.ok) {
-      console.error(`[ChatProvider] Failed to fetch ${key}: HTTP ${res.status}`);
+      console.error(
+        `[ChatProvider] Failed to fetch ${key}: HTTP ${res.status}`,
+      );
       return null;
     }
     const data = await res.json();
@@ -203,7 +209,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       "channels",
       (nextChannels) => {
         setChannels(nextChannels);
-        setServerDataById((prev) => mergeServerData(prev, serverId, { channels: nextChannels }));
+        setServerDataById((prev) =>
+          mergeServerData(prev, serverId, { channels: nextChannels }),
+        );
       },
     );
     if (data) {
@@ -222,7 +230,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       "members",
       (nextMembers) => {
         setMembers(nextMembers);
-        setServerDataById((prev) => mergeServerData(prev, serverId, { members: nextMembers }));
+        setServerDataById((prev) =>
+          mergeServerData(prev, serverId, { members: nextMembers }),
+        );
       },
     );
   }, [serverId]);
@@ -238,7 +248,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       (allAgents) => {
         const nextAgents = allAgents.filter((b) => b.isActive);
         setAgents(nextAgents);
-        setServerDataById((prev) => mergeServerData(prev, serverId, { agents: nextAgents }));
+        setServerDataById((prev) =>
+          mergeServerData(prev, serverId, { agents: nextAgents }),
+        );
       },
     );
   }, [serverId]);
@@ -257,7 +269,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         setUserPermissions(BigInt(data.permissions || "0"));
         setIsOwner(!!data.isOwner);
       } else {
-        console.error(`[ChatProvider] Failed to fetch permissions: HTTP ${res.status}`);
+        console.error(
+          `[ChatProvider] Failed to fetch permissions: HTTP ${res.status}`,
+        );
         setUserPermissions(BigInt(0));
         setIsOwner(false);
       }
@@ -378,15 +392,20 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           ? await agentsRes.json()
           : { agents: [] };
 
-        setServerDataById((prev) => mergeServerData(prev, targetServerId, {
-          channels: serverJson.channels || [],
-          members: membersJson.members || [],
-          agents: (agentsJson.agents || []).filter(
-            (b: AgentData) => b.isActive,
-          ),
-        }));
+        setServerDataById((prev) =>
+          mergeServerData(prev, targetServerId, {
+            channels: serverJson.channels || [],
+            members: membersJson.members || [],
+            agents: (agentsJson.agents || []).filter(
+              (b: AgentData) => b.isActive,
+            ),
+          }),
+        );
       } catch (error) {
-        console.error("[ChatProvider] Failed to refresh server scoped data:", error);
+        console.error(
+          "[ChatProvider] Failed to refresh server scoped data:",
+          error,
+        );
       }
     },
     [],

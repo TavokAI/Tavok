@@ -73,7 +73,6 @@ function extractAttachmentIds(content: string): string[] {
   return [...new Set(ids)];
 }
 
-
 // ---------- Handler factories ----------
 
 interface PrismaClientDep {
@@ -81,7 +80,9 @@ interface PrismaClientDep {
 }
 
 interface SessionDeps {
-  getServerSession: (authOptions: unknown) => Promise<{ user?: { id?: string } } | null>;
+  getServerSession: (
+    authOptions: unknown,
+  ) => Promise<{ user?: { id?: string } } | null>;
   authOptions: unknown;
   prismaClient: PrismaClient;
 }
@@ -90,7 +91,9 @@ interface ServerAgentPatchDeps extends SessionDeps {
   encrypt: (value: string) => string;
 }
 
-export function createInternalMessagesPostHandler({ prismaClient }: PrismaClientDep) {
+export function createInternalMessagesPostHandler({
+  prismaClient,
+}: PrismaClientDep) {
   return async function internalMessagesPostHandler(request: RequestLike) {
     const secret = request.headers.get("x-internal-secret");
     if (!validateInternalSecretValue(secret)) {
@@ -140,7 +143,9 @@ export function createInternalMessagesPostHandler({ prismaClient }: PrismaClient
       );
     }
 
-    const sequenceBigInt = parseNonNegativeSequence(sequenceValue as string | number | bigint);
+    const sequenceBigInt = parseNonNegativeSequence(
+      sequenceValue as string | number | bigint,
+    );
     if (sequenceBigInt === null) {
       return NextResponse.json(
         { error: "sequence must be a non-negative integer string" },
@@ -308,7 +313,12 @@ export function createInternalMessagesPostHandler({ prismaClient }: PrismaClient
     } catch (error: unknown) {
       // P2002 = Prisma unique constraint violation (duplicate message ID).
       // Return 409 so Gateway retry logic treats it as success (idempotency).
-      if (error && typeof error === "object" && "code" in error && error.code === "P2002") {
+      if (
+        error &&
+        typeof error === "object" &&
+        "code" in error &&
+        error.code === "P2002"
+      ) {
         return NextResponse.json(
           { error: "Message already exists" },
           { status: 409 },
@@ -402,7 +412,9 @@ export function createServerAgentPatchHandler({
 
     const agent = await prismaClient.agent.update({
       where: { id: agentId },
-      data: updateData as Parameters<typeof prismaClient.agent.update>[0]["data"],
+      data: updateData as Parameters<
+        typeof prismaClient.agent.update
+      >[0]["data"],
       select: {
         id: true,
         name: true,
@@ -554,7 +566,9 @@ export function createServerChannelPatchHandler({
 
     const channel = await prismaClient.channel.update({
       where: { id: channelId },
-      data: updateData as Parameters<typeof prismaClient.channel.update>[0]["data"],
+      data: updateData as Parameters<
+        typeof prismaClient.channel.update
+      >[0]["data"],
       select: {
         id: true,
         name: true,
@@ -570,4 +584,3 @@ export function createServerChannelPatchHandler({
 // ============================================================
 // AGENT HANDLERS (DEC-0040)
 // ============================================================
-

@@ -58,7 +58,10 @@ export async function createAgent(
   // Generate API key: sk-tvk- prefix + 32 random bytes base64url
   const randomBytes = crypto.randomBytes(32);
   const generatedKey = `sk-tvk-${randomBytes.toString("base64url")}`;
-  const apiKeyHash = crypto.createHash("sha256").update(generatedKey).digest("hex");
+  const apiKeyHash = crypto
+    .createHash("sha256")
+    .update(generatedKey)
+    .digest("hex");
 
   // Generate webhook secret for WEBHOOK method
   const webhookSecret =
@@ -161,7 +164,8 @@ export function buildConnectionInfo(
       break;
     case "INBOUND_WEBHOOK":
       info.inboundWebhookUrl = `${webUrl}/api/v1/webhooks/{token}`;
-      info.note = "Replace {token} with the webhook token from agent registration";
+      info.note =
+        "Replace {token} with the webhook token from agent registration";
       break;
   }
 

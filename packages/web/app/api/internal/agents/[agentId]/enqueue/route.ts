@@ -33,10 +33,8 @@ export async function POST(
   const messageId = typeof body.messageId === "string" ? body.messageId : "";
   const content = typeof body.content === "string" ? body.content : "";
   const authorId = typeof body.authorId === "string" ? body.authorId : "";
-  const authorName =
-    typeof body.authorName === "string" ? body.authorName : "";
-  const authorType =
-    typeof body.authorType === "string" ? body.authorType : "";
+  const authorName = typeof body.authorName === "string" ? body.authorName : "";
+  const authorType = typeof body.authorType === "string" ? body.authorType : "";
 
   if (!channelId || !messageId || !content) {
     return NextResponse.json(

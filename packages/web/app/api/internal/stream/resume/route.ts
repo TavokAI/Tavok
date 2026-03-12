@@ -107,7 +107,10 @@ export async function POST(request: NextRequest) {
       partialContent,
     });
   } catch (error) {
-    console.error("[internal/stream] Failed to validate resume request:", error);
+    console.error(
+      "[internal/stream] Failed to validate resume request:",
+      error,
+    );
     return NextResponse.json(
       { error: "Failed to validate resume request" },
       { status: 500 },

@@ -233,7 +233,9 @@ export function BYOKForm({
         </label>
         <select
           value={triggerMode}
-          onChange={(e) => setTriggerMode(e.target.value as "ALWAYS" | "MENTION" | "KEYWORD")}
+          onChange={(e) =>
+            setTriggerMode(e.target.value as "ALWAYS" | "MENTION" | "KEYWORD")
+          }
           className="w-full rounded bg-background-primary px-3 py-2 text-sm text-text-primary border border-background-tertiary focus:border-brand focus:outline-none"
         >
           <option value="ALWAYS">Always respond</option>

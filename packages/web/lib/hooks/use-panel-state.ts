@@ -157,7 +157,11 @@ export function hydrateSavedPanel(raw: unknown): PanelState | null {
     x: coerceFiniteNumber(r.x, DEFAULT_PANEL_X, 0),
     y: coerceFiniteNumber(r.y, DEFAULT_PANEL_Y, 0),
     width: coerceFiniteNumber(r.width, DEFAULT_PANEL_WIDTH, MIN_PANEL_WIDTH),
-    height: coerceFiniteNumber(r.height, DEFAULT_PANEL_HEIGHT, MIN_PANEL_HEIGHT),
+    height: coerceFiniteNumber(
+      r.height,
+      DEFAULT_PANEL_HEIGHT,
+      MIN_PANEL_HEIGHT,
+    ),
     isMinimized: Boolean(r.isMinimized),
     isClosed: Boolean(r.isClosed),
     isMaximized: Boolean(r.isMaximized),
@@ -172,7 +176,11 @@ export function hydrateSavedPanel(raw: unknown): PanelState | null {
     restoreWidth:
       r.restoreWidth == null
         ? null
-        : coerceFiniteNumber(r.restoreWidth, DEFAULT_PANEL_WIDTH, MIN_PANEL_WIDTH),
+        : coerceFiniteNumber(
+            r.restoreWidth,
+            DEFAULT_PANEL_WIDTH,
+            MIN_PANEL_WIDTH,
+          ),
     restoreHeight:
       r.restoreHeight == null
         ? null

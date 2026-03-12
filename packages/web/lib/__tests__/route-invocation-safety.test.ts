@@ -68,7 +68,9 @@ describe("route_invocation_safety", () => {
     const payload = await response.json();
 
     expect(response.status).toBe(400);
-    expect(payload.error).toBe("sequence must be a non-negative integer string");
+    expect(payload.error).toBe(
+      "sequence must be a non-negative integer string",
+    );
 
     process.env.INTERNAL_API_SECRET = originalSecret;
   });

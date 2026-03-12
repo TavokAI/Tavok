@@ -229,4 +229,3 @@ async function verifyWebhookMessageOwnership(
 
   return { valid: true };
 }
-

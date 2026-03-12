@@ -60,7 +60,9 @@ describe("applyStreamComplete", () => {
 
   it("replaces thinkingTimeline when payload provides one", () => {
     const newTimeline = [{ phase: "done", timestamp: "2026-01-01T00:01:00Z" }];
-    const msg = makeMsg({ thinkingTimeline: [{ phase: "old", timestamp: "2026-01-01T00:00:00Z" }] });
+    const msg = makeMsg({
+      thinkingTimeline: [{ phase: "old", timestamp: "2026-01-01T00:00:00Z" }],
+    });
     const result = applyStreamComplete(msg, {
       messageId: "msg-1",
       finalContent: "Done",
@@ -194,7 +196,14 @@ describe("applyStreamToolCall", () => {
 
   it("appends to existing tool calls", () => {
     const msg = makeMsg({
-      toolCalls: [{ callId: "call-0", toolName: "read", arguments: {}, timestamp: "2026-01-01T00:00:00Z" }],
+      toolCalls: [
+        {
+          callId: "call-0",
+          toolName: "read",
+          arguments: {},
+          timestamp: "2026-01-01T00:00:00Z",
+        },
+      ],
     });
     const result = applyStreamToolCall(msg, {
       messageId: "msg-1",
@@ -242,7 +251,12 @@ describe("buildStreamErrorFallback", () => {
     const result = buildStreamErrorFallback(
       "ch-1",
       { messageId: "msg-1", error: "timeout", partialContent: null },
-      { agentId: "agent-1", agentName: "TestBot", agentAvatarUrl: "/avatar.png", sequence: "42" },
+      {
+        agentId: "agent-1",
+        agentName: "TestBot",
+        agentAvatarUrl: "/avatar.png",
+        sequence: "42",
+      },
       "1",
     );
     expect(result.id).toBe("msg-1");

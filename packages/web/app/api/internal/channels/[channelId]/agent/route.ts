@@ -67,7 +67,10 @@ export async function GET(
       triggerMode: agent.triggerMode,
     });
   } catch (error) {
-    console.error("[internal/channels/agent] Failed to get channel agent:", error);
+    console.error(
+      "[internal/channels/agent] Failed to get channel agent:",
+      error,
+    );
     return NextResponse.json(
       { error: "Failed to get channel agent" },
       { status: 500 },

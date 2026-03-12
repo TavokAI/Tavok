@@ -77,7 +77,10 @@ export async function DELETE(
 
     return NextResponse.json({ id: messageId, deleted: true });
   } catch (error) {
-    console.error("[internal/dms/messages] Failed to delete DM message:", error);
+    console.error(
+      "[internal/dms/messages] Failed to delete DM message:",
+      error,
+    );
     return NextResponse.json(
       { error: "Failed to delete message" },
       { status: 500 },

@@ -24,7 +24,9 @@ import {
 } from "../gateway-client";
 
 // Test fixture helpers
-const makeMessagePayload = (overrides?: Partial<MessageNewPayload>): MessageNewPayload => ({
+const makeMessagePayload = (
+  overrides?: Partial<MessageNewPayload>,
+): MessageNewPayload => ({
   id: "msg-1",
   channelId: "ch-1",
   authorId: "user-1",
@@ -39,7 +41,9 @@ const makeMessagePayload = (overrides?: Partial<MessageNewPayload>): MessageNewP
   ...overrides,
 });
 
-const makeStreamStart = (overrides?: Partial<StreamStartPayload>): StreamStartPayload => ({
+const makeStreamStart = (
+  overrides?: Partial<StreamStartPayload>,
+): StreamStartPayload => ({
   messageId: "msg-1",
   agentId: "agent-1",
   agentName: "TestBot",
@@ -48,7 +52,9 @@ const makeStreamStart = (overrides?: Partial<StreamStartPayload>): StreamStartPa
   ...overrides,
 });
 
-const makeTypedMessage = (overrides?: Partial<TypedMessagePayload>): TypedMessagePayload => ({
+const makeTypedMessage = (
+  overrides?: Partial<TypedMessagePayload>,
+): TypedMessagePayload => ({
   id: "msg-1",
   channelId: "ch-1",
   authorId: "user-1",
@@ -116,7 +122,9 @@ describe("gateway-client", () => {
 
       await expect(
         broadcastToChannel("room:ch-1", "message_new", {}),
-      ).rejects.toThrow("Gateway broadcast failed: 500 Internal Server Error — gateway down");
+      ).rejects.toThrow(
+        "Gateway broadcast failed: 500 Internal Server Error — gateway down",
+      );
     });
 
     it("handles body read failure gracefully", async () => {
@@ -129,7 +137,9 @@ describe("gateway-client", () => {
 
       await expect(
         broadcastToChannel("room:ch-1", "message_new", {}),
-      ).rejects.toThrow("Gateway broadcast failed: 503 Service Unavailable — unknown");
+      ).rejects.toThrow(
+        "Gateway broadcast failed: 503 Service Unavailable — unknown",
+      );
     });
 
     it("uses GATEWAY_WEB_URL fallback when GATEWAY_INTERNAL_URL is not set", async () => {
@@ -183,7 +193,11 @@ describe("gateway-client", () => {
     });
 
     it("broadcastStreamToken sends stream_token event", async () => {
-      const payload: StreamTokenPayload = { messageId: "msg-1", token: "hello", index: 0 };
+      const payload: StreamTokenPayload = {
+        messageId: "msg-1",
+        token: "hello",
+        index: 0,
+      };
       await broadcastStreamToken("ch-1", payload);
 
       const body = JSON.parse(mockFetch.mock.calls[0][1].body);
@@ -191,7 +205,10 @@ describe("gateway-client", () => {
     });
 
     it("broadcastStreamComplete sends stream_complete event", async () => {
-      const payload: StreamCompletePayload = { messageId: "msg-1", content: "done" };
+      const payload: StreamCompletePayload = {
+        messageId: "msg-1",
+        content: "done",
+      };
       await broadcastStreamComplete("ch-1", payload);
 
       const body = JSON.parse(mockFetch.mock.calls[0][1].body);
@@ -199,7 +216,10 @@ describe("gateway-client", () => {
     });
 
     it("broadcastStreamError sends stream_error event", async () => {
-      const payload: StreamErrorPayload = { messageId: "msg-1", error: "failed" };
+      const payload: StreamErrorPayload = {
+        messageId: "msg-1",
+        error: "failed",
+      };
       await broadcastStreamError("ch-1", payload);
 
       const body = JSON.parse(mockFetch.mock.calls[0][1].body);
@@ -259,12 +279,9 @@ describe("gateway-client", () => {
 
       await fetchChannelSequence("ch-1");
 
-      expect(mockFetch).toHaveBeenCalledWith(
-        expect.any(String),
-        {
-          headers: { "x-internal-secret": "" },
-        },
-      );
+      expect(mockFetch).toHaveBeenCalledWith(expect.any(String), {
+        headers: { "x-internal-secret": "" },
+      });
     });
   });
 });

@@ -166,7 +166,9 @@ export async function POST(
     }
 
     if (!response.ok) {
-      console.error(`[internal/dispatch] Webhook dispatch failed: ${response.status}`);
+      console.error(
+        `[internal/dispatch] Webhook dispatch failed: ${response.status}`,
+      );
       return NextResponse.json(
         { error: `Agent returned ${response.status}` },
         { status: 502 },
@@ -265,7 +267,12 @@ export async function POST(
           await updateMessage(messageId, {
             streamingStatus: "ERROR",
             content: fullContent || "*[Error: Stream read failed]*",
-          }).catch((e) => console.error("[internal/dispatch] Failed to persist stream error:", e));
+          }).catch((e) =>
+            console.error(
+              "[internal/dispatch] Failed to persist stream error:",
+              e,
+            ),
+          );
         }
       } finally {
         reader.releaseLock();
@@ -320,4 +327,3 @@ export async function POST(
     );
   }
 }
-

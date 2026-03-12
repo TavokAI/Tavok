@@ -48,7 +48,9 @@ describe("auth configuration", () => {
     // Access the authorize function from the credentials provider
     function getAuthorize() {
       const provider = authOptions.providers[0] as {
-        options: { authorize: (credentials: Record<string, string>) => Promise<unknown> };
+        options: {
+          authorize: (credentials: Record<string, string>) => Promise<unknown>;
+        };
       };
       return provider.options.authorize;
     }

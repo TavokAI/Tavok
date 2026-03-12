@@ -97,10 +97,7 @@ describe("getImageDimensions", () => {
     });
 
     it("handles large dimensions", () => {
-      const result = getImageDimensions(
-        makePngBuffer(4096, 2160),
-        "image/png",
-      );
+      const result = getImageDimensions(makePngBuffer(4096, 2160), "image/png");
       expect(result).toEqual({ width: 4096, height: 2160 });
     });
 

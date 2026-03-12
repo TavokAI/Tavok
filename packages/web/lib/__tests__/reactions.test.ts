@@ -28,9 +28,7 @@ describe("aggregateReactions", () => {
 
   it("handles single reaction", () => {
     const result = aggregateReactions([{ emoji: "🚀", userId: "user1" }]);
-    expect(result).toEqual([
-      { emoji: "🚀", count: 1, userIds: ["user1"] },
-    ]);
+    expect(result).toEqual([{ emoji: "🚀", count: 1, userIds: ["user1"] }]);
   });
 });
 
