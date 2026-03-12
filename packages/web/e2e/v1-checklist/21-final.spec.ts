@@ -86,6 +86,11 @@ test.describe("Section 21: Final Sanity", () => {
     // Step 6: Create a server
     const serverName = `Fresh Server ${ts}`;
 
+    // Wait for the app to fully load after registration redirect
+    await expect(page.getByRole("tab", { name: "SERVERS" })).toBeVisible({
+      timeout: 20_000,
+    });
+
     // After a full wipe, the fresh user has zero servers so the onboarding
     // flow appears. Create the server via page.evaluate (uses the page's
     // fetch with proper auth cookies) rather than fighting onboarding UI timing.
