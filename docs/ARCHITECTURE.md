@@ -2,7 +2,7 @@
 
 > Updated after each structural change. Reflects what is actually built and shipped.
 
-**Last updated**: 2026-03-09 (DEC-0060, DEC-0061)
+**Last updated**: 2026-03-12 (DEC-0064 — boundary clarification)
 
 **Platform identity**: Agent-first workspace with humans in the loop. Not an LLM wrapper — agents do their own reasoning; Tavok handles the transport. The communication layer for humans and agents across all platforms, completely agnostic.
 
@@ -23,9 +23,9 @@ Three languages, three jobs, zero overlap:
 │   Next.js App    │   │   Elixir Gateway    │
 │   (TypeScript)   │   │   (Phoenix/BEAM)    │
 │                  │   │                     │
-│ • Auth (JWT)     │   │ • WebSocket mgmt    │ ◄── TRANSPORT ONLY
-│ • REST API       │   │ • Presence (CRDTs)  │     No orchestration logic
-│ • DB via Prisma  │   │ • Message fan-out   │     No agent decisions
+│ • Auth (JWT)     │   │ • WebSocket mgmt    │ ◄── TRANSPORT + DISPATCH
+│ • REST API       │   │ • Presence (CRDTs)  │     Trigger evaluation
+│ • DB via Prisma  │   │ • Message fan-out   │     Connection routing
 │ • Roles/Perms    │   │ • Stream relay      │
 │ • Agent API      │   │ • Watchdog          │
 │ • Settings UI    │   │ • Agent auth        │
@@ -35,16 +35,16 @@ Three languages, three jobs, zero overlap:
          │    ┌────────────────┤
          │    │                │
          ▼    ▼                ▼
-┌──────────────────┐   ┌─────────────────────┐
-│   PostgreSQL     │   │    Go Proxy         │
-│   + Redis        │   │   (ORCHESTRATOR)    │
-│                  │   │                     │
-│ • All persistent │   │ • Orchestration      │ ◄── THE BRAIN
-│   data           │   │ • Provider routing   │     All agent decisions
-│ • Pub/sub        │   │ • Transport strategies│    Charter/swarm logic
-│ • Sequences      │   │ • Tool execution     │     Stream management
-│                  │   │ • MCP client         │
-└──────────────────┘   └──────────────────────┘
+┌──────────────────┐   ┌──────────────────────────┐
+│   PostgreSQL     │   │    Go Proxy              │
+│   + Redis        │   │   (STREAM MANAGER)       │
+│                  │   │                          │
+│ • All persistent │   │ • LLM API streaming      │ ◄── STREAM LIFECYCLE
+│   data           │   │ • Provider routing       │     Token management
+│ • Pub/sub        │   │ • Token batching         │     Tool execution loop
+│ • Sequences      │   │ • Tool execution         │     Charter enforcement
+│                  │   │ • Charter enforcement    │
+└──────────────────┘   └──────────────────────────┘
                               │
                     ┌─────────┼─────────┐
                     ▼         ▼         ▼
@@ -54,14 +54,15 @@ Three languages, three jobs, zero overlap:
               └──────────┘ └──────┘ └──────────┘
 ```
 
-### Key Architectural Boundary (DEC-0019)
+### Key Architectural Boundary (DEC-0019, clarified DEC-0064)
 
-**Go owns orchestration. Elixir owns transport.**
+**Go owns stream lifecycle. Elixir owns transport and trigger dispatch. Next.js owns state.**
 
-- **Go Proxy** decides: which agent runs next, charter rule evaluation, step sequencing, tool execution, retry logic.
-- **Elixir Gateway** moves: bytes, presence updates, typing indicators. It never makes an orchestration decision.
+- **Go Proxy** manages: LLM stream lifecycle, provider routing, tool execution loops, charter turn enforcement (via Next.js), token batching and delivery.
+- **Elixir Gateway** handles: WebSocket connections, presence, message fan-out, agent trigger evaluation (ALWAYS/MENTION), connection method dispatch (BYOK/webhook/REST poll/SSE), stream relay.
+- **Next.js** owns: persistent state, auth, agent configuration, charter turn arbitration, API surface.
 
-This prevents split-brain as multi-agent flows grow in complexity.
+Go never decides which agent to run — the Gateway evaluates triggers. The Gateway never calls LLM APIs — Go handles all provider communication.
 
 ---
 
@@ -70,8 +71,8 @@ This prevents split-brain as multi-agent flows grow in complexity.
 | Service        | Language                           | Port            | Role                                                           |
 | -------------- | ---------------------------------- | --------------- | -------------------------------------------------------------- |
 | **Web**        | TypeScript (Next.js 15 / React 19) | 5555            | UI, auth, REST API, database, agent management                 |
-| **Gateway**    | Elixir (Phoenix Channels)          | 4001            | WebSocket, presence, real-time messaging, stream relay         |
-| **Streaming**  | Go                                 | 4002 (internal) | LLM streaming, provider routing, orchestration, tool execution |
+| **Gateway**    | Elixir (Phoenix Channels)          | 4001            | WebSocket, presence, real-time messaging, stream relay, trigger dispatch |
+| **Streaming**  | Go                                 | 4002 (internal) | LLM streaming, provider routing, tool execution, charter enforcement |
 | **PostgreSQL** | -                                  | 5432            | All persistent data                                            |
 | **Redis**      | -                                  | 6379            | Pub/sub, sequence counters, caching                            |
 
@@ -108,7 +109,7 @@ This prevents split-brain as multi-agent flows grow in complexity.
 - Message metadata: model name, token counts, latency, cost per message
 - WebSocket auth for agents: connect with API key, no browser needed
 - Per-user rate limiting: 5 msg/10s per user per channel prevents flood abuse (BUG-005)
-- MCP-compatible tool interface
+- Tool execution with MCP-compatible schema format
 - Channel Charter / Swarm Modes
 
 **Infrastructure**
@@ -205,7 +206,7 @@ pgvector in existing PostgreSQL (default). Abstract interface allows swapping to
 
 ### What NOT to Build
 
-- LangChain/CrewAI as a dependency (we ARE the runtime)
+- LangChain/CrewAI as a dependency (we are the interface layer, not the orchestration layer)
 - Python anywhere in the stack
 - LiteLLM proxy (our Go proxy IS the provider-agnostic layer)
 - Separate vector database for V1 (pgvector in Postgres)

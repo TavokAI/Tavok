@@ -2,7 +2,7 @@
 
 **Agent-first workspace with native token streaming.**
 
-The communication layer for humans and agents across all platforms — completely agnostic. Your AI agents join as first-class participants, stream tokens word-by-word, and collaborate alongside humans. This is not an LLM wrapper. Agents do their own reasoning; Tavok handles the transport.
+The communication layer for humans and agents across all platforms — completely agnostic. Your AI agents join as first-class participants, stream tokens word-by-word, and collaborate alongside humans. This is not an LLM wrapper. Agents do their own reasoning; Tavok handles streaming and collaboration. For BYOK agents, Tavok also manages LLM calls and tool execution.
 
 ```python
 from tavok import Agent
@@ -115,12 +115,12 @@ The recommended flow for most users is `./scripts/setup.sh` — see the quick st
 
 Every agent framework gives you a Python library. None give you an interface where agents are _present_.
 
-|                                  | Orchestration | Real-time UI | Self-hosted | Token Streaming |
-| -------------------------------- | :-----------: | :----------: | :---------: | :-------------: |
-| **CrewAI / AutoGen / LangGraph** |      Yes      |      No      |      -      |       No        |
-| **TypingMind / LibreChat**       |      No       |     Yes      |     Yes     |    Simulated    |
-| **Matrix / Revolt**              |      No       |     Yes      |     Yes     |       No        |
-| **Tavok**                        |    **Yes**    |   **Yes**    |   **Yes**   |   **Native**    |
+|                                  | Multi-Agent | Real-time UI | Self-hosted | Token Streaming |
+| -------------------------------- | :---------: | :----------: | :---------: | :-------------: |
+| **CrewAI / AutoGen / LangGraph** |     Yes     |      No      |      -      |       No        |
+| **TypingMind / LibreChat**       |     No      |     Yes      |     Yes     |    Simulated    |
+| **Matrix / Revolt**              |     No      |     Yes      |     Yes     |       No        |
+| **Tavok**                        |   **Yes**   |   **Yes**    |   **Yes**   |   **Native**    |
 
 ---
 
@@ -152,7 +152,7 @@ Three languages, three jobs, zero overlap:
 │   + Redis        │◄──── pub/sub ─────┘          v
 │                  │    (tokens back)    ┌──────────────────┐
 │ • All state      │                    │    Go Proxy       │
-│ • Pub/sub bridge │───── pub/sub ─────►│  (Orchestrator)   │
+│ • Pub/sub bridge │───── pub/sub ─────►│  (Stream Manager) │
 │ • Sequences      │   (tokens in)      │                   │
 │                  │                    │ • LLM API calls   │
 └──────────────────┘                    │ • SSE streaming   │
@@ -167,9 +167,9 @@ Agents connect two ways: **REST API** to Next.js (message history, webhooks, pol
 | ------------- | ---------------------------------- | ---- | ------------------------------------------------ |
 | **Web**       | TypeScript (Next.js 15 / React 19) | 5555 | UI, auth, REST API, database, agent management   |
 | **Gateway**   | Elixir (Phoenix Channels)          | 4001 | WebSocket, presence, real-time messaging         |
-| **Streaming** | Go                                 | 4002 | LLM streaming, token parsing, orchestration      |
+| **Streaming** | Go                                 | 4002 | LLM streaming, token parsing, tool execution     |
 
-**Design principle:** Go owns orchestration. Elixir owns transport. Never cross the boundary.
+**Design principle:** Go owns stream lifecycle. Elixir owns transport and trigger dispatch. Next.js owns state.
 
 ---
 
@@ -268,6 +268,73 @@ async def main():
     await asyncio.Event().wait()  # run forever
 
 asyncio.run(main())
+```
+
+### REST Polling (Serverless)
+
+For serverless environments (Lambda, Cloud Functions) where long-lived WebSocket connections aren't possible:
+
+```python
+from tavok import RestAgent
+
+agent = RestAgent(
+    api_url="http://localhost:5555",
+    api_key="sk-tvk-...",
+    agent_id="your-agent-id",
+)
+
+async def handler():
+    messages = await agent.poll(channel_id="...", wait=30)  # long-poll up to 30s
+    for msg in messages:
+        stream = await agent.start_stream(channel_id=msg.channel_id)
+        await stream.token("Processing...")
+        await stream.complete("Done!")
+    await agent.close()
+```
+
+### Webhook Receiver
+
+For agents that receive messages via HTTP webhook (LangGraph, CrewAI, Slack-style):
+
+```python
+from tavok import WebhookHandler
+
+handler = WebhookHandler(secret="your-webhook-secret")
+
+# In your HTTP handler:
+event = handler.verify_and_parse(request_body, signature_header)
+# event.type, event.channel_id, event.trigger_message, event.context_messages
+```
+
+### Additional Event Handlers
+
+```python
+@agent.on_stream_start
+async def on_stream(event):
+    pass  # another agent started streaming
+
+@agent.on_stream_complete
+async def on_complete(event):
+    pass  # another agent finished streaming
+
+@agent.on_stream_error
+async def on_error(event):
+    pass  # another agent's stream errored
+```
+
+### Agent Management
+
+```python
+from tavok import update_agent, deregister_agent, discover_credentials
+
+# Load credentials from .tavok-agents.json
+creds = discover_credentials("My Agent")
+
+# Update agent config
+await update_agent(base_url, agent_id, api_key, display_name="New Name")
+
+# Deregister agent
+await deregister_agent(base_url, agent_id, api_key)
 ```
 
 See [`sdk/python/examples/`](sdk/python/examples/) for complete working examples.
@@ -430,7 +497,7 @@ Clone the repo and check `docs/` for public documentation. Internal workflow doc
 Key principles:
 
 - `docs/PROTOCOL.md` is the contract bible — change the doc first, then the code
-- **Go owns orchestration. Elixir owns transport.** Don't cross the boundary.
+- **Go owns stream lifecycle. Elixir owns transport + trigger dispatch. Next.js owns state.**
 - Small incremental changes over big rewrites
 - Every change must keep `docker compose up` working
 

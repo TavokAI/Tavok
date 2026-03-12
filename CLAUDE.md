@@ -9,14 +9,18 @@ Tavok is an open-source, self-hostable chat platform that looks and feels like D
 ## Tech Stack
 
 - **Web**: TypeScript / Next.js 15 / React 19 / Tailwind / Prisma / NextAuth
-- **Gateway**: Elixir / Phoenix Channels (BEAM VM — transport only)
-- **Streaming Proxy**: Go (orchestrator — LLM streaming, agent decisions, tool execution)
+- **Gateway**: Elixir / Phoenix Channels (BEAM VM — transport + trigger dispatch)
+- **Streaming Proxy**: Go (stream manager — LLM streaming, tool execution, charter enforcement)
 - **Database**: PostgreSQL 16 + Redis 7
 - **Infra**: Docker Compose
 
 ## Key Boundary
 
-**Go owns orchestration. Elixir owns transport.** (DEC-0019) — Never put agent logic in the Gateway.
+**Go owns stream lifecycle. Elixir owns transport + trigger dispatch. Next.js owns state.** (DEC-0019, DEC-0064)
+
+- Go: LLM API calls, token streaming, tool execution, charter turn enforcement
+- Elixir: WebSocket, presence, message fan-out, agent trigger evaluation, connection method routing
+- Next.js: Auth, persistent state, agent config, charter turn arbitration
 
 ## How to Run
 
@@ -53,8 +57,8 @@ Tavok/
 ├── packages/
 │   ├── web/                  # Next.js frontend + API
 │   └── shared/               # Shared TypeScript types
-├── gateway/                  # Elixir/Phoenix real-time gateway (TRANSPORT)
-├── streaming/                # Go LLM streaming proxy (ORCHESTRATOR)
+├── gateway/                  # Elixir/Phoenix real-time gateway (TRANSPORT + DISPATCH)
+├── streaming/                # Go LLM streaming proxy (STREAM MANAGER)
 ├── sdk/python/               # Python SDK (tavok-sdk)
 ├── prisma/                   # Database schema
 ├── docs/                     # Public documentation
@@ -71,4 +75,4 @@ Tavok/
 - If you change a contract, update `docs/PROTOCOL.md` first
 - Log tradeoffs in `docs/DECISIONS.md`
 - Keep `docker-compose up` working after every change
-- Go = orchestration. Elixir = transport. Don't cross the boundary.
+- Go = stream lifecycle. Elixir = transport + trigger dispatch. Next.js = state. Respect the boundaries.

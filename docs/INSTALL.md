@@ -54,7 +54,7 @@ Open http://localhost:5555. Create an account. Create a server. Done.
 | `redis` | Redis 7 | 6379 (localhost only) | Pub/sub, caching, stream relay |
 | `web` | Next.js 15 | **5555** | UI, auth, REST API, database |
 | `gateway` | Elixir/Phoenix | **4001** | WebSocket, presence, real-time messaging |
-| `streaming` | Go | 4002 | LLM streaming, orchestration |
+| `streaming` | Go | 4002 | LLM streaming, tool execution, charter enforcement |
 
 3. The `web` container ran Prisma migrations automatically on first boot
 
@@ -379,7 +379,7 @@ docker compose up -d
 ```
 Browser → :5555 (web)     UI, auth, REST API, database
        → :4001 (gateway)  WebSocket, presence, real-time
-         :4002 (streaming) LLM streaming, orchestration (internal)
+         :4002 (streaming) LLM streaming, tool execution (internal)
 
          :5432 (db)        PostgreSQL (localhost only)
          :6379 (redis)     Redis pub/sub (localhost only)

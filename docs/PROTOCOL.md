@@ -1677,7 +1677,7 @@ Broadcasts `reaction_update` to `dm:{dmId}`.
 
 ## 9. Channel Charter / Swarm Modes (TASK-0020, DEC-0050)
 
-Multi-agent collaboration modes with human-defined rules, enforced by the Go orchestrator.
+Multi-agent collaboration modes with human-defined rules, enforced by the Go stream manager.
 
 ### 9a. Swarm Modes
 

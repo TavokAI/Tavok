@@ -1309,3 +1309,30 @@ model AgentRegistration {
 5. **Charter delivery**: SDK agents receive a `charter_update` WebSocket event on channel join (with charter text) and on charter changes (via broadcast).
 
 **Consequences**: Breaking wire format change — SDK clients using `authorType: "BOT"` must update to `"AGENT"`. All API consumers using `/bots/` endpoints must update to `/agents/`. SDK agents no longer receive spurious BYOK errors on @mention. Charter rules are now enforced for SDK agents.
+
+---
+
+## DEC-0064: Clarify service boundary — "stream lifecycle" not "orchestration"
+
+**Date**: 2026-03-12
+**Status**: Accepted
+**Context**: Documentation audit revealed a systemic mismatch between what the docs claim and what the code does. DEC-0019 states "Go Proxy is the orchestrator. All agent decision-making lives in Go: which agent runs next, charter rule evaluation, step sequencing, tool execution, retry logic, checkpoint/resume. Elixir Gateway is pure transport." A code audit found:
+
+1. Go proxy never decides which agent runs next — it receives a pre-selected `agentId` via Redis
+2. No "step sequencing" exists in Go — only the standard LLM tool-use loop
+3. No retry logic for LLM API calls (explicitly no retries on 4xx per PROTOCOL.md)
+4. The Elixir Gateway contains substantial agent decision logic: trigger evaluation (ALWAYS/MENTION per agent), connection method dispatch (BYOK/webhook/REST poll/SSE routing), multi-agent trigger evaluation, BYOK context building, and charter delivery — all added intentionally via DEC-0043 and TASK-0012
+
+The word "orchestration" appears 13 times across 7 files, consistently overstating Go's role and understating Elixir's.
+
+**Decision**: Redefine the boundary to match what the code actually does:
+
+- **Go Proxy** (stream manager): LLM stream lifecycle — API calls, SSE parsing, token batching, tool execution loops, charter turn enforcement (via Next.js), thinking phase management
+- **Elixir Gateway** (transport + dispatch): WebSocket connections, presence, message fan-out, agent trigger evaluation, connection method routing, stream relay, watchdog
+- **Next.js** (state + API): Auth, persistent state, agent configuration, charter turn arbitration, all public and internal APIs
+
+Replace "orchestration/orchestrator" with "stream management/stream manager" in service descriptions. The term "orchestration" implies task routing, workflow DAGs, and agent coordination — capabilities Tavok intentionally does not provide (agents orchestrate themselves externally).
+
+**Rationale**: Accurate documentation prevents developers from putting code in the wrong service. It also prevents external users from expecting LangGraph-style orchestration when evaluating Tavok. DEC-0019's original intent (clear ownership, no split-brain) is preserved — the boundaries are just described more precisely.
+
+**Consequences**: Updated ARCHITECTURE.md, README.md, CLAUDE.md, AGENTS.md, INSTALL.md, PROTOCOL.md. The Go/Elixir boundary is unchanged in code — only the documentation now matches the implementation.
