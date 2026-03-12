@@ -60,12 +60,13 @@ test.describe("Section 17: Channel Charter & Swarm Modes", () => {
             `/api/servers/${args.serverId}/channels`,
           );
           if (!channelRes.ok) return;
-          const channels = await channelRes.json();
-          if (!Array.isArray(channels) || channels.length === 0) return;
+          const channelData = await channelRes.json();
+          const channelList = channelData.channels || channelData;
+          if (!Array.isArray(channelList) || channelList.length === 0) return;
 
           // Assign agents to channel
           await fetch(
-            `/api/servers/${args.serverId}/channels/${channels[0].id}`,
+            `/api/servers/${args.serverId}/channels/${channelList[0].id}`,
             {
               method: "PATCH",
               headers: { "Content-Type": "application/json" },
@@ -278,8 +279,9 @@ test.describe("Section 17: Channel Charter & Swarm Modes", () => {
         const channelRes = await fetch(
           `/api/servers/${args.serverId}/channels`,
         );
-        const channels = await channelRes.json();
-        const general = channels[0];
+        const data = await channelRes.json();
+        const channelList = data.channels || data;
+        const general = channelList[0];
 
         // Set Round Robin mode
         await fetch(`/api/servers/${args.serverId}/channels/${general.id}`, {
@@ -323,8 +325,9 @@ test.describe("Section 17: Channel Charter & Swarm Modes", () => {
         const channelRes = await fetch(
           `/api/servers/${args.serverId}/channels`,
         );
-        const channels = await channelRes.json();
-        const general = channels[0];
+        const data = await channelRes.json();
+        const channelList = data.channels || data;
+        const general = channelList[0];
 
         // Ensure mode is set
         await fetch(`/api/servers/${args.serverId}/channels/${general.id}`, {
@@ -375,8 +378,9 @@ test.describe("Section 17: Channel Charter & Swarm Modes", () => {
         const channelRes = await fetch(
           `/api/servers/${args.serverId}/channels`,
         );
-        const channels = await channelRes.json();
-        const general = channels[0];
+        const data = await channelRes.json();
+        const channelList = data.channels || data;
+        const general = channelList[0];
 
         await fetch(`/api/servers/${args.serverId}/channels/${general.id}`, {
           method: "PATCH",
@@ -433,8 +437,9 @@ test.describe("Section 17: Channel Charter & Swarm Modes", () => {
         const channelRes = await fetch(
           `/api/servers/${args.serverId}/channels`,
         );
-        const channels = await channelRes.json();
-        const general = channels[0];
+        const data = await channelRes.json();
+        const channelList = data.channels || data;
+        const general = channelList[0];
 
         await fetch(`/api/servers/${args.serverId}/channels/${general.id}`, {
           method: "PATCH",
@@ -483,8 +488,9 @@ test.describe("Section 17: Channel Charter & Swarm Modes", () => {
         const channelRes = await fetch(
           `/api/servers/${args.serverId}/channels`,
         );
-        const channels = await channelRes.json();
-        const general = channels[0];
+        const data = await channelRes.json();
+        const channelList = data.channels || data;
+        const general = channelList[0];
 
         await fetch(`/api/servers/${args.serverId}/channels/${general.id}`, {
           method: "PATCH",
