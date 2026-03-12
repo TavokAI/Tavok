@@ -321,7 +321,7 @@ export function ChatPanel({ panel }: ChatPanelProps) {
   return (
     <div
       onMouseDown={focusAndSyncRoute}
-      className="chrome-panel absolute flex flex-col overflow-hidden rounded-[24px] border border-white/10 shadow-[0_26px_70px_rgba(2,8,20,0.42)] ring-1 ring-white/5"
+      className="chrome-panel absolute flex flex-col overflow-hidden rounded-lg border border-white/10"
       style={{
         left: panel.x,
         top: panel.y,
@@ -333,7 +333,7 @@ export function ChatPanel({ panel }: ChatPanelProps) {
       {/* Titlebar */}
       <div
         onMouseDown={handleMouseDownDrag}
-        className={`flex h-[44px] shrink-0 items-center justify-between border-b border-white/8 bg-[linear-gradient(180deg,rgba(24,39,70,0.98),rgba(18,30,54,0.92))] px-4 ${
+        className={`flex h-[44px] shrink-0 items-center justify-between border-b border-border bg-background-secondary px-4 ${
           panel.isMaximized
             ? "cursor-default"
             : "cursor-grab active:cursor-grabbing"
@@ -401,7 +401,7 @@ export function ChatPanel({ panel }: ChatPanelProps) {
           {osVariant === "windows" && (
             <div
               onMouseDown={(e) => e.stopPropagation()}
-              className="ml-1 flex items-center overflow-hidden rounded-xl border border-white/10 bg-background-tertiary/48"
+              className="ml-1 flex items-center overflow-hidden rounded-lg border border-white/10 bg-background-tertiary/48"
             >
               <button
                 onClick={handleMinimizePanel}
@@ -436,7 +436,7 @@ export function ChatPanel({ panel }: ChatPanelProps) {
       </div>
 
       {/* Content */}
-      <div className="flex flex-1 flex-col overflow-hidden bg-[linear-gradient(180deg,rgba(14,23,42,0.82),rgba(11,18,34,0.94))]">
+      <div className="flex flex-1 flex-col overflow-hidden bg-background-primary">
         <MessageList
           messages={messages}
           hasMoreHistory={hasMoreHistory}
@@ -456,7 +456,7 @@ export function ChatPanel({ panel }: ChatPanelProps) {
             className={
               isErrorHint
                 ? "border-t border-status-dnd/35 bg-status-dnd/10 px-4 py-2.5 text-sm font-semibold text-status-dnd"
-                : "border-t border-brand/20 bg-brand/10 px-4 py-2.5 text-sm font-semibold text-orange-100"
+                : "border-t border-brand/20 bg-brand/10 px-4 py-2.5 text-sm font-semibold text-white"
             }
           >
             {agentTriggerHint}

@@ -114,7 +114,7 @@ export async function POST(request: Request) {
         { status: 409 },
       );
     }
-    console.error("Registration error:", error);
+    console.error("[auth/register] Registration error:", error);
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 },

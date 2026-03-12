@@ -7,6 +7,7 @@ import {
   broadcastStreamError,
   broadcastToChannel,
 } from "@/lib/gateway-client";
+import { updateMessage } from "@/lib/internal-api-client";
 
 /**
  * POST /api/v1/agents/{id}/messages/{messageId}/stream — Stream tokens (DEC-0043)
@@ -167,7 +168,7 @@ export async function POST(
       nextTokenOffset: tokenIndex,
     });
   } catch (err) {
-    console.error("Agent stream failed:", err);
+    console.error("[v1/agents/stream] Agent stream failed:", err);
     return NextResponse.json(
       { error: "Failed to process stream" },
       { status: 500 },
@@ -195,7 +196,7 @@ async function verifyMessageOwnership(
       },
     });
   } catch (err) {
-    console.error("Ownership check DB query failed:", err);
+    console.error("[v1/agents/stream] Ownership check DB query failed:", err);
     return {
       valid: false,
       error: "Internal error during ownership verification",
@@ -226,14 +227,3 @@ async function verifyMessageOwnership(
   return { valid: true, channelId: message.channelId };
 }
 
-async function updateMessage(messageId: string, data: Record<string, unknown>) {
-  const internalUrl = process.env.NEXTAUTH_URL || "http://localhost:5555";
-  await fetch(`${internalUrl}/api/internal/messages/${messageId}`, {
-    method: "PUT",
-    headers: {
-      "Content-Type": "application/json",
-      "x-internal-secret": process.env.INTERNAL_API_SECRET || "",
-    },
-    body: JSON.stringify(data),
-  }).catch((err) => console.error("Update failed:", err));
-}

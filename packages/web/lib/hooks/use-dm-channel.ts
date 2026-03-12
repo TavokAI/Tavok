@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import type { Channel, Socket } from "phoenix";
 import { Presence } from "phoenix";
 import { getSocket } from "@/lib/socket";
+import { compareSequences } from "@/lib/api-safety";
 
 /**
  * TASK-0019: DM message payload (simplified — no streaming, no agents).
@@ -24,20 +25,13 @@ export interface DmMessagePayload {
   reactions: Array<{ emoji: string; count: number; userIds: string[] }>;
 }
 
-function compareSequences(a: string, b: string): number {
-  const aBigInt = BigInt(a);
-  const bBigInt = BigInt(b);
-  if (aBigInt === bBigInt) return 0;
-  return aBigInt > bBigInt ? 1 : -1;
-}
-
-export interface DmTypingUser {
+interface DmTypingUser {
   userId: string;
   username: string;
   displayName: string;
 }
 
-export interface DmPresenceUser {
+interface DmPresenceUser {
   userId: string;
   username: string;
   displayName: string;

@@ -17,28 +17,28 @@ import { NextRequest, NextResponse } from "next/server";
  * Fails closed: returns false if INTERNAL_API_SECRET env var is missing or empty.
  */
 export function validateInternalSecret(request: NextRequest): boolean {
+  return validateInternalSecretValue(
+    request.headers.get("x-internal-secret"),
+  );
+}
+
+/**
+ * Validates a raw secret value using constant-time comparison.
+ * Use this when you have the header value already extracted (e.g., in handler factories).
+ */
+export function validateInternalSecretValue(provided: string | null): boolean {
   const expected = process.env.INTERNAL_API_SECRET;
   if (!expected) {
     console.error(
-      "INTERNAL_API_SECRET is not set — rejecting all internal API requests",
+      "[internal-auth] INTERNAL_API_SECRET is not set — rejecting all internal API requests",
     );
     return false;
   }
+  if (!provided) return false;
 
-  const provided = request.headers.get("x-internal-secret");
-  if (!provided) {
-    return false;
-  }
-
-  // Constant-time comparison prevents timing attacks (ISSUE-010)
   const expectedBuf = Buffer.from(expected);
   const providedBuf = Buffer.from(provided);
-
-  // Length check must be separate — timingSafeEqual requires equal lengths
-  if (expectedBuf.length !== providedBuf.length) {
-    return false;
-  }
-
+  if (expectedBuf.length !== providedBuf.length) return false;
   return crypto.timingSafeEqual(expectedBuf, providedBuf);
 }
 
@@ -47,4 +47,12 @@ export function validateInternalSecret(request: NextRequest): boolean {
  */
 export function unauthorizedResponse(): NextResponse {
   return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+}
+
+/**
+ * Returns the internal base URL for self-calls (Web → Web internal API).
+ * Reads from NEXTAUTH_URL env var with localhost fallback.
+ */
+export function getInternalBaseUrl(): string {
+  return process.env.NEXTAUTH_URL || "http://localhost:5555";
 }

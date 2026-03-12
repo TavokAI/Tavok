@@ -108,7 +108,7 @@ export async function GET(
 
     return NextResponse.json({ messages: payload, hasMore });
   } catch (error) {
-    console.error("Failed to fetch DM messages:", error);
+    console.error("[dms/messages] Failed to fetch DM messages:", error);
     return NextResponse.json(
       { error: "Failed to fetch messages" },
       { status: 500 },

@@ -40,7 +40,7 @@ export async function GET(
 
     return NextResponse.json(message);
   } catch (error) {
-    console.error("[Internal] Failed to fetch message:", error);
+    console.error("[internal/messages] Failed to fetch message:", error);
     return NextResponse.json(
       { error: "Failed to fetch message" },
       { status: 500 },
@@ -63,7 +63,14 @@ export async function PUT(
   }
 
   const { messageId } = await params;
-  const body = await request.json();
+
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
+
   const {
     content,
     streamingStatus,
@@ -100,7 +107,7 @@ export async function PUT(
       streamingStatus: message.streamingStatus,
     });
   } catch (error) {
-    console.error("[Internal] Failed to update message:", error);
+    console.error("[internal/messages] Failed to update message:", error);
     return NextResponse.json(
       { error: "Failed to update message" },
       { status: 500 },
@@ -209,7 +216,7 @@ export async function PATCH(
       editedAt: editedAt.toISOString(),
     });
   } catch (error) {
-    console.error("[Internal] Failed to edit message:", error);
+    console.error("[internal/messages] Failed to edit message:", error);
     return NextResponse.json(
       { error: "Failed to edit message" },
       { status: 500 },
@@ -321,7 +328,7 @@ export async function DELETE(
       deletedBy: userId,
     });
   } catch (error) {
-    console.error("[Internal] Failed to delete message:", error);
+    console.error("[internal/messages] Failed to delete message:", error);
     return NextResponse.json(
       { error: "Failed to delete message" },
       { status: 500 },

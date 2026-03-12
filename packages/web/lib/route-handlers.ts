@@ -1,20 +1,50 @@
-import { NextResponse } from "next/server.js";
+import { NextRequest, NextResponse } from "next/server";
 import {
   buildMonotonicLastSequenceUpdate,
   canMutateServerScopedResource,
   isJsonObjectBody,
   parseNonNegativeSequence,
   serializeSequence,
-} from "./api-safety.js";
+} from "./api-safety";
 import { parseMentionedUserIds } from "./mention-parser";
 import { generateId } from "./ulid";
-import crypto from "crypto";
+import { validateInternalSecretValue } from "./internal-auth";
+import type { PrismaClient } from "@prisma/client";
 
-function isAuthorType(value) {
+// ---------- Shared types ----------
+
+type AuthorType = "USER" | "AGENT" | "SYSTEM";
+type MessageType =
+  | "STANDARD"
+  | "STREAMING"
+  | "SYSTEM"
+  | "TOOL_CALL"
+  | "TOOL_RESULT"
+  | "CODE_BLOCK"
+  | "ARTIFACT"
+  | "STATUS";
+type StreamingStatus = "ACTIVE" | "COMPLETE" | "ERROR";
+
+// Minimal request shape — tests pass plain objects, not full NextRequest
+interface RequestLike {
+  headers: Headers;
+  url: string;
+  json: () => Promise<unknown>;
+  searchParams?: URLSearchParams;
+}
+
+// Next.js App Router context for route handlers with dynamic params
+interface RouteContext {
+  params: Promise<Record<string, string>>;
+}
+
+// ---------- Type guards ----------
+
+function isAuthorType(value: unknown): value is AuthorType {
   return value === "USER" || value === "AGENT" || value === "SYSTEM";
 }
 
-function isMessageType(value) {
+function isMessageType(value: unknown): value is MessageType {
   return (
     value === "STANDARD" ||
     value === "STREAMING" ||
@@ -27,12 +57,14 @@ function isMessageType(value) {
   );
 }
 
-function isStreamingStatus(value) {
+function isStreamingStatus(value: unknown): value is StreamingStatus {
   return value === "ACTIVE" || value === "COMPLETE" || value === "ERROR";
 }
 
-function extractAttachmentIds(content) {
-  const ids = [];
+// ---------- Helpers ----------
+
+function extractAttachmentIds(content: string): string[] {
+  const ids: string[] = [];
   const regex = /\[file:([^:\]]+):[^:\]]+:[^\]]+\]/g;
   let match;
   while ((match = regex.exec(content)) !== null) {
@@ -41,14 +73,31 @@ function extractAttachmentIds(content) {
   return [...new Set(ids)];
 }
 
-export function createInternalMessagesPostHandler({ prismaClient }) {
-  return async function internalMessagesPostHandler(request) {
+
+// ---------- Handler factories ----------
+
+interface PrismaClientDep {
+  prismaClient: PrismaClient;
+}
+
+interface SessionDeps {
+  getServerSession: (authOptions: unknown) => Promise<{ user?: { id?: string } } | null>;
+  authOptions: unknown;
+  prismaClient: PrismaClient;
+}
+
+interface ServerAgentPatchDeps extends SessionDeps {
+  encrypt: (value: string) => string;
+}
+
+export function createInternalMessagesPostHandler({ prismaClient }: PrismaClientDep) {
+  return async function internalMessagesPostHandler(request: RequestLike) {
     const secret = request.headers.get("x-internal-secret");
-    if (secret !== process.env.INTERNAL_API_SECRET) {
+    if (!validateInternalSecretValue(secret)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    let body;
+    let body: Record<string, unknown>;
     try {
       const parsedBody = await request.json();
       if (!isJsonObjectBody(parsedBody)) {
@@ -91,7 +140,7 @@ export function createInternalMessagesPostHandler({ prismaClient }) {
       );
     }
 
-    const sequenceBigInt = parseNonNegativeSequence(sequenceValue);
+    const sequenceBigInt = parseNonNegativeSequence(sequenceValue as string | number | bigint);
     if (sequenceBigInt === null) {
       return NextResponse.json(
         { error: "sequence must be a non-negative integer string" },
@@ -104,22 +153,23 @@ export function createInternalMessagesPostHandler({ prismaClient }) {
       authorType === "USER" ? extractAttachmentIds(content) : [];
 
     try {
+      const createData: Record<string, unknown> = {
+        id,
+        channelId,
+        authorId,
+        authorType,
+        content,
+        type,
+        streamingStatus: (streamingStatus as string) ?? null,
+        sequence: sequenceBigInt,
+      };
+      if (metadata !== undefined && metadata !== null) {
+        createData.metadata = metadata;
+      }
+
       const [message] = await prismaClient.$transaction(async (tx) => {
-        const createData = {
-          id,
-          channelId,
-          authorId,
-          authorType,
-          content,
-          type,
-          streamingStatus: streamingStatus ?? null,
-          sequence: sequenceBigInt,
-        };
-        if (metadata !== undefined && metadata !== null) {
-          createData.metadata = metadata;
-        }
         const createdMessage = await tx.message.create({
-          data: createData,
+          data: createData as Parameters<typeof tx.message.create>[0]["data"],
         });
 
         if (attachmentIds.length > 0) {
@@ -191,7 +241,6 @@ export function createInternalMessagesPostHandler({ prismaClient }) {
               });
 
               // TASK-0016: Increment mentionCount for mentioned users (excluding author).
-              // Users who don't have a ChannelReadState yet: updateMany affects 0 rows — fine for V1.
               const mentionedOthers = mentionedIds.filter(
                 (uid) => uid !== authorId,
               );
@@ -217,7 +266,7 @@ export function createInternalMessagesPostHandler({ prismaClient }) {
       // BUG-002: Use descriptive fallback instead of "Unknown" for deleted authors
       let authorName =
         authorType === "AGENT" ? "Deleted Agent" : "Deleted User";
-      let authorAvatarUrl = null;
+      let authorAvatarUrl: string | null = null;
 
       if (authorType === "USER") {
         const user = await prismaClient.user.findUnique({
@@ -256,16 +305,16 @@ export function createInternalMessagesPostHandler({ prismaClient }) {
         },
         { status: 201 },
       );
-    } catch (error) {
+    } catch (error: unknown) {
       // P2002 = Prisma unique constraint violation (duplicate message ID).
       // Return 409 so Gateway retry logic treats it as success (idempotency).
-      if (error?.code === "P2002") {
+      if (error && typeof error === "object" && "code" in error && error.code === "P2002") {
         return NextResponse.json(
           { error: "Message already exists" },
           { status: 409 },
         );
       }
-      console.error("Failed to persist message:", error);
+      console.error("[route-handlers] Failed to persist message:", error);
       return NextResponse.json(
         { error: "Failed to persist message" },
         { status: 500 },
@@ -279,8 +328,11 @@ export function createServerAgentPatchHandler({
   authOptions,
   prismaClient,
   encrypt,
-}) {
-  return async function serverAgentPatchHandler(request, { params }) {
+}: ServerAgentPatchDeps) {
+  return async function serverAgentPatchHandler(
+    request: RequestLike,
+    { params }: RouteContext,
+  ) {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -312,7 +364,7 @@ export function createServerAgentPatchHandler({
       );
     }
 
-    let body;
+    let body: Record<string, unknown>;
     try {
       const parsedBody = await request.json();
       if (!isJsonObjectBody(parsedBody)) {
@@ -326,7 +378,7 @@ export function createServerAgentPatchHandler({
       return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
     }
 
-    const updateData = {};
+    const updateData: Record<string, unknown> = {};
     const allowedFields = [
       "name",
       "llmProvider",
@@ -344,13 +396,13 @@ export function createServerAgentPatchHandler({
       }
     }
 
-    if (typeof body.apiKey === "string" && body.apiKey.length > 0) {
-      updateData.apiKeyEncrypted = encrypt(body.apiKey);
+    if (typeof body.apiKey === "string" && (body.apiKey as string).length > 0) {
+      updateData.apiKeyEncrypted = encrypt(body.apiKey as string);
     }
 
     const agent = await prismaClient.agent.update({
       where: { id: agentId },
-      data: updateData,
+      data: updateData as Parameters<typeof prismaClient.agent.update>[0]["data"],
       select: {
         id: true,
         name: true,
@@ -373,8 +425,11 @@ export function createServerChannelPatchHandler({
   getServerSession,
   authOptions,
   prismaClient,
-}) {
-  return async function serverChannelPatchHandler(request, { params }) {
+}: SessionDeps) {
+  return async function serverChannelPatchHandler(
+    request: RequestLike,
+    { params }: RouteContext,
+  ) {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -406,7 +461,7 @@ export function createServerChannelPatchHandler({
       );
     }
 
-    let body;
+    let body: Record<string, unknown>;
     try {
       const parsedBody = await request.json();
       if (!isJsonObjectBody(parsedBody)) {
@@ -420,14 +475,14 @@ export function createServerChannelPatchHandler({
       return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
     }
 
-    const updateData = {};
+    const updateData: Record<string, unknown> = {};
 
     if ("defaultAgentId" in body) {
       if (body.defaultAgentId === null) {
         updateData.defaultAgentId = null;
       } else if (
         typeof body.defaultAgentId !== "string" ||
-        body.defaultAgentId.length === 0
+        (body.defaultAgentId as string).length === 0
       ) {
         return NextResponse.json(
           { error: "defaultAgentId must be a string or null" },
@@ -435,7 +490,7 @@ export function createServerChannelPatchHandler({
         );
       } else {
         const agent = await prismaClient.agent.findUnique({
-          where: { id: body.defaultAgentId },
+          where: { id: body.defaultAgentId as string },
         });
         if (!agent || agent.serverId !== serverId) {
           return NextResponse.json(
@@ -469,7 +524,7 @@ export function createServerChannelPatchHandler({
         );
       }
       // Validate all items are non-empty strings
-      for (const id of body.agentIds) {
+      for (const id of body.agentIds as unknown[]) {
         if (typeof id !== "string" || id.length === 0) {
           return NextResponse.json(
             { error: "agentIds must be an array of strings" },
@@ -478,13 +533,14 @@ export function createServerChannelPatchHandler({
         }
       }
       // Validate all agent IDs exist in the server
-      if (body.agentIds.length > 0 && prismaClient.agent?.findMany) {
+      const agentIds = body.agentIds as string[];
+      if (agentIds.length > 0) {
         const validAgents = await prismaClient.agent.findMany({
-          where: { id: { in: body.agentIds }, serverId },
+          where: { id: { in: agentIds }, serverId },
           select: { id: true },
         });
         const validIds = new Set(validAgents.map((a) => a.id));
-        const invalid = body.agentIds.filter((id) => !validIds.has(id));
+        const invalid = agentIds.filter((id) => !validIds.has(id));
         if (invalid.length > 0) {
           return NextResponse.json(
             {
@@ -498,7 +554,7 @@ export function createServerChannelPatchHandler({
 
     const channel = await prismaClient.channel.update({
       where: { id: channelId },
-      data: updateData,
+      data: updateData as Parameters<typeof prismaClient.channel.update>[0]["data"],
       select: {
         id: true,
         name: true,
@@ -515,261 +571,3 @@ export function createServerChannelPatchHandler({
 // AGENT HANDLERS (DEC-0040)
 // ============================================================
 
-/**
- * Hash an API key with SHA-256 for indexed lookup.
- * Exported for testing.
- */
-export function hashApiKey(apiKey) {
-  return crypto.createHash("sha256").update(apiKey).digest("hex");
-}
-
-/**
- * GET /api/v1/agents/{id}
- * Public agent info (no auth required).
- */
-export function createAgentGetHandler({ prismaClient }) {
-  return async function agentGetHandler(agentId) {
-    const agent = await prismaClient.agent.findUnique({
-      where: { id: agentId },
-      select: {
-        id: true,
-        name: true,
-        avatarUrl: true,
-        serverId: true,
-        llmModel: true,
-        isActive: true,
-        triggerMode: true,
-        createdAt: true,
-        agentRegistration: {
-          select: {
-            capabilities: true,
-            healthUrl: true,
-            webhookUrl: true,
-            maxTokensSec: true,
-            lastHealthCheck: true,
-            lastHealthOk: true,
-          },
-        },
-      },
-    });
-
-    if (!agent || !agent.agentRegistration) {
-      return NextResponse.json({ error: "Agent not found" }, { status: 404 });
-    }
-
-    return NextResponse.json({
-      agentId: agent.id,
-      displayName: agent.name,
-      avatarUrl: agent.avatarUrl,
-      serverId: agent.serverId,
-      model: agent.llmModel,
-      isActive: agent.isActive,
-      triggerMode: agent.triggerMode,
-      capabilities: agent.agentRegistration.capabilities,
-      healthUrl: agent.agentRegistration.healthUrl,
-      webhookUrl: agent.agentRegistration.webhookUrl,
-      maxTokensSec: agent.agentRegistration.maxTokensSec,
-      lastHealthCheck: agent.agentRegistration.lastHealthCheck,
-      lastHealthOk: agent.agentRegistration.lastHealthOk,
-      createdAt: agent.createdAt,
-    });
-  };
-}
-
-/**
- * Authenticate an agent via Authorization: Bearer sk-tvk-...
- * Returns { authorized, error, status }.
- */
-export async function authenticateAgentKey(authHeader, agentId, prismaClient) {
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    return {
-      authorized: false,
-      error: "Missing Authorization header",
-      status: 401,
-    };
-  }
-
-  const apiKey = authHeader.slice(7);
-  const apiKeyHash = hashApiKey(apiKey);
-
-  const registration = await prismaClient.agentRegistration.findFirst({
-    where: { apiKeyHash, agentId: agentId },
-    select: { id: true, agentId: true },
-  });
-
-  if (!registration) {
-    return { authorized: false, error: "Invalid API key", status: 401 };
-  }
-
-  return { authorized: true };
-}
-
-/**
- * PATCH /api/v1/agents/{id}
- * Update agent. Requires Bearer auth.
- */
-export function createAgentPatchHandler({ prismaClient }) {
-  return async function agentPatchHandler(request, agentId) {
-    const authHeader = request.headers.get("authorization");
-    const auth = await authenticateAgentKey(authHeader, agentId, prismaClient);
-    if (!auth.authorized) {
-      return NextResponse.json({ error: auth.error }, { status: auth.status });
-    }
-
-    let body;
-    try {
-      const parsedBody = await request.json();
-      if (!isJsonObjectBody(parsedBody)) {
-        return NextResponse.json(
-          { error: "Invalid JSON body" },
-          { status: 400 },
-        );
-      }
-      body = parsedBody;
-    } catch {
-      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
-    }
-
-    const {
-      displayName,
-      avatarUrl,
-      capabilities,
-      healthUrl,
-      webhookUrl,
-      maxTokensSec,
-    } = body;
-
-    try {
-      await prismaClient.$transaction(async (tx) => {
-        const agentUpdate = {};
-        if (displayName !== undefined) agentUpdate.name = displayName;
-        if (avatarUrl !== undefined) agentUpdate.avatarUrl = avatarUrl;
-
-        if (Object.keys(agentUpdate).length > 0) {
-          await tx.agent.update({
-            where: { id: agentId },
-            data: agentUpdate,
-          });
-        }
-
-        const regUpdate = {};
-        if (capabilities !== undefined) regUpdate.capabilities = capabilities;
-        if (healthUrl !== undefined) regUpdate.healthUrl = healthUrl;
-        if (webhookUrl !== undefined) regUpdate.webhookUrl = webhookUrl;
-        if (maxTokensSec !== undefined) regUpdate.maxTokensSec = maxTokensSec;
-
-        if (Object.keys(regUpdate).length > 0) {
-          await tx.agentRegistration.update({
-            where: { agentId: agentId },
-            data: regUpdate,
-          });
-        }
-      });
-
-      return NextResponse.json({ success: true });
-    } catch (error) {
-      console.error("Agent update failed:", error);
-      return NextResponse.json({ error: "Update failed" }, { status: 500 });
-    }
-  };
-}
-
-/**
- * DELETE /api/v1/agents/{id}
- * Deregister agent. Cascade deletes Agent. Requires Bearer auth.
- */
-export function createAgentDeleteHandler({ prismaClient }) {
-  return async function agentDeleteHandler(request, agentId) {
-    const authHeader = request.headers.get("authorization");
-    const auth = await authenticateAgentKey(authHeader, agentId, prismaClient);
-    if (!auth.authorized) {
-      return NextResponse.json({ error: auth.error }, { status: auth.status });
-    }
-
-    try {
-      await prismaClient.agent.delete({ where: { id: agentId } });
-      return NextResponse.json({ success: true });
-    } catch (error) {
-      console.error("Agent deregistration failed:", error);
-      return NextResponse.json(
-        { error: "Deregistration failed" },
-        { status: 500 },
-      );
-    }
-  };
-}
-
-/**
- * GET /api/internal/agents/verify?api_key=sk-tvk-...
- * Called by Gateway to verify agent API key.
- * Requires X-Internal-Secret header.
- */
-export function createAgentVerifyHandler({ prismaClient }) {
-  return async function agentVerifyHandler(request) {
-    const secret = request.headers.get("x-internal-secret");
-    if (secret !== process.env.INTERNAL_API_SECRET) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const apiKey =
-      request.searchParams?.get("api_key") ||
-      new URL(request.url).searchParams.get("api_key");
-
-    if (!apiKey || !apiKey.startsWith("sk-tvk-")) {
-      return NextResponse.json(
-        { error: "Invalid API key format" },
-        { status: 400 },
-      );
-    }
-
-    const apiKeyHash = hashApiKey(apiKey);
-
-    try {
-      const registration = await prismaClient.agentRegistration.findFirst({
-        where: { apiKeyHash },
-        select: {
-          id: true,
-          capabilities: true,
-          agent: {
-            select: {
-              id: true,
-              name: true,
-              avatarUrl: true,
-              serverId: true,
-              isActive: true,
-            },
-          },
-        },
-      });
-
-      if (!registration) {
-        return NextResponse.json(
-          { error: "Agent not found", valid: false },
-          { status: 404 },
-        );
-      }
-
-      if (!registration.agent.isActive) {
-        return NextResponse.json(
-          { error: "Agent is deactivated", valid: false },
-          { status: 403 },
-        );
-      }
-
-      return NextResponse.json({
-        valid: true,
-        agentId: registration.agent.id,
-        agentName: registration.agent.name,
-        agentAvatarUrl: registration.agent.avatarUrl,
-        serverId: registration.agent.serverId,
-        capabilities: registration.capabilities,
-      });
-    } catch (error) {
-      console.error("Agent verification failed:", error);
-      return NextResponse.json(
-        { error: "Verification failed" },
-        { status: 500 },
-      );
-    }
-  };
-}

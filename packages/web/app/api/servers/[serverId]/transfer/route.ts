@@ -80,7 +80,7 @@ export async function POST(
 
     return NextResponse.json({ ok: true, newOwnerId });
   } catch (error) {
-    console.error("Failed to transfer ownership:", error);
+    console.error("[servers/transfer] Failed to transfer ownership:", error);
     return NextResponse.json({ error: "Internal error" }, { status: 500 });
   }
 }

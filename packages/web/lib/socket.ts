@@ -43,10 +43,7 @@ export async function getSocket(): Promise<Socket | null> {
       [1000, 2000, 5000, 10000][Math.min(tries - 1, 3)],
   });
 
-  // Refresh token before reconnection attempts
-  socket.onOpen(() => {
-    console.log("[Socket] Connected to Gateway");
-  });
+  socket.onOpen(() => {});
 
   socket.onError(async () => {
     // Try refreshing the token on error (may be expired)

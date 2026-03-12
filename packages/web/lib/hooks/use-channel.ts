@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import type { Channel, Socket } from "phoenix";
 import { Presence } from "phoenix";
 import { getSocket } from "@/lib/socket";
+import { compareSequences } from "@/lib/api-safety";
 
 export interface ReactionData {
   emoji: string;
@@ -40,7 +41,7 @@ export interface MessagePayload {
   thinkingPhase?: string;
   thinkingTimeline?: Array<{ phase: string; timestamp: string }>; // TASK-0011
   metadata?: Record<string, unknown> | null; // Agent execution metadata: model, tokens, latency (TASK-0039)
-  tokenHistory?: Array<{ o: number; t: number }>; // TASK-0021: Stream rewind data [{o: contentOffset, t: relativeMs}]
+  tokenHistory?: Array<{ contentOffset: number; elapsedMs: number }>;
   checkpoints?: Array<{
     index: number;
     label: string;
@@ -54,13 +55,6 @@ export interface MessagePayload {
   reactions: ReactionData[];
   editedAt?: string | null;
   isDeleted?: boolean;
-}
-
-function compareSequences(a: string, b: string): number {
-  const aBigInt = BigInt(a);
-  const bBigInt = BigInt(b);
-  if (aBigInt === bBigInt) return 0;
-  return aBigInt > bBigInt ? 1 : -1;
 }
 
 export interface TypingUser {
@@ -101,6 +95,340 @@ interface UseChannelReturn {
   activeStreamCount: number; // TASK-0012: number of concurrently streaming messages
   charterState: CharterState | null; // TASK-0020: live charter status
   sendCharterControl: (action: "pause" | "end") => void; // TASK-0020
+}
+
+// ---------------------------------------------------------------------------
+// Handler registration helpers — extracted from the monolithic useEffect
+// Each function registers a group of related channel event handlers and
+// keeps the main effect body as a concise orchestrator.
+// ---------------------------------------------------------------------------
+
+interface HandlerDeps {
+  mounted: () => boolean;
+  channelId: string;
+  addMessages: (msgs: MessagePayload[], prepend?: boolean) => void;
+  setMessages: React.Dispatch<React.SetStateAction<MessagePayload[]>>;
+  setAgentTriggerHint: React.Dispatch<React.SetStateAction<string | null>>;
+  setTypingUsers: React.Dispatch<React.SetStateAction<TypingUser[]>>;
+  setCharterState: React.Dispatch<React.SetStateAction<CharterState | null>>;
+  setHasMoreHistory: React.Dispatch<React.SetStateAction<boolean>>;
+  loadingHistoryRef: React.MutableRefObject<boolean>;
+  pendingStreamMetaRef: React.MutableRefObject<
+    Map<string, { agentId: string; agentName: string; agentAvatarUrl: string | null; sequence: string }>
+  >;
+  streamLastTokenRef: React.MutableRefObject<Map<string, number>>;
+  streamBufferRef: React.MutableRefObject<Map<string, string>>;
+  typingTimersRef: React.MutableRefObject<Map<string, NodeJS.Timeout>>;
+  lastSequenceRef: React.MutableRefObject<string>;
+  messageIdsRef: React.MutableRefObject<Set<string>>;
+  flushStreamBuffer: () => void;
+}
+
+function registerMessageHandlers(channel: Channel, deps: HandlerDeps) {
+  channel.on("message_new", (raw: unknown) => {
+    if (!deps.mounted()) return;
+    deps.addMessages([raw as MessagePayload]);
+  });
+
+  channel.on("sync_response", (raw: unknown) => {
+    if (!deps.mounted()) return;
+    const payload = raw as { messages: MessagePayload[]; hasMore: boolean };
+    if (payload.messages.length > 0) deps.addMessages(payload.messages);
+  });
+
+  channel.on("history_response", (raw: unknown) => {
+    if (!deps.mounted()) return;
+    const payload = raw as { messages: MessagePayload[]; hasMore: boolean };
+    deps.loadingHistoryRef.current = false;
+    deps.setHasMoreHistory(payload.hasMore);
+    if (payload.messages.length > 0) deps.addMessages(payload.messages, true);
+  });
+
+  channel.on("typed_message", (raw: unknown) => {
+    if (!deps.mounted()) return;
+    const payload = raw as MessagePayload;
+    deps.addMessages([{ ...payload, reactions: payload.reactions || [] }]);
+  });
+
+  channel.on("agent_trigger_skipped", (raw: unknown) => {
+    if (!deps.mounted()) return;
+    const payload = raw as { agentId: string; agentName: string; reason: string; triggerMode: string };
+    if (payload.reason === "mention_required" && payload.agentName) {
+      deps.setAgentTriggerHint(`Action needed: no agent triggered. Mention @${payload.agentName} to trigger it.`);
+    }
+  });
+}
+
+function registerTypingHandlers(channel: Channel, deps: HandlerDeps) {
+  channel.on("user_typing", (raw: unknown) => {
+    if (!deps.mounted()) return;
+    const payload = raw as TypingUser;
+
+    deps.setTypingUsers((prev) => {
+      const existing = prev.find((t) => t.userId === payload.userId);
+      return existing ? prev : [...prev, payload];
+    });
+
+    const existingTimer = deps.typingTimersRef.current.get(payload.userId);
+    if (existingTimer) clearTimeout(existingTimer);
+    deps.typingTimersRef.current.set(
+      payload.userId,
+      setTimeout(() => {
+        if (!deps.mounted()) return;
+        deps.setTypingUsers((prev) => prev.filter((t) => t.userId !== payload.userId));
+        deps.typingTimersRef.current.delete(payload.userId);
+      }, 3000),
+    );
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Pure helpers for streaming message updates — extracted for readability and
+// independent testability (low_level_elegance review issue).
+// ---------------------------------------------------------------------------
+
+/** Apply a stream_complete payload to a single message. */
+export function applyStreamComplete(
+  msg: MessagePayload,
+  payload: {
+    messageId: string;
+    finalContent: string;
+    thinkingTimeline?: Array<{ phase: string; timestamp: string }>;
+    metadata?: Record<string, unknown>;
+  },
+): MessagePayload {
+  if (msg.id !== payload.messageId) return msg;
+  return {
+    ...msg,
+    content: payload.finalContent,
+    streamingStatus: "COMPLETE",
+    type: "STREAMING",
+    thinkingPhase: undefined,
+    thinkingTimeline: payload.thinkingTimeline || msg.thinkingTimeline,
+    metadata: payload.metadata || msg.metadata,
+  };
+}
+
+/** Apply a stream_error payload to an existing message. */
+export function applyStreamError(
+  msg: MessagePayload,
+  payload: { messageId: string; error: string; partialContent: string | null },
+): MessagePayload {
+  if (msg.id !== payload.messageId) return msg;
+  return {
+    ...msg,
+    content: payload.partialContent || msg.content || `[Error: ${payload.error}]`,
+    type: "STREAMING",
+    streamingStatus: "ERROR",
+    thinkingPhase: undefined,
+  };
+}
+
+/** Apply a stream_thinking payload to a single message. */
+export function applyStreamThinking(
+  msg: MessagePayload,
+  payload: { messageId: string; phase: string; timestamp?: string },
+): MessagePayload {
+  if (msg.id !== payload.messageId) return msg;
+  return {
+    ...msg,
+    thinkingPhase: payload.phase,
+    thinkingTimeline: [
+      ...(msg.thinkingTimeline || []),
+      { phase: payload.phase, timestamp: payload.timestamp || new Date().toISOString() },
+    ],
+  };
+}
+
+/** Apply a stream_tool_call payload to a single message. */
+export function applyStreamToolCall(
+  msg: MessagePayload,
+  payload: { messageId: string; callId: string; toolName: string; arguments: Record<string, unknown>; timestamp: string },
+): MessagePayload {
+  if (msg.id !== payload.messageId) return msg;
+  return {
+    ...msg,
+    thinkingPhase: `Using ${payload.toolName}`,
+    toolCalls: [
+      ...(msg.toolCalls || []),
+      { callId: payload.callId, toolName: payload.toolName, arguments: payload.arguments, timestamp: payload.timestamp },
+    ],
+  };
+}
+
+/** Apply a stream_tool_result payload to a single message. */
+export function applyStreamToolResult(
+  msg: MessagePayload,
+  payload: { messageId: string; callId: string; toolName: string; content: string; isError: boolean; timestamp: string },
+): MessagePayload {
+  if (msg.id !== payload.messageId) return msg;
+  return {
+    ...msg,
+    toolResults: [
+      ...(msg.toolResults || []),
+      { callId: payload.callId, toolName: payload.toolName, content: payload.content, isError: payload.isError, timestamp: payload.timestamp },
+    ],
+  };
+}
+
+/** Build a fallback error message when stream_error arrives with no matching message. */
+export function buildStreamErrorFallback(
+  channelId: string,
+  payload: { messageId: string; error: string; partialContent: string | null },
+  streamMeta: { agentId: string; agentName: string; agentAvatarUrl: string | null; sequence: string } | undefined,
+  lastSequence: string,
+): MessagePayload {
+  return {
+    id: payload.messageId,
+    channelId,
+    authorId: streamMeta?.agentId || "",
+    authorType: "AGENT",
+    authorName: streamMeta?.agentName || "Agent",
+    authorAvatarUrl: streamMeta?.agentAvatarUrl || null,
+    content: payload.partialContent || `[Error: ${payload.error}]`,
+    type: "STREAMING",
+    streamingStatus: "ERROR",
+    sequence: streamMeta?.sequence || lastSequence,
+    createdAt: new Date().toISOString(),
+    reactions: [],
+  };
+}
+
+function registerStreamingHandlers(channel: Channel, deps: HandlerDeps) {
+  channel.on("stream_start", (raw: unknown) => {
+    if (!deps.mounted()) return;
+    const payload = raw as {
+      messageId: string; agentId: string; agentName: string;
+      agentAvatarUrl: string | null; sequence: string;
+    };
+
+    deps.pendingStreamMetaRef.current.set(payload.messageId, {
+      agentId: payload.agentId, agentName: payload.agentName,
+      agentAvatarUrl: payload.agentAvatarUrl, sequence: payload.sequence,
+    });
+    deps.streamLastTokenRef.current.set(payload.messageId, Date.now());
+
+    const placeholder: MessagePayload = {
+      id: payload.messageId, channelId: deps.channelId,
+      authorId: payload.agentId, authorType: "AGENT", authorName: payload.agentName,
+      authorAvatarUrl: payload.agentAvatarUrl, content: "", type: "STREAMING",
+      streamingStatus: "ACTIVE", sequence: payload.sequence,
+      createdAt: new Date().toISOString(), reactions: [],
+    };
+    deps.addMessages([placeholder]);
+  });
+
+  channel.on("stream_token", (raw: unknown) => {
+    if (!deps.mounted()) return;
+    const payload = raw as { messageId: string; token: string; index: number };
+    deps.streamLastTokenRef.current.set(payload.messageId, Date.now());
+    const existing = deps.streamBufferRef.current.get(payload.messageId) || "";
+    deps.streamBufferRef.current.set(payload.messageId, existing + payload.token);
+    deps.flushStreamBuffer();
+  });
+
+  channel.on("stream_complete", (raw: unknown) => {
+    if (!deps.mounted()) return;
+    const payload = raw as {
+      messageId: string; finalContent: string;
+      thinkingTimeline?: Array<{ phase: string; timestamp: string }>;
+      metadata?: Record<string, unknown>;
+    };
+    deps.pendingStreamMetaRef.current.delete(payload.messageId);
+    deps.streamLastTokenRef.current.delete(payload.messageId);
+    deps.setMessages((prev) => prev.map((m) => applyStreamComplete(m, payload)));
+    deps.streamBufferRef.current.delete(payload.messageId);
+  });
+
+  channel.on("stream_error", (raw: unknown) => {
+    if (!deps.mounted()) return;
+    const payload = raw as { messageId: string; error: string; partialContent: string | null };
+    deps.streamLastTokenRef.current.delete(payload.messageId);
+    deps.setMessages((prev) => {
+      const hasMatch = prev.some((m) => m.id === payload.messageId);
+      const streamMeta = deps.pendingStreamMetaRef.current.get(payload.messageId);
+
+      if (hasMatch) {
+        deps.pendingStreamMetaRef.current.delete(payload.messageId);
+        return prev.map((m) => applyStreamError(m, payload));
+      }
+
+      const fallback = buildStreamErrorFallback(
+        deps.channelId, payload, streamMeta, deps.lastSequenceRef.current,
+      );
+      deps.messageIdsRef.current.add(payload.messageId);
+      deps.pendingStreamMetaRef.current.delete(payload.messageId);
+      return [...prev, fallback].sort((a, b) => compareSequences(a.sequence, b.sequence));
+    });
+    deps.streamBufferRef.current.delete(payload.messageId);
+    const errorText = (payload.error || "").trim();
+    if (errorText) deps.setAgentTriggerHint(`Agent response failed: ${errorText}`);
+  });
+
+  channel.on("stream_thinking", (raw: unknown) => {
+    if (!deps.mounted()) return;
+    const payload = raw as { messageId: string; phase: string; timestamp?: string };
+    deps.setMessages((prev) => prev.map((m) => applyStreamThinking(m, payload)));
+  });
+
+  channel.on("stream_tool_call", (raw: unknown) => {
+    if (!deps.mounted()) return;
+    const payload = raw as { messageId: string; callId: string; toolName: string; arguments: Record<string, unknown>; timestamp: string };
+    deps.setMessages((prev) => prev.map((m) => applyStreamToolCall(m, payload)));
+  });
+
+  channel.on("stream_tool_result", (raw: unknown) => {
+    if (!deps.mounted()) return;
+    const payload = raw as { messageId: string; callId: string; toolName: string; content: string; isError: boolean; timestamp: string };
+    deps.setMessages((prev) => prev.map((m) => applyStreamToolResult(m, payload)));
+  });
+
+  channel.on("stream_checkpoint", (raw: unknown) => {
+    if (!deps.mounted()) return;
+    const payload = raw as { messageId: string; index: number; label: string; contentOffset: number; timestamp: string };
+    deps.setMessages((prev) =>
+      prev.map((m) =>
+        m.id === payload.messageId
+          ? { ...m, checkpoints: [...(m.checkpoints || []), { index: payload.index, label: payload.label, contentOffset: payload.contentOffset, timestamp: payload.timestamp }] }
+          : m,
+      ),
+    );
+  });
+}
+
+function registerMutationHandlers(channel: Channel, deps: HandlerDeps) {
+  channel.on("reaction_update", (raw: unknown) => {
+    if (!deps.mounted()) return;
+    const payload = raw as { messageId: string; reactions: ReactionData[] };
+    deps.setMessages((prev) =>
+      prev.map((m) => m.id === payload.messageId ? { ...m, reactions: payload.reactions || [] } : m),
+    );
+  });
+
+  channel.on("charter_status", (raw: unknown) => {
+    if (!deps.mounted()) return;
+    const payload = raw as { channelId: string; currentTurn: number; maxTurns: number; status: string; swarmMode?: string };
+    deps.setCharterState((prev) => ({
+      swarmMode: payload.swarmMode || prev?.swarmMode || "HUMAN_IN_THE_LOOP",
+      currentTurn: payload.currentTurn, maxTurns: payload.maxTurns, status: payload.status,
+    }));
+  });
+
+  channel.on("message_edited", (raw: unknown) => {
+    if (!deps.mounted()) return;
+    const payload = raw as { messageId: string; content: string; editedAt: string };
+    deps.setMessages((prev) =>
+      prev.map((m) => m.id === payload.messageId ? { ...m, content: payload.content, editedAt: payload.editedAt } : m),
+    );
+  });
+
+  channel.on("message_deleted", (raw: unknown) => {
+    if (!deps.mounted()) return;
+    const payload = raw as { messageId: string; deletedBy: string };
+    deps.setMessages((prev) =>
+      prev.map((m) => m.id === payload.messageId ? { ...m, isDeleted: true } : m),
+    );
+  });
 }
 
 /**
@@ -270,449 +598,30 @@ export function useChannel(channelId: string | null): UseChannelReturn {
         setPresenceMap(newMap);
       });
 
-      // Listen for new messages
-      channel.on("message_new", (raw: unknown) => {
-        if (!mounted) return;
-        const payload = raw as MessagePayload;
-        addMessages([payload]);
-      });
+      // Register all channel event handlers (extracted for readability)
+      const deps: HandlerDeps = {
+        mounted: () => mounted,
+        channelId: channelId!,
+        addMessages,
+        setMessages,
+        setAgentTriggerHint,
+        setTypingUsers,
+        setCharterState,
+        setHasMoreHistory,
+        loadingHistoryRef,
+        pendingStreamMetaRef,
+        streamLastTokenRef,
+        streamBufferRef,
+        typingTimersRef,
+        lastSequenceRef,
+        messageIdsRef,
+        flushStreamBuffer,
+      };
 
-      // Listen for sync responses (reconnection)
-      channel.on("sync_response", (raw: unknown) => {
-        if (!mounted) return;
-        const payload = raw as { messages: MessagePayload[]; hasMore: boolean };
-        if (payload.messages.length > 0) {
-          addMessages(payload.messages);
-        }
-      });
-
-      // Listen for history responses
-      channel.on("history_response", (raw: unknown) => {
-        if (!mounted) return;
-        const payload = raw as { messages: MessagePayload[]; hasMore: boolean };
-        loadingHistoryRef.current = false;
-        setHasMoreHistory(payload.hasMore);
-        if (payload.messages.length > 0) {
-          addMessages(payload.messages, true);
-        }
-      });
-
-      // agent_trigger_skipped: show inline hint for mention-only agents
-      channel.on("agent_trigger_skipped", (raw: unknown) => {
-        if (!mounted) return;
-        const payload = raw as {
-          agentId: string;
-          agentName: string;
-          reason: string;
-          triggerMode: string;
-        };
-
-        if (payload.reason === "mention_required" && payload.agentName) {
-          setAgentTriggerHint(
-            `Action needed: no agent triggered. Mention @${payload.agentName} to trigger it.`,
-          );
-        }
-      });
-
-      // Listen for typing indicators
-      channel.on("user_typing", (raw: unknown) => {
-        if (!mounted) return;
-        const payload = raw as TypingUser;
-
-        setTypingUsers((prev) => {
-          const existing = prev.find((t) => t.userId === payload.userId);
-          if (!existing) {
-            return [...prev, payload];
-          }
-          return prev;
-        });
-
-        // Clear typing after 3 seconds
-        const existingTimer = typingTimersRef.current.get(payload.userId);
-        if (existingTimer) clearTimeout(existingTimer);
-        typingTimersRef.current.set(
-          payload.userId,
-          setTimeout(() => {
-            if (!mounted) return;
-            setTypingUsers((prev) =>
-              prev.filter((t) => t.userId !== payload.userId),
-            );
-            typingTimersRef.current.delete(payload.userId);
-          }, 3000),
-        );
-      });
-
-      // ---- Streaming events ----
-
-      // stream_start: add placeholder message for the agent
-      channel.on("stream_start", (raw: unknown) => {
-        if (!mounted) return;
-        const payload = raw as {
-          messageId: string;
-          agentId: string;
-          agentName: string;
-          agentAvatarUrl: string | null;
-          sequence: string;
-        };
-
-        pendingStreamMetaRef.current.set(payload.messageId, {
-          agentId: payload.agentId,
-          agentName: payload.agentName,
-          agentAvatarUrl: payload.agentAvatarUrl,
-          sequence: payload.sequence,
-        });
-
-        // BUG-006: Record stream start time for timeout detection
-        streamLastTokenRef.current.set(payload.messageId, Date.now());
-
-        const placeholder: MessagePayload = {
-          id: payload.messageId,
-          channelId: channelId!,
-          authorId: payload.agentId,
-          authorType: "AGENT",
-          authorName: payload.agentName,
-          authorAvatarUrl: payload.agentAvatarUrl,
-          content: "",
-          type: "STREAMING",
-          streamingStatus: "ACTIVE",
-          sequence: payload.sequence,
-          createdAt: new Date().toISOString(),
-          reactions: [],
-        };
-
-        addMessages([placeholder]);
-      });
-
-      // stream_token: accumulate in buffer, flush via rAF
-      channel.on("stream_token", (raw: unknown) => {
-        if (!mounted) return;
-        const payload = raw as {
-          messageId: string;
-          token: string;
-          index: number;
-        };
-
-        // BUG-006: Update last token timestamp for timeout detection
-        streamLastTokenRef.current.set(payload.messageId, Date.now());
-
-        const existing = streamBufferRef.current.get(payload.messageId) || "";
-        streamBufferRef.current.set(
-          payload.messageId,
-          existing + payload.token,
-        );
-        flushStreamBuffer();
-      });
-
-      // stream_complete: set final content, mark COMPLETE, capture thinking timeline + metadata (TASK-0011, TASK-0039)
-      channel.on("stream_complete", (raw: unknown) => {
-        if (!mounted) return;
-        const payload = raw as {
-          messageId: string;
-          finalContent: string;
-          thinkingTimeline?: Array<{ phase: string; timestamp: string }>;
-          metadata?: Record<string, unknown>;
-        };
-
-        pendingStreamMetaRef.current.delete(payload.messageId);
-        streamLastTokenRef.current.delete(payload.messageId); // BUG-006
-
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === payload.messageId
-              ? {
-                  ...m,
-                  content: payload.finalContent,
-                  streamingStatus: "COMPLETE",
-                  type: "STREAMING",
-                  thinkingPhase: undefined,
-                  thinkingTimeline:
-                    payload.thinkingTimeline || m.thinkingTimeline,
-                  metadata: payload.metadata || m.metadata,
-                }
-              : m,
-          ),
-        );
-
-        // Clear any buffered tokens for this message
-        streamBufferRef.current.delete(payload.messageId);
-      });
-
-      // stream_error: set partial content and mark ERROR
-      channel.on("stream_error", (raw: unknown) => {
-        if (!mounted) return;
-        const payload = raw as {
-          messageId: string;
-          error: string;
-          partialContent: string | null;
-        };
-
-        streamLastTokenRef.current.delete(payload.messageId); // BUG-006
-
-        setMessages((prev) => {
-          const hasMatch = prev.some((m) => m.id === payload.messageId);
-          const streamMeta = pendingStreamMetaRef.current.get(
-            payload.messageId,
-          );
-
-          if (hasMatch) {
-            pendingStreamMetaRef.current.delete(payload.messageId);
-            const updated = prev.map((m) =>
-              m.id === payload.messageId
-                ? {
-                    ...m,
-                    content:
-                      payload.partialContent ||
-                      m.content ||
-                      "[Error: " + payload.error + "]",
-                    type: "STREAMING",
-                    streamingStatus: "ERROR",
-                    thinkingPhase: undefined,
-                  }
-                : m,
-            );
-
-            return updated;
-          }
-
-          // Race fallback: stream_error can arrive before stream_start placeholder commit.
-          // Upsert an errored message so the user still sees a visible outcome.
-          const fallback: MessagePayload = {
-            id: payload.messageId,
-            channelId: channelId!,
-            authorId: streamMeta?.agentId || "",
-            authorType: "AGENT",
-            authorName: streamMeta?.agentName || "Agent",
-            authorAvatarUrl: streamMeta?.agentAvatarUrl || null,
-            content: payload.partialContent || "[Error: " + payload.error + "]",
-            type: "STREAMING",
-            streamingStatus: "ERROR",
-            sequence: streamMeta?.sequence || lastSequenceRef.current,
-            createdAt: new Date().toISOString(),
-            reactions: [],
-          };
-
-          messageIdsRef.current.add(payload.messageId);
-          pendingStreamMetaRef.current.delete(payload.messageId);
-          return [...prev, fallback].sort((a, b) =>
-            compareSequences(a.sequence, b.sequence),
-          );
-        });
-
-        // Clear any buffered tokens for this message
-        streamBufferRef.current.delete(payload.messageId);
-
-        // Surface stream failures inline near the input, not only in the message list.
-        const errorText = (payload.error || "").trim();
-        if (errorText) {
-          setAgentTriggerHint(`Agent response failed: ${errorText}`);
-        }
-      });
-
-      // stream_thinking: update thinking phase badge + accumulate timeline progressively (TASK-0011)
-      channel.on("stream_thinking", (raw: unknown) => {
-        if (!mounted) return;
-        const payload = raw as {
-          messageId: string;
-          phase: string;
-          timestamp?: string;
-        };
-
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === payload.messageId
-              ? {
-                  ...m,
-                  thinkingPhase: payload.phase,
-                  thinkingTimeline: [
-                    ...(m.thinkingTimeline || []),
-                    {
-                      phase: payload.phase,
-                      timestamp: payload.timestamp || new Date().toISOString(),
-                    },
-                  ],
-                }
-              : m,
-          ),
-        );
-      });
-
-      // stream_tool_call: track tool execution in progress (TASK-0018)
-      channel.on("stream_tool_call", (raw: unknown) => {
-        if (!mounted) return;
-        const payload = raw as {
-          messageId: string;
-          callId: string;
-          toolName: string;
-          arguments: Record<string, unknown>;
-          timestamp: string;
-        };
-
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === payload.messageId
-              ? {
-                  ...m,
-                  thinkingPhase: `Using ${payload.toolName}`,
-                  toolCalls: [
-                    ...(m.toolCalls || []),
-                    {
-                      callId: payload.callId,
-                      toolName: payload.toolName,
-                      arguments: payload.arguments,
-                      timestamp: payload.timestamp,
-                    },
-                  ],
-                }
-              : m,
-          ),
-        );
-      });
-
-      // stream_tool_result: record tool result (TASK-0018)
-      channel.on("stream_tool_result", (raw: unknown) => {
-        if (!mounted) return;
-        const payload = raw as {
-          messageId: string;
-          callId: string;
-          toolName: string;
-          content: string;
-          isError: boolean;
-          timestamp: string;
-        };
-
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === payload.messageId
-              ? {
-                  ...m,
-                  toolResults: [
-                    ...(m.toolResults || []),
-                    {
-                      callId: payload.callId,
-                      toolName: payload.toolName,
-                      content: payload.content,
-                      isError: payload.isError,
-                      timestamp: payload.timestamp,
-                    },
-                  ],
-                }
-              : m,
-          ),
-        );
-      });
-
-      // ---- Typed messages (TASK-0039) ----
-      // Agents can send typed messages (TOOL_CALL, TOOL_RESULT, CODE_BLOCK, etc.)
-      channel.on("typed_message", (raw: unknown) => {
-        if (!mounted) return;
-        const payload = raw as MessagePayload;
-        addMessages([{ ...payload, reactions: payload.reactions || [] }]);
-      });
-
-      // ---- Reaction events (TASK-0030) ----
-      // Real-time reaction broadcast from other users
-      channel.on("reaction_update", (raw: unknown) => {
-        if (!mounted) return;
-        const payload = raw as {
-          messageId: string;
-          reactions: ReactionData[];
-        };
-
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === payload.messageId
-              ? { ...m, reactions: payload.reactions || [] }
-              : m,
-          ),
-        );
-      });
-
-      // ---- Checkpoint events (TASK-0021) ----
-      // Real-time checkpoint markers during streaming for rewind UI
-      channel.on("stream_checkpoint", (raw: unknown) => {
-        if (!mounted) return;
-        const payload = raw as {
-          messageId: string;
-          index: number;
-          label: string;
-          contentOffset: number;
-          timestamp: string;
-        };
-
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === payload.messageId
-              ? {
-                  ...m,
-                  checkpoints: [
-                    ...(m.checkpoints || []),
-                    {
-                      index: payload.index,
-                      label: payload.label,
-                      contentOffset: payload.contentOffset,
-                      timestamp: payload.timestamp,
-                    },
-                  ],
-                }
-              : m,
-          ),
-        );
-      });
-
-      // ---- Charter status events (TASK-0020) ----
-      channel.on("charter_status", (raw: unknown) => {
-        if (!mounted) return;
-        const payload = raw as {
-          channelId: string;
-          currentTurn: number;
-          maxTurns: number;
-          status: string;
-          swarmMode?: string;
-        };
-
-        setCharterState((prev) => ({
-          swarmMode:
-            payload.swarmMode || prev?.swarmMode || "HUMAN_IN_THE_LOOP",
-          currentTurn: payload.currentTurn,
-          maxTurns: payload.maxTurns,
-          status: payload.status,
-        }));
-      });
-
-      // ---- Edit & Delete events (TASK-0014) ----
-
-      // message_edited: update content and editedAt for the edited message
-      channel.on("message_edited", (raw: unknown) => {
-        if (!mounted) return;
-        const payload = raw as {
-          messageId: string;
-          content: string;
-          editedAt: string;
-        };
-
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === payload.messageId
-              ? { ...m, content: payload.content, editedAt: payload.editedAt }
-              : m,
-          ),
-        );
-      });
-
-      // message_deleted: mark the message as deleted
-      channel.on("message_deleted", (raw: unknown) => {
-        if (!mounted) return;
-        const payload = raw as {
-          messageId: string;
-          deletedBy: string;
-        };
-
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === payload.messageId ? { ...m, isDeleted: true } : m,
-          ),
-        );
-      });
+      registerMessageHandlers(channel, deps);
+      registerTypingHandlers(channel, deps);
+      registerStreamingHandlers(channel, deps);
+      registerMutationHandlers(channel, deps);
 
       channel
         .join()

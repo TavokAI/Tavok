@@ -24,7 +24,6 @@ export const authOptions: NextAuthOptions = {
       },
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) {
-          console.log("[AUTH] authorize: missing email or password");
           return null;
         }
 
@@ -33,7 +32,6 @@ export const authOptions: NextAuthOptions = {
         });
 
         if (!user) {
-          console.log("[AUTH] authorize: no user found");
           return null;
         }
 
@@ -42,11 +40,9 @@ export const authOptions: NextAuthOptions = {
           user.password,
         );
         if (!isValid) {
-          console.log("[AUTH] authorize: invalid password");
           return null;
         }
 
-        console.log(`[AUTH] authorize: success for user ${user.id}`);
         return {
           id: user.id,
           email: user.email,

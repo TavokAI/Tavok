@@ -47,7 +47,7 @@ export async function PATCH(
       editedAt: message.editedAt?.toISOString(),
     });
   } catch (error) {
-    console.error("Failed to edit DM message:", error);
+    console.error("[internal/dms/messages] Failed to edit DM message:", error);
     return NextResponse.json(
       { error: "Failed to edit message" },
       { status: 500 },
@@ -77,7 +77,7 @@ export async function DELETE(
 
     return NextResponse.json({ id: messageId, deleted: true });
   } catch (error) {
-    console.error("Failed to delete DM message:", error);
+    console.error("[internal/dms/messages] Failed to delete DM message:", error);
     return NextResponse.json(
       { error: "Failed to delete message" },
       { status: 500 },

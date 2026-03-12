@@ -37,10 +37,9 @@ type timelineEntry struct {
 }
 
 // tokenHistoryEntry records a token batch boundary for stream rewind. (TASK-0021)
-// O = content offset (end position in final content), T = relative ms from stream start.
 type tokenHistoryEntry struct {
-	O int   `json:"o"`
-	T int64 `json:"t"`
+	ContentOffset int   `json:"contentOffset"`
+	ElapsedMs     int64 `json:"elapsedMs"`
 }
 
 // checkpointEntry records a stream checkpoint for resume. (TASK-0021)
@@ -553,8 +552,8 @@ func (m *Manager) runProviderIteration(
 		}
 		// Record token boundary for stream rewind (TASK-0021)
 		*tokenHistory = append(*tokenHistory, tokenHistoryEntry{
-			O: len(lastContent),
-			T: time.Since(startTime).Milliseconds(),
+			ContentOffset: len(lastContent),
+			ElapsedMs:     time.Since(startTime).Milliseconds(),
 		})
 		batchBuf.Reset()
 		batchCount = 0

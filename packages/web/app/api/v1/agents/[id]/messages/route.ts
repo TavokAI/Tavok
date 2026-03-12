@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { ulid } from "ulid";
+import { generateId } from "@/lib/ulid";
 import { authenticateAgentRequest } from "@/lib/agent-auth";
 import {
   broadcastMessageNew,
   broadcastStreamStart,
   fetchChannelSequence,
 } from "@/lib/gateway-client";
+import { getInternalBaseUrl } from "@/lib/internal-auth";
+import { persistMessage } from "@/lib/internal-api-client";
 
 /**
  * GET /api/v1/agents/{id}/messages — Poll for messages (DEC-0043, Phase 4)
@@ -59,16 +61,23 @@ export async function GET(
       take: limit,
     });
 
-    // Simple long-poll: if no messages and wait > 0, poll periodically
+    // Long-poll: if no messages and wait > 0, retry with increasing intervals.
+    // Uses 1s → 2s → 3s backoff to reduce DB pressure during quiet periods.
     if (messages.length === 0 && wait > 0) {
       const deadline = Date.now() + wait * 1000;
+      let interval = 1000;
       while (Date.now() < deadline && messages.length === 0) {
-        await new Promise((resolve) => setTimeout(resolve, 1000));
+        const remaining = deadline - Date.now();
+        await new Promise((resolve) =>
+          setTimeout(resolve, Math.min(interval, remaining)),
+        );
+        if (Date.now() >= deadline) break;
         messages = await prisma.agentMessage.findMany({
           where,
           orderBy: { createdAt: "asc" },
           take: limit,
         });
+        interval = Math.min(interval + 1000, 3000);
       }
     }
 
@@ -106,7 +115,7 @@ export async function GET(
       pollAgainAfterMs: messages.length === 0 ? 1000 : 0,
     });
   } catch (error) {
-    console.error("Agent message poll failed:", error);
+    console.error("[v1/agents/messages] Agent message poll failed:", error);
     return NextResponse.json(
       { error: "Failed to fetch messages" },
       { status: 500 },
@@ -169,7 +178,7 @@ export async function POST(
     );
   }
 
-  const messageId = ulid();
+  const messageId = generateId();
   const sequence = await fetchChannelSequence(channelId);
 
   try {
@@ -194,7 +203,7 @@ export async function POST(
         sequence,
       });
 
-      const webUrl = process.env.NEXTAUTH_URL || "http://localhost:5555";
+      const webUrl = getInternalBaseUrl();
 
       return NextResponse.json(
         {
@@ -240,7 +249,7 @@ export async function POST(
 
     return NextResponse.json({ messageId, sequence });
   } catch (error) {
-    console.error("Agent message send failed:", error);
+    console.error("[v1/agents/messages] Agent message send failed:", error);
     return NextResponse.json(
       { error: "Failed to send message" },
       { status: 500 },
@@ -248,14 +257,3 @@ export async function POST(
   }
 }
 
-async function persistMessage(data: Record<string, unknown>) {
-  const internalUrl = process.env.NEXTAUTH_URL || "http://localhost:5555";
-  await fetch(`${internalUrl}/api/internal/messages`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-internal-secret": process.env.INTERNAL_API_SECRET || "",
-    },
-    body: JSON.stringify(data),
-  }).catch((err) => console.error("Persist failed:", err));
-}

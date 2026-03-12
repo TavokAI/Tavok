@@ -20,7 +20,7 @@ interface SimpleAgentFormProps {
   onCancel: () => void;
 }
 
-export function SimpleAgentForm({
+function SimpleAgentForm({
   serverId,
   connectionMethod,
   title,

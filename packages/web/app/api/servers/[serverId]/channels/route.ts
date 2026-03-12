@@ -3,7 +3,6 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { generateId } from "@/lib/ulid";
-import { ulid } from "ulid";
 import { checkMemberPermission } from "@/lib/check-member-permission";
 import { Permissions } from "@/lib/permissions";
 
@@ -47,7 +46,7 @@ export async function GET(
 
     return NextResponse.json({ channels });
   } catch (error) {
-    console.error("Failed to list channels:", error);
+    console.error("[channels] Failed to list channels:", error);
     return NextResponse.json({ error: "Internal error" }, { status: 500 });
   }
 }
@@ -124,7 +123,7 @@ export async function POST(
     if (serverAgents.length > 0) {
       await prisma.channelAgent.createMany({
         data: serverAgents.map((agent) => ({
-          id: ulid(),
+          id: generateId(),
           channelId: channel.id,
           agentId: agent.id,
         })),
@@ -142,7 +141,7 @@ export async function POST(
       { status: 201 },
     );
   } catch (error) {
-    console.error("Failed to create channel:", error);
+    console.error("[channels] Failed to create channel:", error);
     return NextResponse.json({ error: "Internal error" }, { status: 500 });
   }
 }

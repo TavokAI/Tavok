@@ -3,9 +3,12 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { generateId } from "@/lib/ulid";
-import { broadcastToChannel } from "@/lib/gateway-client";
-
-const ALLOWED_EMOJIS = ["👍", "👎", "✅", "❌", "🚀"];
+import {
+  ALLOWED_EMOJIS,
+  aggregateReactions,
+  reactionsResponse,
+  broadcastReactionUpdate,
+} from "@/lib/reactions";
 
 /**
  * GET /api/messages/[messageId]/reactions — Get reactions for a message
@@ -29,7 +32,12 @@ export async function GET(
     );
   }
 
-  return getReactionsResponse(messageId, session.user.id);
+  const reactions = await prisma.reaction.findMany({
+    where: { messageId },
+    select: { emoji: true, userId: true },
+  });
+
+  return reactionsResponse(aggregateReactions(reactions), session.user.id);
 }
 
 /**
@@ -80,20 +88,23 @@ export async function POST(
       },
     });
 
-    // Broadcast to all clients in the channel (TASK-0030)
-    const updatedReactions = await getAggregatedReactions(messageId);
+    const reactions = await prisma.reaction.findMany({
+      where: { messageId },
+      select: { emoji: true, userId: true },
+    });
+    const aggregated = aggregateReactions(reactions);
+
     if (access.channelId) {
-      broadcastReactionUpdate(access.channelId, messageId, updatedReactions);
+      broadcastReactionUpdate(
+        `room:${access.channelId}`,
+        messageId,
+        aggregated,
+      );
     }
 
-    return NextResponse.json({
-      reactions: updatedReactions.map((r) => ({
-        ...r,
-        hasReacted: r.userIds.includes(session.user.id),
-      })),
-    });
+    return reactionsResponse(aggregated, session.user.id);
   } catch (error) {
-    console.error("Failed to add reaction:", error);
+    console.error("[reactions] Failed to add reaction:", error);
     return NextResponse.json({ error: "Internal error" }, { status: 500 });
   }
 }
@@ -136,20 +147,23 @@ export async function DELETE(
       },
     });
 
-    // Broadcast to all clients in the channel (TASK-0030)
-    const updatedReactions = await getAggregatedReactions(messageId);
+    const reactions = await prisma.reaction.findMany({
+      where: { messageId },
+      select: { emoji: true, userId: true },
+    });
+    const aggregated = aggregateReactions(reactions);
+
     if (access.channelId) {
-      broadcastReactionUpdate(access.channelId, messageId, updatedReactions);
+      broadcastReactionUpdate(
+        `room:${access.channelId}`,
+        messageId,
+        aggregated,
+      );
     }
 
-    return NextResponse.json({
-      reactions: updatedReactions.map((r) => ({
-        ...r,
-        hasReacted: r.userIds.includes(session.user.id),
-      })),
-    });
+    return reactionsResponse(aggregated, session.user.id);
   } catch (error) {
-    console.error("Failed to remove reaction:", error);
+    console.error("[reactions] Failed to remove reaction:", error);
     return NextResponse.json({ error: "Internal error" }, { status: 500 });
   }
 }
@@ -187,51 +201,4 @@ async function ensureMessageAccess(messageId: string, userId: string) {
   }
 
   return { ok: true as const, channelId: message.channelId };
-}
-
-/** Helper to build aggregated reactions from DB */
-async function getAggregatedReactions(messageId: string) {
-  const reactions = await prisma.reaction.findMany({
-    where: { messageId },
-    select: { emoji: true, userId: true },
-  });
-
-  const aggregated = new Map<string, string[]>();
-  for (const reaction of reactions) {
-    const existing = aggregated.get(reaction.emoji) || [];
-    existing.push(reaction.userId);
-    aggregated.set(reaction.emoji, existing);
-  }
-
-  return Array.from(aggregated.entries()).map(([emoji, userIds]) => ({
-    emoji,
-    count: userIds.length,
-    userIds,
-  }));
-}
-
-/** Helper to build aggregated reaction HTTP response */
-async function getReactionsResponse(messageId: string, currentUserId: string) {
-  const result = await getAggregatedReactions(messageId);
-
-  return NextResponse.json({
-    reactions: result.map((r) => ({
-      ...r,
-      hasReacted: r.userIds.includes(currentUserId),
-    })),
-  });
-}
-
-/** Broadcast reaction update to all connected clients in the channel (TASK-0030) */
-function broadcastReactionUpdate(
-  channelId: string,
-  messageId: string,
-  reactions: { emoji: string; count: number; userIds: string[] }[],
-) {
-  broadcastToChannel(`room:${channelId}`, "reaction_update", {
-    messageId,
-    reactions,
-  }).catch((err) => {
-    console.error("Failed to broadcast reaction update:", err);
-  });
 }

@@ -1,9 +1,10 @@
+// @ts-nocheck — test mocks use partial objects that don't satisfy full Prisma types
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import {
   createInternalMessagesPostHandler,
   createServerAgentPatchHandler,
   createServerChannelPatchHandler,
-} from "../route-handlers.js";
+} from "../route-handlers";
 
 // ---------- Mocks for the PUT finalization handler (TASK-0021) ----------
 // vi.hoisted ensures these are available when vi.mock factories run.
@@ -24,6 +25,9 @@ vi.mock("@/lib/db", () => ({ prisma: mockPrismaForRoute }));
 vi.mock("@/lib/internal-auth", () => ({
   validateInternalSecret: vi.fn((req: any) => {
     return req.headers.get("x-internal-secret") === "test-secret";
+  }),
+  validateInternalSecretValue: vi.fn((secret: string | null) => {
+    return secret === "test-secret";
   }),
 }));
 vi.mock("@/lib/permissions", () => ({

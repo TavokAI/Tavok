@@ -105,7 +105,7 @@ export async function POST(request: NextRequest) {
       { status: 201 },
     );
   } catch (error) {
-    console.error("Bootstrap agent creation failed:", error);
+    console.error("[v1/bootstrap/agents] Bootstrap agent creation failed:", error);
     return NextResponse.json(
       { error: "Agent creation failed" },
       { status: 500 },

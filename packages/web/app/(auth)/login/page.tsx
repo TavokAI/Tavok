@@ -48,7 +48,7 @@ function LoginForm() {
   }
 
   return (
-    <div className="rounded-xl border border-border/80 bg-background-floating p-8 shadow-xl">
+    <div className="rounded-lg border border-border/80 bg-background-floating p-8 shadow-xl">
       <div className="mb-6 text-center">
         <h1 className="text-2xl font-bold text-text-primary">Welcome back!</h1>
         <p className="mt-1 text-text-secondary">
@@ -100,7 +100,7 @@ function LoginForm() {
         <button
           type="submit"
           disabled={loading}
-          className="w-full rounded bg-brand py-2.5 font-medium text-background-floating transition hover:bg-brand-hover disabled:opacity-50"
+          className="w-full rounded bg-brand py-2.5 font-medium text-black transition hover:bg-brand-hover disabled:opacity-50"
         >
           {loading ? "Logging in..." : "Log In"}
         </button>

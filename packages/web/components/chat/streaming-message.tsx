@@ -8,7 +8,7 @@ import { MarkdownContent } from "./markdown-content";
 import { ReactionBar } from "./reaction-bar";
 import { FileAttachment, parseFileReferences } from "./file-attachment";
 import { MessageActions } from "./message-actions";
-import { MessageMetadata } from "./MessageMetadata";
+import { MessageMetadata } from "./message-metadata";
 import { RewindSlider } from "./rewind-slider";
 import { CheckpointResume } from "./checkpoint-resume";
 import { passthroughImageLoader } from "@/lib/image-loader";

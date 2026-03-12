@@ -72,7 +72,7 @@ export async function GET(request: NextRequest) {
       capabilities: registration.capabilities,
     });
   } catch (error) {
-    console.error("Agent verification failed:", error);
+    console.error("[internal/agents/verify] Agent verification failed:", error);
     return NextResponse.json({ error: "Verification failed" }, { status: 500 });
   }
 }

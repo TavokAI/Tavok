@@ -9,7 +9,7 @@ export interface UnreadState {
   lastReadSeq: string;
 }
 
-export interface UseUnreadReturn {
+interface UseUnreadReturn {
   /** Map of channelId → { hasUnread, mentionCount } */
   unreadMap: Map<string, UnreadState>;
   /** Mark a channel as read (optimistic + server call) */

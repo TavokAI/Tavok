@@ -80,7 +80,7 @@ export async function GET() {
 
     return NextResponse.json({ dms });
   } catch (error) {
-    console.error("Failed to fetch DM channels:", error);
+    console.error("[dms] Failed to fetch DM channels:", error);
     return NextResponse.json(
       { error: "Failed to fetch conversations" },
       { status: 500 },
@@ -194,7 +194,7 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error("Failed to create DM channel:", error);
+    console.error("[dms] Failed to create DM channel:", error);
     return NextResponse.json(
       { error: "Failed to create conversation" },
       { status: 500 },

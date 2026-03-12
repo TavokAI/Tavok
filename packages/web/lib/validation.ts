@@ -1,4 +1,4 @@
-export function parseLimit(value) {
+export function parseLimit(value: string | null | undefined): number {
   if (!value) {
     return 50;
   }
@@ -11,7 +11,7 @@ export function parseLimit(value) {
   return parsed;
 }
 
-export function parseAfterSequence(value) {
+export function parseAfterSequence(value: string): string {
   if (value.trim() === "") {
     throw new Error("afterSequence must be a non-negative integer");
   }

@@ -45,17 +45,17 @@ async function globalSetup() {
       await page.getByLabel("Password", { exact: true }).fill(user.password);
       await page.getByLabel("Confirm Password").fill(user.password);
       await page.getByRole("button", { name: /continue/i }).click();
-      await page.waitForTimeout(3000);
 
-      // Check if we landed on dashboard (success) or got an error (user exists)
-      const url = page.url();
-      if (url.includes("/register")) {
-        // Registration failed — user likely already exists, verify login works
+      // Wait for navigation away from /register (success → dashboard, or stay on /register if user exists)
+      try {
+        await page.waitForURL(/^(?!.*\/register)/, { timeout: 10_000 });
+      } catch {
+        // Still on /register — user likely already exists, verify login works
         await page.goto("/login");
         await page.getByLabel("Email").fill(user.email);
         await page.getByLabel("Password").fill(user.password);
         await page.getByRole("button", { name: /log in/i }).click();
-        await page.waitForTimeout(3000);
+        await page.waitForURL(/^(?!.*\/login)/, { timeout: 10_000 });
       }
     } catch {
       // Ignore errors — user may already exist from a previous run

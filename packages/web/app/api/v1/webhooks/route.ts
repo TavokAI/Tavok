@@ -1,8 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 import { prisma } from "@/lib/db";
-import { ulid } from "ulid";
+import { generateId } from "@/lib/ulid";
 import crypto from "crypto";
 import { authenticateAgentRequest } from "@/lib/agent-auth";
+import { getInternalBaseUrl } from "@/lib/internal-auth";
+
+/** Zod schema for webhook creation POST body. */
+const webhookCreateSchema = z
+  .object({
+    channelId: z.string().min(1, "channelId is required"),
+    name: z.string().min(1, "name is required"),
+    avatarUrl: z.string().nullable().optional(),
+  })
+  .strict();
 
 /**
  * POST /api/v1/webhooks — Create an inbound webhook (DEC-0045)
@@ -21,29 +32,23 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  let body: Record<string, unknown>;
+  let body: z.infer<typeof webhookCreateSchema>;
   try {
-    body = await request.json();
+    const rawBody = await request.json();
+    const parsed = webhookCreateSchema.safeParse(rawBody);
+    if (!parsed.success) {
+      const firstError = parsed.error.errors[0];
+      return NextResponse.json(
+        { error: firstError?.message || "Invalid request body" },
+        { status: 400 },
+      );
+    }
+    body = parsed.data;
   } catch {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const { channelId, name, avatarUrl } = body as {
-    channelId?: string;
-    name?: string;
-    avatarUrl?: string;
-  };
-
-  if (!channelId || typeof channelId !== "string") {
-    return NextResponse.json(
-      { error: "channelId is required" },
-      { status: 400 },
-    );
-  }
-
-  if (!name || typeof name !== "string" || name.trim().length === 0) {
-    return NextResponse.json({ error: "name is required" }, { status: 400 });
-  }
+  const { channelId, name, avatarUrl } = body;
 
   // Verify channel exists and belongs to agent's server
   const channel = await prisma.channel.findUnique({
@@ -62,9 +67,9 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Keep the token under the 64-char DB limit: 4-char prefix + 43-char base64url
-  const token = `whk_${crypto.randomBytes(32).toString("base64url")}`;
-  const webhookId = ulid();
+  // Keep the webhook token under the 64-char DB limit: 4-char prefix + 43-char base64url
+  const webhookToken = `whk_${crypto.randomBytes(32).toString("base64url")}`;
+  const webhookId = generateId();
 
   try {
     const webhook = await prisma.inboundWebhook.create({
@@ -72,19 +77,19 @@ export async function POST(request: NextRequest) {
         id: webhookId,
         channelId,
         agentId: agent.agentId,
-        token,
+        token: webhookToken,
         name: name.trim(),
-        avatarUrl: (avatarUrl as string) || null,
+        avatarUrl: avatarUrl ?? null,
       },
     });
 
-    const webUrl = process.env.NEXTAUTH_URL || "http://localhost:5555";
+    const webUrl = getInternalBaseUrl();
 
     return NextResponse.json(
       {
         id: webhook.id,
-        token, // Shown ONCE for security — not returned in list
-        url: `${webUrl}/api/v1/webhooks/${token}`,
+        token: webhookToken, // Shown ONCE for security — not returned in list
+        url: `${webUrl}/api/v1/webhooks/${webhookToken}`,
         channelId: webhook.channelId,
         name: webhook.name,
         avatarUrl: webhook.avatarUrl,
@@ -92,7 +97,7 @@ export async function POST(request: NextRequest) {
       { status: 201 },
     );
   } catch (error) {
-    console.error("Webhook creation failed:", error);
+    console.error("[v1/webhooks] Webhook creation failed:", error);
     return NextResponse.json(
       { error: "Failed to create webhook" },
       { status: 500 },
@@ -141,7 +146,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ webhooks });
   } catch (error) {
-    console.error("Failed to list webhooks:", error);
+    console.error("[v1/webhooks] Failed to list webhooks:", error);
     return NextResponse.json(
       { error: "Failed to list webhooks" },
       { status: 500 },
@@ -194,7 +199,7 @@ export async function DELETE(request: NextRequest) {
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("Webhook deletion failed:", error);
+    console.error("[v1/webhooks] Webhook deletion failed:", error);
     return NextResponse.json(
       { error: "Failed to delete webhook" },
       { status: 500 },

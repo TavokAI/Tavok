@@ -65,9 +65,9 @@ export async function DELETE(
 
   try {
     await prisma.member.delete({ where: { id: memberId } });
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("Failed to kick member:", error);
+    console.error("[servers/members] Failed to kick member:", error);
     return NextResponse.json({ error: "Internal error" }, { status: 500 });
   }
 }

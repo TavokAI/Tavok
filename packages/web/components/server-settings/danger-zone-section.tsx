@@ -43,7 +43,8 @@ export function DangerZoneSection({
         );
       }
     } catch {
-      // Silently fail
+      console.error("[DangerZone] Failed to load members");
+      return;
     }
   }, [serverId]);
 

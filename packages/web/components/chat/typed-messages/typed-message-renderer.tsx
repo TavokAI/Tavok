@@ -2,11 +2,11 @@
 
 import { useMemo } from "react";
 import type { MessagePayload } from "@/lib/hooks/use-channel";
-import { ToolCallCard } from "./ToolCallCard";
-import { ToolResultCard } from "./ToolResultCard";
-import { CodeBlockMessage } from "./CodeBlockMessage";
-import { ArtifactRenderer } from "./ArtifactRenderer";
-import { StatusIndicator } from "./StatusIndicator";
+import { ToolCallCard } from "./tool-call-card";
+import { ToolResultCard } from "./tool-result-card";
+import { CodeBlockMessage } from "./code-block-message";
+import { ArtifactRenderer } from "./artifact-renderer";
+import { StatusIndicator } from "./status-indicator";
 import type {
   ToolCallContent,
   ToolResultContent,

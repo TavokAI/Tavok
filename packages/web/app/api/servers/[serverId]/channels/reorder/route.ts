@@ -78,7 +78,7 @@ export async function PUT(
 
     return NextResponse.json({ ok: true });
   } catch (error) {
-    console.error("Failed to reorder channels:", error);
+    console.error("[channels/reorder] Failed to reorder channels:", error);
     return NextResponse.json({ error: "Internal error" }, { status: 500 });
   }
 }

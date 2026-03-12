@@ -3,13 +3,11 @@
  * DEC-0047: Multi-method agent onboarding
  */
 
-export type ConnectionMethodType =
-  | "WEBSOCKET"
-  | "WEBHOOK"
-  | "INBOUND_WEBHOOK"
-  | "REST_POLL"
-  | "SSE"
-  | "OPENAI_COMPAT";
+import type { TriggerMode } from "@tavok/shared/agent";
+import type { ConnectionMethodValue } from "@/lib/agent-factory";
+
+export type { TriggerMode };
+export type ConnectionMethodType = ConnectionMethodValue;
 
 export type ModalView =
   | "list"
@@ -34,10 +32,10 @@ export interface AgentListItem {
   temperature: number;
   maxTokens: number;
   isActive: boolean;
-  triggerMode: string;
+  triggerMode: TriggerMode;
   thinkingSteps: string | null;
   connectionMethod: ConnectionMethodType | null; // null = BYOK
-  capabilities: unknown;
+  capabilities: string[];
   createdAt: string;
 }
 

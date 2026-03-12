@@ -43,7 +43,7 @@ export async function GET() {
 
     return NextResponse.json({ servers: payload });
   } catch (error) {
-    console.error("Failed to discover servers:", error);
+    console.error("[servers/discover] Failed to discover servers:", error);
     return NextResponse.json({ error: "Internal error" }, { status: 500 });
   }
 }

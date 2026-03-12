@@ -175,7 +175,7 @@ export async function GET(
             // Don't wait for next interval; the next tick will pick up remaining rows
           }
         } catch (err) {
-          console.error("SSE poll error:", err);
+          console.error("[v1/agents/events] SSE poll error:", err);
         }
       }, 2000);
 

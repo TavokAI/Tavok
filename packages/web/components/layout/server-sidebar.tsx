@@ -18,9 +18,9 @@ export function ServerSidebar() {
         {/* Home button */}
         <button
           onClick={() => router.push("/")}
-          className={`flex h-12 w-12 items-center justify-center rounded-2xl transition-all hover:rounded-xl hover:bg-brand hover:text-background-floating ${
+          className={`flex h-12 w-12 items-center justify-center rounded-lg transition-all hover:rounded-lg hover:bg-brand hover:text-background-floating ${
             !currentServerId
-              ? "rounded-xl bg-brand text-background-floating"
+              ? "rounded-lg bg-brand text-background-floating"
               : "bg-background-primary text-brand"
           }`}
         >
@@ -57,8 +57,8 @@ export function ServerSidebar() {
                 onClick={() => router.push(`/servers/${server.id}`)}
                 className={`flex h-12 w-12 items-center justify-center transition-all ${
                   isActive
-                    ? "rounded-xl bg-brand text-background-floating"
-                    : "rounded-3xl bg-background-primary text-text-primary hover:rounded-xl hover:bg-brand hover:text-background-floating"
+                    ? "rounded-lg bg-brand text-background-floating"
+                    : "rounded-lg bg-background-primary text-text-primary hover:rounded-lg hover:bg-brand hover:text-background-floating"
                 }`}
               >
                 {server.iconUrl ? (
@@ -103,7 +103,7 @@ export function ServerSidebar() {
         <button
           onClick={() => setShowCreateModal(true)}
           title="Create a server"
-          className="flex h-12 w-12 items-center justify-center rounded-3xl bg-background-primary text-status-online transition-all hover:rounded-xl hover:bg-status-online hover:text-white"
+          className="flex h-12 w-12 items-center justify-center rounded-lg bg-background-primary text-status-online transition-all hover:rounded-lg hover:bg-status-online hover:text-white"
         >
           <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
             <path d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" />

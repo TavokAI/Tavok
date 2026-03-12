@@ -70,7 +70,7 @@ export async function GET(
       memberCount: server._count.members,
     });
   } catch (error) {
-    console.error("Failed to get server:", error);
+    console.error("[servers] Failed to get server:", error);
     return NextResponse.json({ error: "Internal error" }, { status: 500 });
   }
 }
@@ -122,9 +122,9 @@ export async function PATCH(
         { status: 400 },
       );
     }
-    if (body.name.trim().length > 50) {
+    if (body.name.trim().length > 100) {
       return NextResponse.json(
-        { error: "Server name must be 50 characters or fewer" },
+        { error: "Server name must be 100 characters or fewer" },
         { status: 400 },
       );
     }
@@ -172,7 +172,7 @@ export async function PATCH(
       ownerId: server.ownerId,
     });
   } catch (error) {
-    console.error("Failed to update server:", error);
+    console.error("[servers] Failed to update server:", error);
     return NextResponse.json({ error: "Internal error" }, { status: 500 });
   }
 }
@@ -212,9 +212,9 @@ export async function DELETE(
       where: { id: serverId },
     });
 
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("Failed to delete server:", error);
+    console.error("[servers] Failed to delete server:", error);
     return NextResponse.json({ error: "Internal error" }, { status: 500 });
   }
 }

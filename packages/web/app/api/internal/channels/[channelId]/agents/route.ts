@@ -54,7 +54,7 @@ export async function GET(
             apiKey = decrypt(ca.agent.apiKeyEncrypted);
           } catch {
             console.error(
-              `[Internal] Failed to decrypt API key for agent ${ca.agent.id}`,
+              `[internal/channels/agents] Failed to decrypt API key for agent ${ca.agent.id}`,
             );
           }
 
@@ -100,7 +100,7 @@ export async function GET(
       apiKey = decrypt(agent.apiKeyEncrypted);
     } catch {
       console.error(
-        `[Internal] Failed to decrypt API key for agent ${agent.id}`,
+        `[internal/channels/agents] Failed to decrypt API key for agent ${agent.id}`,
       );
     }
 
@@ -132,7 +132,7 @@ export async function GET(
       ],
     });
   } catch (error) {
-    console.error("[Internal] Failed to get channel agents:", error);
+    console.error("[internal/channels/agents] Failed to get channel agents:", error);
     return NextResponse.json(
       { error: "Failed to get channel agents" },
       { status: 500 },

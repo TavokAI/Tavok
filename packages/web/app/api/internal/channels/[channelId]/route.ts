@@ -85,7 +85,7 @@ export async function GET(
 
     return NextResponse.json(response);
   } catch (error) {
-    console.error("Failed to load internal channel:", error);
+    console.error("[internal/channels] Failed to load internal channel:", error);
     return NextResponse.json({ error: "Internal error" }, { status: 500 });
   }
 }

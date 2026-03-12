@@ -18,7 +18,7 @@ case "$COMMAND" in
     echo "Blocked: database drop command" >&2
     exit 2
     ;;
-  *"force push"*|*"--force"*|*"-f push"*)
+  *"force push"*|*"git push"*"--force"*|*"git push"*"-f"*|*"-f push"*)
     echo "Blocked: force push. Use --force-with-lease if needed." >&2
     exit 2
     ;;

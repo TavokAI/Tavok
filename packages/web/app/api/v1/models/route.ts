@@ -50,7 +50,7 @@ export async function GET(request: NextRequest) {
       data: models,
     });
   } catch (error) {
-    console.error("Models list failed:", error);
+    console.error("[v1/models] Models list failed:", error);
     return NextResponse.json(
       {
         error: {

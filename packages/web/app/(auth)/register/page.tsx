@@ -85,7 +85,7 @@ function RegisterForm() {
   }
 
   return (
-    <div className="rounded-xl border border-border/80 bg-background-floating p-8 shadow-xl">
+    <div className="rounded-lg border border-border/80 bg-background-floating p-8 shadow-xl">
       <div className="mb-6 text-center">
         <h1 className="text-2xl font-bold text-text-primary">
           Create an account
@@ -191,7 +191,7 @@ function RegisterForm() {
         <button
           type="submit"
           disabled={loading}
-          className="w-full rounded bg-brand py-2.5 font-medium text-background-floating transition hover:bg-brand-hover disabled:opacity-50"
+          className="w-full rounded bg-brand py-2.5 font-medium text-black transition hover:bg-brand-hover disabled:opacity-50"
         >
           {loading ? "Creating account..." : "Continue"}
         </button>

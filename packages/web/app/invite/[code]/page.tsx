@@ -104,7 +104,7 @@ export default function InvitePage() {
               You&apos;ve been invited to join
             </p>
 
-            <div className="mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-2xl bg-brand/20">
+            <div className="mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-lg bg-brand/20">
               {inviteInfo.serverIconUrl ? (
                 <Image
                   src={inviteInfo.serverIconUrl}
@@ -113,7 +113,7 @@ export default function InvitePage() {
                   unoptimized
                   width={64}
                   height={64}
-                  className="h-16 w-16 rounded-2xl object-cover"
+                  className="h-16 w-16 rounded-lg object-cover"
                 />
               ) : (
                 <span className="text-2xl font-bold text-brand">

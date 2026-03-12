@@ -14,12 +14,18 @@ interface MessageMetadataProps {
 export function MessageMetadata({ metadata }: MessageMetadataProps) {
   const [expanded, setExpanded] = useState(false);
 
-  const model = metadata.model as string | undefined;
-  const provider = metadata.provider as string | undefined;
-  const tokensIn = metadata.tokensIn as number | undefined;
-  const tokensOut = metadata.tokensOut as number | undefined;
-  const latencyMs = metadata.latencyMs as number | undefined;
-  const costUsd = metadata.costUsd as number | undefined;
+  const model =
+    typeof metadata.model === "string" ? metadata.model : undefined;
+  const provider =
+    typeof metadata.provider === "string" ? metadata.provider : undefined;
+  const tokensIn =
+    typeof metadata.tokensIn === "number" ? metadata.tokensIn : undefined;
+  const tokensOut =
+    typeof metadata.tokensOut === "number" ? metadata.tokensOut : undefined;
+  const latencyMs =
+    typeof metadata.latencyMs === "number" ? metadata.latencyMs : undefined;
+  const costUsd =
+    typeof metadata.costUsd === "number" ? metadata.costUsd : undefined;
 
   // Build compact summary
   const parts: string[] = [];

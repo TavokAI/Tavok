@@ -74,7 +74,7 @@ export function MessageItem({
   if (message.isDeleted) {
     if (isGrouped) {
       return (
-        <div className="group mx-2 flex gap-4 rounded-xl px-4 py-1 hover:bg-background-secondary/40">
+        <div className="group mx-2 flex gap-4 rounded-lg px-4 py-1 hover:bg-background-secondary/40">
           <div className="w-10 flex-shrink-0" />
           <div className="min-w-0 flex-1">
             <p className="text-sm italic text-text-muted">[message deleted]</p>
@@ -83,9 +83,9 @@ export function MessageItem({
       );
     }
     return (
-      <div className="group mx-2 mt-3 flex gap-4 rounded-2xl border border-white/6 bg-background-floating/28 px-4 py-3 hover:bg-background-floating/42">
+      <div className="group mx-2 mt-3 flex gap-4 rounded-lg border border-white/6 bg-background-floating/28 px-4 py-3 hover:bg-background-floating/42">
         <div className="flex-shrink-0 pt-0.5">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-background-secondary text-sm font-semibold text-text-dim">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-white/10 bg-background-secondary text-sm font-semibold text-text-dim">
             ?
           </div>
         </div>
@@ -107,7 +107,7 @@ export function MessageItem({
   if (isGrouped) {
     return (
       <div
-        className={`group relative mx-2 flex gap-4 rounded-xl px-4 py-1 transition-colors hover:bg-background-secondary/36 ${!isAgent ? "bg-transparent" : "bg-transparent"}`}
+        className={`group relative mx-2 flex gap-4 rounded-lg px-4 py-1 transition-colors hover:bg-background-secondary/36 ${!isAgent ? "bg-transparent" : "bg-transparent"}`}
       >
         <div className="w-10 flex-shrink-0" />
         <div className="min-w-0 flex-1">
@@ -157,7 +157,7 @@ export function MessageItem({
 
   return (
     <div
-      className={`group relative mx-2 mt-3 flex gap-4 rounded-[22px] border px-4 py-3 shadow-[0_12px_30px_rgba(3,9,22,0.18)] transition-colors hover:bg-background-floating/46 ${!isAgent ? "border-brand/20 bg-brand/10" : "border-accent-cyan/20 bg-background-floating/35"}`}
+      className={`group relative mx-2 mt-3 flex gap-4 rounded-lg border px-4 py-3 transition-colors hover:bg-background-floating/46 ${!isAgent ? "border-brand/20 bg-brand/10" : "border-accent-cyan/20 bg-background-floating/35"}`}
     >
       {/* Avatar */}
       <div className="flex-shrink-0 pt-0.5">
@@ -173,7 +173,7 @@ export function MessageItem({
           />
         ) : (
           <div
-            className={`flex h-10 w-10 items-center justify-center rounded-xl text-sm font-semibold ${isAgent ? "border border-accent-cyan/20 bg-accent-cyan/10 text-accent-cyan" : "border border-brand/24 bg-brand/10 text-brand"}`}
+            className={`flex h-10 w-10 items-center justify-center rounded-lg text-sm font-semibold ${isAgent ? "border border-accent-cyan/20 bg-accent-cyan/10 text-accent-cyan" : "border border-brand/24 bg-brand/10 text-brand"}`}
           >
             {message.authorName?.charAt(0)?.toUpperCase() || "?"}
           </div>
@@ -184,7 +184,7 @@ export function MessageItem({
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline gap-2 mb-1">
           <span
-            className={`text-sm font-semibold ${isAgent ? "text-accent-cyan" : "text-orange-100"}`}
+            className={`text-sm font-semibold ${isAgent ? "text-accent-cyan" : "text-white"}`}
           >
             {!isAgent && <span className="mr-1 text-brand/80">&gt;</span>}
             {message.authorName}

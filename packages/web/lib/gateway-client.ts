@@ -8,11 +8,81 @@
  * All methods use the INTERNAL_API_SECRET for authentication.
  */
 
-const GATEWAY_INTERNAL_URL =
-  process.env.GATEWAY_INTERNAL_URL ||
-  process.env.GATEWAY_WEB_URL ||
-  "http://gateway:4001";
-const INTERNAL_API_SECRET = process.env.INTERNAL_API_SECRET;
+// ---------------------------------------------------------------------------
+// Typed broadcast payload interfaces
+// ---------------------------------------------------------------------------
+
+export interface MessageNewPayload {
+  id: string;
+  channelId: string;
+  authorId: string;
+  authorType: string;
+  authorName: string;
+  authorAvatarUrl: string | null;
+  content: string;
+  type: string;
+  streamingStatus: string | null;
+  sequence: string;
+  createdAt: string;
+}
+
+export interface StreamStartPayload {
+  messageId: string;
+  agentId: string;
+  agentName: string;
+  agentAvatarUrl: string | null;
+  sequence: string;
+}
+
+export interface StreamTokenPayload {
+  messageId: string;
+  token: string;
+  index: number;
+}
+
+export interface StreamCompletePayload {
+  messageId: string;
+  content?: string;
+  finalContent?: string;
+  sequence?: string;
+  metadata?: Record<string, unknown> | null;
+}
+
+export interface StreamErrorPayload {
+  messageId: string;
+  error: string;
+  partialContent?: string | null;
+}
+
+export interface TypedMessagePayload {
+  id: string;
+  channelId: string;
+  authorId: string;
+  authorType: string;
+  authorName: string;
+  authorAvatarUrl: string | null;
+  content: string;
+  type: string;
+  streamingStatus?: string | null;
+  sequence: string;
+  createdAt: string;
+}
+
+// ---------------------------------------------------------------------------
+// Internal helpers
+// ---------------------------------------------------------------------------
+
+function getGatewayInternalUrl(): string {
+  return (
+    process.env.GATEWAY_INTERNAL_URL ||
+    process.env.GATEWAY_WEB_URL ||
+    "http://gateway:4001"
+  );
+}
+
+function getInternalApiSecret(): string | undefined {
+  return process.env.INTERNAL_API_SECRET;
+}
 
 /**
  * Broadcast an event to a Phoenix Channel topic.
@@ -25,22 +95,24 @@ const INTERNAL_API_SECRET = process.env.INTERNAL_API_SECRET;
  * @param event - Event name (e.g., "message_new", "stream_start", "stream_token")
  * @param payload - Event payload (will be JSON-serialized)
  */
-export async function broadcastToChannel(
+export async function broadcastToChannel<T extends object>(
   topic: string,
   event: string,
-  payload: Record<string, unknown>,
+  payload: T,
 ): Promise<void> {
-  if (!INTERNAL_API_SECRET) {
+  const secret = getInternalApiSecret();
+  if (!secret) {
     throw new Error("INTERNAL_API_SECRET is not configured");
   }
 
+  const gatewayUrl = getGatewayInternalUrl();
   const response = await fetch(
-    `${GATEWAY_INTERNAL_URL}/api/internal/broadcast`,
+    `${gatewayUrl}/api/internal/broadcast`,
     {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-internal-secret": INTERNAL_API_SECRET,
+        "x-internal-secret": secret,
       },
       body: JSON.stringify({ topic, event, payload }),
     },
@@ -54,63 +126,44 @@ export async function broadcastToChannel(
   }
 }
 
-/**
- * Broadcast a new message event to a channel.
- * Convenience wrapper around broadcastToChannel.
- */
 export async function broadcastMessageNew(
   channelId: string,
-  payload: Record<string, unknown>,
+  payload: MessageNewPayload,
 ): Promise<void> {
   return broadcastToChannel(`room:${channelId}`, "message_new", payload);
 }
 
-/**
- * Broadcast a stream_start event to a channel.
- */
 export async function broadcastStreamStart(
   channelId: string,
-  payload: Record<string, unknown>,
+  payload: StreamStartPayload,
 ): Promise<void> {
   return broadcastToChannel(`room:${channelId}`, "stream_start", payload);
 }
 
-/**
- * Broadcast a stream_token event to a channel.
- */
 export async function broadcastStreamToken(
   channelId: string,
-  payload: Record<string, unknown>,
+  payload: StreamTokenPayload,
 ): Promise<void> {
   return broadcastToChannel(`room:${channelId}`, "stream_token", payload);
 }
 
-/**
- * Broadcast a stream_complete event to a channel.
- */
 export async function broadcastStreamComplete(
   channelId: string,
-  payload: Record<string, unknown>,
+  payload: StreamCompletePayload,
 ): Promise<void> {
   return broadcastToChannel(`room:${channelId}`, "stream_complete", payload);
 }
 
-/**
- * Broadcast a stream_error event to a channel.
- */
 export async function broadcastStreamError(
   channelId: string,
-  payload: Record<string, unknown>,
+  payload: StreamErrorPayload,
 ): Promise<void> {
   return broadcastToChannel(`room:${channelId}`, "stream_error", payload);
 }
 
-/**
- * Broadcast a typed_message event to a channel.
- */
 export async function broadcastTypedMessage(
   channelId: string,
-  payload: Record<string, unknown>,
+  payload: TypedMessagePayload,
 ): Promise<void> {
   return broadcastToChannel(`room:${channelId}`, "typed_message", payload);
 }
@@ -121,11 +174,12 @@ export async function broadcastTypedMessage(
  */
 export async function fetchChannelSequence(channelId: string): Promise<string> {
   try {
+    const gatewayUrl = getGatewayInternalUrl();
     const response = await fetch(
-      `${GATEWAY_INTERNAL_URL}/api/internal/sequence?channelId=${channelId}`,
+      `${gatewayUrl}/api/internal/sequence?channelId=${channelId}`,
       {
         headers: {
-          "x-internal-secret": INTERNAL_API_SECRET || "",
+          "x-internal-secret": getInternalApiSecret() || "",
         },
       },
     );

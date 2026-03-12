@@ -71,7 +71,7 @@ async function main() {
 
 main()
   .catch((error) => {
-    console.error(error);
+    console.error("[backfill-everyone-role] Script failed:", error);
     process.exitCode = 1;
   })
   .finally(async () => {

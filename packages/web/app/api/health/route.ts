@@ -12,7 +12,7 @@ export async function GET() {
   try {
     await prisma.$queryRaw`SELECT 1`;
   } catch (error) {
-    console.error("Health check failed: database", error);
+    console.error("[health] Health check failed: database", error);
     checks.database.status = "unhealthy";
   }
 

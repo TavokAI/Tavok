@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { encrypt } from "@/lib/encryption";
-import { ulid } from "ulid";
+import { generateId } from "@/lib/ulid";
 import { checkMemberPermission } from "@/lib/check-member-permission";
 import { Permissions } from "@/lib/permissions";
 import {
@@ -113,7 +113,15 @@ export async function POST(
     );
   }
 
-  const body = await request.json();
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json(
+      { error: "Invalid JSON body" },
+      { status: 400 },
+    );
+  }
   const {
     name,
     connectionMethod,
@@ -158,10 +166,9 @@ export async function POST(
     );
   }
 
-  // Encrypt the API key
   const apiKeyEncrypted = encrypt(apiKey);
 
-  const agentId = ulid();
+  const agentId = generateId();
   const agent = await prisma.agent.create({
     data: {
       id: agentId,
@@ -188,7 +195,7 @@ export async function POST(
   if (channels.length > 0) {
     await prisma.channelAgent.createMany({
       data: channels.map((ch) => ({
-        id: ulid(),
+        id: generateId(),
         channelId: ch.id,
         agentId: agent.id,
       })),
@@ -224,7 +231,7 @@ async function createNonBYOKAgent(
   opts: {
     name: string;
     connectionMethod: ConnectionMethodValue;
-    triggerMode?: string;
+    triggerMode?: "ALWAYS" | "MENTION" | "KEYWORD";
     webhookUrl?: string;
     capabilities?: string[];
     systemPrompt?: string;
@@ -256,7 +263,7 @@ async function createNonBYOKAgent(
       { status: 201 },
     );
   } catch (error) {
-    console.error("Non-BYOK agent creation failed:", error);
+    console.error("[servers/agents] Non-BYOK agent creation failed:", error);
     return NextResponse.json(
       { error: "Agent creation failed" },
       { status: 500 },

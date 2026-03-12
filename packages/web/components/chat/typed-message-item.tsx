@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import type { MessagePayload } from "@/lib/hooks/use-channel";
-import { TypedMessageRenderer } from "./typed-messages/TypedMessageRenderer";
+import { TypedMessageRenderer } from "./typed-messages/typed-message-renderer";
 import { passthroughImageLoader } from "@/lib/image-loader";
 import { formatTime } from "@/lib/format-time";
 

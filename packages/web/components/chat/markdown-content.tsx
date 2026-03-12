@@ -120,7 +120,7 @@ export function MarkdownContent({
             }
 
             return (
-              <code className="bg-background-tertiary text-amber-300 px-1.5 py-0.5 rounded text-xs font-mono">
+              <code className="bg-background-tertiary text-emerald-300 px-1.5 py-0.5 rounded text-xs font-mono">
                 {children}
               </code>
             );

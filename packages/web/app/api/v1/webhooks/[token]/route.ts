@@ -1,12 +1,38 @@
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 import { prisma } from "@/lib/db";
-import { ulid } from "ulid";
+import { generateId } from "@/lib/ulid";
 import {
   broadcastMessageNew,
   broadcastStreamStart,
   broadcastTypedMessage,
+  fetchChannelSequence,
 } from "@/lib/gateway-client";
 import { webhookLimiter } from "@/lib/rate-limit";
+import { getInternalBaseUrl } from "@/lib/internal-auth";
+import { persistMessage } from "@/lib/internal-api-client";
+
+/** Valid typed message types for webhook payloads. */
+const VALID_TYPED_TYPES = [
+  "TOOL_CALL",
+  "TOOL_RESULT",
+  "CODE_BLOCK",
+  "ARTIFACT",
+  "STATUS",
+] as const;
+
+/** Zod schema for webhook message POST body. */
+const webhookMessageSchema = z
+  .object({
+    content: z.union([z.string(), z.record(z.unknown())]).optional(),
+    streaming: z.boolean().optional(),
+    username: z.string().optional(),
+    avatarUrl: z.string().optional(),
+    type: z.enum(VALID_TYPED_TYPES).optional(),
+  })
+  .strict();
+
+type WebhookMessageBody = z.infer<typeof webhookMessageSchema>;
 
 /**
  * POST /api/v1/webhooks/{token} — Send a message via inbound webhook (DEC-0045)
@@ -71,9 +97,18 @@ export async function POST(
     return NextResponse.json({ error: "Webhook is disabled" }, { status: 403 });
   }
 
-  let body: Record<string, unknown>;
+  let body: WebhookMessageBody;
   try {
-    body = await request.json();
+    const rawBody = await request.json();
+    const parsed = webhookMessageSchema.safeParse(rawBody);
+    if (!parsed.success) {
+      const firstError = parsed.error.errors[0];
+      return NextResponse.json(
+        { error: firstError?.message || "Invalid request body" },
+        { status: 400 },
+      );
+    }
+    body = parsed.data;
   } catch {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
@@ -84,50 +119,21 @@ export async function POST(
     username,
     avatarUrl: overrideAvatar,
     type: msgType,
-  } = body as {
-    content?: string;
-    streaming?: boolean;
-    username?: string;
-    avatarUrl?: string;
-    type?: string;
-  };
+  } = body;
 
   // Resolve display name/avatar (allow per-message overrides like Discord)
-  const displayName = (username as string) || webhook.name;
-  const displayAvatar = (overrideAvatar as string) || webhook.avatarUrl;
+  const displayName = username || webhook.name;
+  const displayAvatar = overrideAvatar || webhook.avatarUrl;
 
-  const messageId = ulid();
+  const messageId = generateId();
 
-  // Get next sequence via internal API
-  const sequenceResponse = await fetch(
-    `${process.env.GATEWAY_INTERNAL_URL || process.env.GATEWAY_WEB_URL || "http://gateway:4001"}/api/internal/sequence?channelId=${webhook.channelId}`,
-    {
-      headers: { "x-internal-secret": process.env.INTERNAL_API_SECRET || "" },
-    },
-  ).catch(() => null);
-
-  // Fallback: use timestamp-based sequence if gateway is unavailable
-  let sequence = String(Date.now());
-  if (sequenceResponse?.ok) {
-    const seqData = await sequenceResponse.json();
-    sequence = String(seqData.sequence);
-  } else {
-    console.warn(
-      `[Webhook] Gateway sequence unavailable for channel ${webhook.channelId}, using timestamp fallback`,
-    );
-  }
+  // Get next sequence (falls back to timestamp if gateway is unavailable)
+  const sequence = await fetchChannelSequence(webhook.channelId);
 
   try {
     // Handle typed messages (TOOL_CALL, TOOL_RESULT, CODE_BLOCK, etc.)
-    const validTypedTypes = [
-      "TOOL_CALL",
-      "TOOL_RESULT",
-      "CODE_BLOCK",
-      "ARTIFACT",
-      "STATUS",
-    ];
-    if (msgType && validTypedTypes.includes(msgType)) {
-      const typedContent = body.content;
+    if (msgType) {
+      const typedContent = content;
 
       // Persist message
       await persistMessage({
@@ -186,7 +192,7 @@ export async function POST(
         sequence,
       });
 
-      const webUrl = process.env.NEXTAUTH_URL || "http://localhost:5555";
+      const webUrl = getInternalBaseUrl();
 
       return NextResponse.json(
         {
@@ -234,7 +240,7 @@ export async function POST(
 
     return NextResponse.json({ messageId, sequence });
   } catch (error) {
-    console.error("Webhook message failed:", error);
+    console.error("[v1/webhooks] Webhook message failed:", error);
     return NextResponse.json(
       { error: "Failed to send message" },
       { status: 500 },
@@ -242,35 +248,3 @@ export async function POST(
   }
 }
 
-/**
- * Persist a message via the internal API.
- */
-async function persistMessage(data: {
-  id: string;
-  channelId: string;
-  authorId: string;
-  authorType: string;
-  content: string;
-  type: string;
-  streamingStatus?: string;
-  sequence: string;
-}) {
-  const internalUrl = process.env.NEXTAUTH_URL || "http://localhost:5555";
-
-  const response = await fetch(`${internalUrl}/api/internal/messages`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-internal-secret": process.env.INTERNAL_API_SECRET || "",
-    },
-    body: JSON.stringify(data),
-  });
-
-  if (!response.ok && response.status !== 409) {
-    // 409 = duplicate (idempotency guard) — treated as success
-    const errorBody = await response.text().catch(() => "unknown");
-    console.error(
-      `Message persistence failed: ${response.status} ${errorBody}`,
-    );
-  }
-}

@@ -144,7 +144,7 @@ export async function POST(
       { status: 201 },
     );
   } catch (error) {
-    console.error("Failed to create role:", error);
+    console.error("[servers/roles] Failed to create role:", error);
     return NextResponse.json({ error: "Internal error" }, { status: 500 });
   }
 }

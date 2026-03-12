@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
+import { z } from "zod";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import {
@@ -8,7 +9,34 @@ import {
 } from "@/lib/api-safety";
 import { checkMemberPermission } from "@/lib/check-member-permission";
 import { Permissions } from "@/lib/permissions";
-import { ulid } from "ulid";
+import { generateId } from "@/lib/ulid";
+
+/** Valid swarm modes for TASK-0020 */
+const VALID_SWARM_MODES = [
+  "HUMAN_IN_THE_LOOP",
+  "LEAD_AGENT",
+  "ROUND_ROBIN",
+  "STRUCTURED_DEBATE",
+  "CODE_REVIEW_SPRINT",
+  "FREEFORM",
+  "CUSTOM",
+] as const;
+
+/** Zod schema for channel PATCH body — replaces manual validation chain. */
+const channelPatchSchema = z
+  .object({
+    defaultAgentId: z.string().min(1).nullable().optional(),
+    topic: z.string().max(300).nullable().optional(),
+    swarmMode: z.enum(VALID_SWARM_MODES).optional(),
+    charterGoal: z.string().nullable().optional(),
+    charterRules: z.string().nullable().optional(),
+    charterAgentOrder: z.array(z.string()).nullable().optional(),
+    charterMaxTurns: z.number().int().nonnegative().optional(),
+    agentIds: z.array(z.string()).optional(),
+  })
+  .strict();
+
+type ChannelPatchBody = z.infer<typeof channelPatchSchema>;
 
 /**
  * PATCH /api/servers/{serverId}/channels/{channelId}
@@ -54,45 +82,29 @@ export async function PATCH(
     );
   }
 
-  let body: Record<string, unknown>;
+  // Parse and validate body with zod
+  let body: ChannelPatchBody;
   try {
-    const parsedBody = await request.json();
-    if (
-      !parsedBody ||
-      typeof parsedBody !== "object" ||
-      Array.isArray(parsedBody)
-    ) {
-      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    const rawBody = await request.json();
+    const parsed = channelPatchSchema.safeParse(rawBody);
+    if (!parsed.success) {
+      const firstError = parsed.error.errors[0];
+      return NextResponse.json(
+        { error: firstError?.message || "Invalid request body" },
+        { status: 400 },
+      );
     }
-    body = parsedBody as Record<string, unknown>;
+    body = parsed.data;
   } catch {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  // Valid swarm modes for TASK-0020
-  const VALID_SWARM_MODES = [
-    "HUMAN_IN_THE_LOOP",
-    "LEAD_AGENT",
-    "ROUND_ROBIN",
-    "STRUCTURED_DEBATE",
-    "CODE_REVIEW_SPRINT",
-    "FREEFORM",
-    "CUSTOM",
-  ];
-
   const updateData: Record<string, unknown> = {};
 
-  if ("defaultAgentId" in body) {
+  // Validate defaultAgentId references an agent in this server
+  if (body.defaultAgentId !== undefined) {
     if (body.defaultAgentId === null) {
       updateData.defaultAgentId = null;
-    } else if (
-      typeof body.defaultAgentId !== "string" ||
-      body.defaultAgentId.length === 0
-    ) {
-      return NextResponse.json(
-        { error: "defaultAgentId must be a string or null" },
-        { status: 400 },
-      );
     } else {
       const agent = await prisma.agent.findUnique({
         where: { id: body.defaultAgentId },
@@ -107,102 +119,44 @@ export async function PATCH(
     }
   }
 
-  if ("topic" in body) {
-    if (body.topic === null || body.topic === "") {
-      updateData.topic = null;
-    } else if (typeof body.topic === "string") {
-      if (body.topic.length > 300) {
-        return NextResponse.json(
-          { error: "Topic must be 300 characters or fewer" },
-          { status: 400 },
-        );
-      }
-      updateData.topic = body.topic;
-    } else {
-      return NextResponse.json(
-        { error: "topic must be a string or null" },
-        { status: 400 },
-      );
-    }
+  if (body.topic !== undefined) {
+    updateData.topic = body.topic === "" ? null : body.topic;
   }
 
-  // Handle swarm mode fields (TASK-0020)
-  if ("swarmMode" in body) {
-    if (
-      typeof body.swarmMode !== "string" ||
-      !VALID_SWARM_MODES.includes(body.swarmMode)
-    ) {
-      return NextResponse.json(
-        { error: `swarmMode must be one of: ${VALID_SWARM_MODES.join(", ")}` },
-        { status: 400 },
-      );
-    }
+  if (body.swarmMode !== undefined) {
     updateData.swarmMode = body.swarmMode;
   }
 
-  if ("charterGoal" in body) {
-    if (body.charterGoal !== null && typeof body.charterGoal !== "string") {
-      return NextResponse.json(
-        { error: "charterGoal must be a string or null" },
-        { status: 400 },
-      );
-    }
+  if (body.charterGoal !== undefined) {
     updateData.charterGoal = body.charterGoal || null;
   }
 
-  if ("charterRules" in body) {
-    if (body.charterRules !== null && typeof body.charterRules !== "string") {
-      return NextResponse.json(
-        { error: "charterRules must be a string or null" },
-        { status: 400 },
-      );
-    }
+  if (body.charterRules !== undefined) {
     updateData.charterRules = body.charterRules || null;
   }
 
-  if ("charterAgentOrder" in body) {
-    if (
-      body.charterAgentOrder !== null &&
-      !Array.isArray(body.charterAgentOrder)
-    ) {
-      return NextResponse.json(
-        { error: "charterAgentOrder must be an array or null" },
-        { status: 400 },
-      );
-    }
+  if (body.charterAgentOrder !== undefined) {
     updateData.charterAgentOrder = body.charterAgentOrder
       ? JSON.stringify(body.charterAgentOrder)
       : null;
   }
 
-  if ("charterMaxTurns" in body) {
-    if (typeof body.charterMaxTurns !== "number" || body.charterMaxTurns < 0) {
-      return NextResponse.json(
-        { error: "charterMaxTurns must be a non-negative integer" },
-        { status: 400 },
-      );
-    }
-    updateData.charterMaxTurns = Math.floor(body.charterMaxTurns);
+  if (body.charterMaxTurns !== undefined) {
+    updateData.charterMaxTurns = body.charterMaxTurns;
   }
 
   // Handle agentIds array (multi-agent assignment — TASK-0012)
-  if ("agentIds" in body) {
+  if (body.agentIds !== undefined) {
     const agentIds = body.agentIds;
-    if (!Array.isArray(agentIds)) {
-      return NextResponse.json(
-        { error: "agentIds must be an array of strings" },
-        { status: 400 },
-      );
-    }
 
     // Validate all agent IDs exist in this server
     if (agentIds.length > 0) {
       const validAgents = await prisma.agent.findMany({
-        where: { id: { in: agentIds as string[] }, serverId },
+        where: { id: { in: agentIds }, serverId },
         select: { id: true },
       });
       const validIds = new Set(validAgents.map((a) => a.id));
-      const invalid = (agentIds as string[]).filter((id) => !validIds.has(id));
+      const invalid = agentIds.filter((id) => !validIds.has(id));
       if (invalid.length > 0) {
         return NextResponse.json(
           { error: `Agents not found in this server: ${invalid.join(", ")}` },
@@ -214,16 +168,16 @@ export async function PATCH(
     // Transaction: delete old ChannelAgent entries → create new ones → update defaultAgentId
     await prisma.$transaction([
       prisma.channelAgent.deleteMany({ where: { channelId } }),
-      ...(agentIds as string[]).map((agentId: string) =>
+      ...agentIds.map((agentId: string) =>
         prisma.channelAgent.create({
-          data: { id: ulid(), channelId, agentId },
+          data: { id: generateId(), channelId, agentId },
         }),
       ),
       // Set first agent as defaultAgentId for backward compat
       prisma.channel.update({
         where: { id: channelId },
         data: {
-          defaultAgentId: agentIds.length > 0 ? (agentIds[0] as string) : null,
+          defaultAgentId: agentIds.length > 0 ? agentIds[0] : null,
         },
       }),
     ]);
@@ -303,9 +257,9 @@ export async function DELETE(
     }
 
     await prisma.channel.delete({ where: { id: channelId } });
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("Failed to delete channel:", error);
+    console.error("[channels] Failed to delete channel:", error);
     return NextResponse.json({ error: "Internal error" }, { status: 500 });
   }
 }

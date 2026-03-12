@@ -62,7 +62,7 @@ function coerceFiniteNumber(
   return Math.max(minimum, numeric);
 }
 
-export function getWorkspaceDimensions() {
+function getWorkspaceDimensions() {
   if (typeof window === "undefined") {
     return { width: 1200, height: 800 };
   }
@@ -147,52 +147,41 @@ export function hydrateSavedPanel(raw: unknown): PanelState | null {
   if (!raw || typeof raw !== "object") return null;
   if (!("channelId" in raw) || !("serverId" in raw)) return null;
 
+  const r = raw as PanelState;
   const normalized: PanelState = {
-    id: String((raw as PanelState).id || (raw as PanelState).channelId),
-    channelId: String((raw as PanelState).channelId),
-    channelName: String((raw as PanelState).channelName || "unknown"),
-    serverId: String((raw as PanelState).serverId),
-    serverName: String((raw as PanelState).serverName || "unknown"),
-    x: coerceFiniteNumber((raw as PanelState).x, DEFAULT_PANEL_X, 0),
-    y: coerceFiniteNumber((raw as PanelState).y, DEFAULT_PANEL_Y, 0),
-    width: coerceFiniteNumber(
-      (raw as PanelState).width,
-      DEFAULT_PANEL_WIDTH,
-      MIN_PANEL_WIDTH,
-    ),
-    height: coerceFiniteNumber(
-      (raw as PanelState).height,
-      DEFAULT_PANEL_HEIGHT,
-      MIN_PANEL_HEIGHT,
-    ),
-    isMinimized: Boolean((raw as PanelState).isMinimized),
-    isClosed: Boolean((raw as PanelState).isClosed),
-    isMaximized: Boolean((raw as PanelState).isMaximized),
+    id: String(r.id || r.channelId),
+    channelId: String(r.channelId),
+    channelName: String(r.channelName || "unknown"),
+    serverId: String(r.serverId),
+    serverName: String(r.serverName || "unknown"),
+    x: coerceFiniteNumber(r.x, DEFAULT_PANEL_X, 0),
+    y: coerceFiniteNumber(r.y, DEFAULT_PANEL_Y, 0),
+    width: coerceFiniteNumber(r.width, DEFAULT_PANEL_WIDTH, MIN_PANEL_WIDTH),
+    height: coerceFiniteNumber(r.height, DEFAULT_PANEL_HEIGHT, MIN_PANEL_HEIGHT),
+    isMinimized: Boolean(r.isMinimized),
+    isClosed: Boolean(r.isClosed),
+    isMaximized: Boolean(r.isMaximized),
     restoreX:
-      (raw as PanelState).restoreX == null
+      r.restoreX == null
         ? null
-        : coerceFiniteNumber((raw as PanelState).restoreX, DEFAULT_PANEL_X, 0),
+        : coerceFiniteNumber(r.restoreX, DEFAULT_PANEL_X, 0),
     restoreY:
-      (raw as PanelState).restoreY == null
+      r.restoreY == null
         ? null
-        : coerceFiniteNumber((raw as PanelState).restoreY, DEFAULT_PANEL_Y, 0),
+        : coerceFiniteNumber(r.restoreY, DEFAULT_PANEL_Y, 0),
     restoreWidth:
-      (raw as PanelState).restoreWidth == null
+      r.restoreWidth == null
         ? null
-        : coerceFiniteNumber(
-            (raw as PanelState).restoreWidth,
-            DEFAULT_PANEL_WIDTH,
-            MIN_PANEL_WIDTH,
-          ),
+        : coerceFiniteNumber(r.restoreWidth, DEFAULT_PANEL_WIDTH, MIN_PANEL_WIDTH),
     restoreHeight:
-      (raw as PanelState).restoreHeight == null
+      r.restoreHeight == null
         ? null
         : coerceFiniteNumber(
-            (raw as PanelState).restoreHeight,
+            r.restoreHeight,
             DEFAULT_PANEL_HEIGHT,
             MIN_PANEL_HEIGHT,
           ),
-    zIndex: coerceFiniteNumber((raw as PanelState).zIndex, 1, 1),
+    zIndex: coerceFiniteNumber(r.zIndex, 1, 1),
   };
 
   return normalizePanelGeometry(restoreWindowedGeometry(normalized));
@@ -279,6 +268,7 @@ export function usePanelState() {
       }
     } catch (e) {
       console.error("Failed to parse saved panels", e);
+      return;
     }
     setIsLoaded(true);
   }, []);

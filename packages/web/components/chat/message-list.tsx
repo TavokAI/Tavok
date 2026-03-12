@@ -7,6 +7,95 @@ import { StreamingMessage } from "./streaming-message";
 import { TypedMessageItem } from "./typed-message-item";
 import { UnreadDivider } from "./unread-divider";
 
+const TYPED_MESSAGE_TYPES = [
+  "TOOL_CALL",
+  "TOOL_RESULT",
+  "CODE_BLOCK",
+  "ARTIFACT",
+  "STATUS",
+];
+
+function MessageRow({
+  message,
+  prevMessage,
+  showDivider,
+  currentUserId,
+  latestOwnUserMessageId,
+  onReactionsChange,
+  canManageMessages,
+  onEditMessage,
+  onDeleteMessage,
+}: {
+  message: MessagePayload;
+  prevMessage?: MessagePayload;
+  showDivider: boolean;
+  currentUserId?: string;
+  latestOwnUserMessageId: string | null;
+  onReactionsChange: (messageId: string, reactions: ReactionData[]) => void;
+  canManageMessages?: boolean;
+  onEditMessage?: (messageId: string, content: string) => Promise<boolean>;
+  onDeleteMessage?: (messageId: string) => void;
+}) {
+  let isGrouped =
+    prevMessage?.authorId === message.authorId &&
+    prevMessage?.authorType === message.authorType &&
+    !prevMessage?.isDeleted &&
+    !message.isDeleted &&
+    new Date(message.createdAt).getTime() -
+      new Date(prevMessage!.createdAt).getTime() <
+      5 * 60 * 1000;
+
+  if (
+    currentUserId &&
+    message.authorType === "USER" &&
+    message.id === latestOwnUserMessageId
+  ) {
+    isGrouped = false;
+  }
+
+  const wrapper = (children: React.ReactNode) => (
+    <div
+      data-message-id={message.id}
+      data-message-author-type={message.authorType}
+      data-message-type={message.type}
+    >
+      {showDivider && <UnreadDivider />}
+      {children}
+    </div>
+  );
+
+  if (message.type === "STREAMING") {
+    return wrapper(
+      <StreamingMessage
+        message={message}
+        isGrouped={isGrouped}
+        onReactionsChange={onReactionsChange}
+        currentUserId={currentUserId}
+        canManageMessages={canManageMessages}
+        onDelete={onDeleteMessage}
+      />,
+    );
+  }
+
+  if (TYPED_MESSAGE_TYPES.includes(message.type)) {
+    return wrapper(
+      <TypedMessageItem message={message} isGrouped={isGrouped} />,
+    );
+  }
+
+  return wrapper(
+    <MessageItem
+      message={message}
+      isGrouped={isGrouped}
+      onReactionsChange={onReactionsChange}
+      currentUserId={currentUserId}
+      canManageMessages={canManageMessages}
+      onEdit={onEditMessage}
+      onDelete={onDeleteMessage}
+    />,
+  );
+}
+
 interface MessageListProps {
   messages: MessagePayload[];
   hasMoreHistory: boolean;
@@ -50,6 +139,22 @@ export function MessageList({
     }
     return null;
   }, [messages, currentUserId]);
+
+  const dividerIndex = useMemo(() => {
+    if (!lastReadSeq || lastReadSeq === "0" || messages.length === 0) return -1;
+    const lrs = BigInt(lastReadSeq);
+    for (let i = 0; i < messages.length; i++) {
+      try {
+        if (BigInt(messages[i].sequence) > lrs) {
+          // If dividerIndex is 0 (all messages unread), don't show
+          return i > 0 ? i : -1;
+        }
+      } catch {
+        // skip if sequence isn't a valid bigint
+      }
+    }
+    return -1;
+  }, [messages, lastReadSeq]);
 
   // Detect if user is near bottom
   const handleScroll = useCallback(() => {
@@ -243,7 +348,7 @@ export function MessageList({
       {/* Empty state */}
       {messages.length === 0 && (
         <div className="flex h-full items-center justify-center px-4 py-10">
-          <div className="chrome-card rounded-[24px] px-8 py-10 text-center">
+          <div className="chrome-card rounded-lg px-8 py-10 text-center">
             <p className="font-display text-xl font-semibold text-white">
               No messages yet
             </p>
@@ -264,112 +369,21 @@ export function MessageList({
         </div>
       )}
 
-      {/* TASK-0016: Compute divider position â€” the index of the FIRST unread message */}
-      {(() => {
-        // Find the index where the divider should be inserted
-        let dividerIndex = -1;
-        if (lastReadSeq && lastReadSeq !== "0" && messages.length > 0) {
-          const lrs = BigInt(lastReadSeq);
-          for (let i = 0; i < messages.length; i++) {
-            try {
-              if (BigInt(messages[i].sequence) > lrs) {
-                dividerIndex = i;
-                break;
-              }
-            } catch {
-              // skip if sequence isn't a valid bigint
-            }
-          }
-          // If dividerIndex is 0 (all messages are unread) or -1 (all read), don't show
-          if (dividerIndex <= 0) dividerIndex = -1;
-        }
-        return messages.map((message, index) => {
-          const prevMessage = messages[index - 1];
-          let isGrouped =
-            prevMessage?.authorId === message.authorId &&
-            prevMessage?.authorType === message.authorType &&
-            // Don't group if previous message was deleted
-            !prevMessage?.isDeleted &&
-            !message.isDeleted &&
-            // Only group if less than 5 minutes apart
-            new Date(message.createdAt).getTime() -
-              new Date(prevMessage.createdAt).getTime() <
-              5 * 60 * 1000;
-          const isMostRecentOwnUserMessage =
-            Boolean(currentUserId) &&
-            message.authorType === "USER" &&
-            message.id === latestOwnUserMessageId;
-          if (isMostRecentOwnUserMessage) {
-            isGrouped = false;
-          }
-
-          const showDivider = index === dividerIndex;
-
-          // Use StreamingMessage for active/recently-completed streaming messages
-          if (message.type === "STREAMING") {
-            return (
-              <div
-                key={message.id}
-                data-message-id={message.id}
-                data-message-author-type={message.authorType}
-                data-message-type={message.type}
-              >
-                {showDivider && <UnreadDivider />}
-                <StreamingMessage
-                  message={message}
-                  isGrouped={isGrouped}
-                  onReactionsChange={onReactionsChange}
-                  currentUserId={currentUserId}
-                  canManageMessages={canManageMessages}
-                  onDelete={onDeleteMessage}
-                />
-              </div>
-            );
-          }
-
-          // Use TypedMessageItem for structured agent messages (TASK-0039)
-          const typedTypes = [
-            "TOOL_CALL",
-            "TOOL_RESULT",
-            "CODE_BLOCK",
-            "ARTIFACT",
-            "STATUS",
-          ];
-          if (typedTypes.includes(message.type)) {
-            return (
-              <div
-                key={message.id}
-                data-message-id={message.id}
-                data-message-author-type={message.authorType}
-                data-message-type={message.type}
-              >
-                {showDivider && <UnreadDivider />}
-                <TypedMessageItem message={message} isGrouped={isGrouped} />
-              </div>
-            );
-          }
-
-          return (
-            <div
-              key={message.id}
-              data-message-id={message.id}
-              data-message-author-type={message.authorType}
-              data-message-type={message.type}
-            >
-              {showDivider && <UnreadDivider />}
-              <MessageItem
-                message={message}
-                isGrouped={isGrouped}
-                onReactionsChange={onReactionsChange}
-                currentUserId={currentUserId}
-                canManageMessages={canManageMessages}
-                onEdit={onEditMessage}
-                onDelete={onDeleteMessage}
-              />
-            </div>
-          );
-        });
-      })()}
+      {/* TASK-0016: Compute divider position — the index of the FIRST unread message */}
+      {messages.map((message, index) => (
+        <MessageRow
+          key={message.id}
+          message={message}
+          prevMessage={messages[index - 1]}
+          showDivider={index === dividerIndex}
+          currentUserId={currentUserId}
+          latestOwnUserMessageId={latestOwnUserMessageId}
+          onReactionsChange={onReactionsChange}
+          canManageMessages={canManageMessages}
+          onEditMessage={onEditMessage}
+          onDeleteMessage={onDeleteMessage}
+        />
+      ))}
     </div>
   );
 }

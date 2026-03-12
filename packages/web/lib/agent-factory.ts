@@ -1,6 +1,8 @@
-import { ulid } from "ulid";
+import { generateId } from "@/lib/ulid";
 import crypto from "crypto";
 import { prisma } from "@/lib/db";
+import { getInternalBaseUrl } from "@/lib/internal-auth";
+import type { TriggerMode, ConnectionMethod } from "@tavok/shared/agent";
 
 /**
  * Shared agent creation logic — used by both:
@@ -20,19 +22,19 @@ export const VALID_CONNECTION_METHODS = [
   "OPENAI_COMPAT",
 ] as const;
 
-export type ConnectionMethodValue = (typeof VALID_CONNECTION_METHODS)[number];
+export type ConnectionMethodValue = ConnectionMethod;
 
-export interface CreateAgentOptions {
+interface CreateAgentOptions {
   name: string;
   serverId: string;
   connectionMethod: ConnectionMethodValue;
-  triggerMode?: string;
+  triggerMode?: TriggerMode;
   webhookUrl?: string;
   capabilities?: string[];
   systemPrompt?: string;
 }
 
-export interface CreateAgentResult {
+interface CreateAgentResult {
   agent: { id: string; name: string };
   apiKey: string; // raw key — shown once, never stored
   connectionMethod: ConnectionMethodValue;
@@ -50,13 +52,13 @@ export interface CreateAgentResult {
 export async function createAgent(
   opts: CreateAgentOptions,
 ): Promise<CreateAgentResult> {
-  const agentId = ulid();
-  const registrationId = ulid();
+  const agentId = generateId();
+  const registrationId = generateId();
 
   // Generate API key: sk-tvk- prefix + 32 random bytes base64url
   const randomBytes = crypto.randomBytes(32);
-  const apiKey = `sk-tvk-${randomBytes.toString("base64url")}`;
-  const apiKeyHash = crypto.createHash("sha256").update(apiKey).digest("hex");
+  const generatedKey = `sk-tvk-${randomBytes.toString("base64url")}`;
+  const apiKeyHash = crypto.createHash("sha256").update(generatedKey).digest("hex");
 
   // Generate webhook secret for WEBHOOK method
   const webhookSecret =
@@ -78,10 +80,7 @@ export async function createAgent(
         temperature: 0.7,
         maxTokens: 4096,
         isActive: true,
-        triggerMode: (opts.triggerMode || "MENTION") as
-          | "ALWAYS"
-          | "MENTION"
-          | "KEYWORD",
+        triggerMode: opts.triggerMode || "MENTION",
         connectionMethod: opts.connectionMethod,
       },
     });
@@ -107,7 +106,7 @@ export async function createAgent(
     if (channels.length > 0) {
       await tx.channelAgent.createMany({
         data: channels.map((ch) => ({
-          id: ulid(),
+          id: generateId(),
           channelId: ch.id,
           agentId: agent.id,
         })),
@@ -119,7 +118,7 @@ export async function createAgent(
 
   return {
     agent: { id: result.agent.id, name: result.agent.name },
-    apiKey,
+    apiKey: generatedKey,
     connectionMethod: opts.connectionMethod,
     webhookSecret,
   };
@@ -138,7 +137,7 @@ export function buildConnectionInfo(
 ): Record<string, string | undefined> {
   const gatewayUrl =
     process.env.NEXT_PUBLIC_GATEWAY_URL || "ws://localhost:4001/socket";
-  const webUrl = process.env.NEXTAUTH_URL || "http://localhost:5555";
+  const webUrl = getInternalBaseUrl();
 
   const info: Record<string, string | undefined> = {};
 
@@ -159,6 +158,10 @@ export function buildConnectionInfo(
     case "OPENAI_COMPAT":
       info.chatCompletionsUrl = `${webUrl}/api/v1/chat/completions`;
       info.modelsUrl = `${webUrl}/api/v1/models`;
+      break;
+    case "INBOUND_WEBHOOK":
+      info.inboundWebhookUrl = `${webUrl}/api/v1/webhooks/{token}`;
+      info.note = "Replace {token} with the webhook token from agent registration";
       break;
   }
 

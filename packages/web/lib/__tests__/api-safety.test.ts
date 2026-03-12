@@ -6,7 +6,7 @@ import {
   serializeSequence,
   parseNonNegativeSequence,
   buildMonotonicLastSequenceUpdate,
-} from "../api-safety.js";
+} from "../api-safety";
 
 describe("canMutateServerScopedResource", () => {
   it("returns true when route and target server IDs match", () => {
@@ -18,15 +18,15 @@ describe("canMutateServerScopedResource", () => {
   });
 
   it("returns false for non-string routeServerId", () => {
-    expect(canMutateServerScopedResource(null, "server-1")).toBe(false);
-    expect(canMutateServerScopedResource(undefined, "server-1")).toBe(false);
-    expect(canMutateServerScopedResource(123, "server-1")).toBe(false);
+    expect(canMutateServerScopedResource(null as any, "server-1")).toBe(false);
+    expect(canMutateServerScopedResource(undefined as any, "server-1")).toBe(false);
+    expect(canMutateServerScopedResource(123 as any, "server-1")).toBe(false);
   });
 
   it("returns false for non-string targetServerId", () => {
-    expect(canMutateServerScopedResource("server-1", null)).toBe(false);
-    expect(canMutateServerScopedResource("server-1", undefined)).toBe(false);
-    expect(canMutateServerScopedResource("server-1", 123)).toBe(false);
+    expect(canMutateServerScopedResource("server-1", null as any)).toBe(false);
+    expect(canMutateServerScopedResource("server-1", undefined as any)).toBe(false);
+    expect(canMutateServerScopedResource("server-1", 123 as any)).toBe(false);
   });
 
   it("prevents cross-server mutation (IDOR defense)", () => {
@@ -93,7 +93,7 @@ describe("getRedisHealthStatus", () => {
   it("returns 'unhealthy' when redisUrl is empty/falsy", async () => {
     const probe = async () => true;
     expect(await getRedisHealthStatus("", probe)).toBe("unhealthy");
-    expect(await getRedisHealthStatus(null, probe)).toBe("unhealthy");
+    expect(await getRedisHealthStatus(null as any, probe)).toBe("unhealthy");
     expect(await getRedisHealthStatus(undefined, probe)).toBe("unhealthy");
   });
 });
@@ -148,9 +148,9 @@ describe("parseNonNegativeSequence", () => {
   });
 
   it("returns null for null/undefined/boolean", () => {
-    expect(parseNonNegativeSequence(null)).toBeNull();
-    expect(parseNonNegativeSequence(undefined)).toBeNull();
-    expect(parseNonNegativeSequence(true)).toBeNull();
+    expect(parseNonNegativeSequence(null as any)).toBeNull();
+    expect(parseNonNegativeSequence(undefined as any)).toBeNull();
+    expect(parseNonNegativeSequence(true as any)).toBeNull();
   });
 
   it("trims whitespace from valid string input", () => {

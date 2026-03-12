@@ -35,7 +35,7 @@ export async function GET(
       apiKey = decrypt(agent.apiKeyEncrypted);
     } catch {
       console.error(
-        `[Internal] Failed to decrypt API key for agent ${agent.id}`,
+        `[internal/agents] Failed to decrypt API key for agent ${agent.id}`,
       );
       return NextResponse.json(
         { error: "Failed to decrypt agent API key" },
@@ -59,7 +59,7 @@ export async function GET(
       enabledTools: agent.enabledTools ? JSON.parse(agent.enabledTools) : [], // TASK-0018
     });
   } catch (error) {
-    console.error("[Internal] Failed to get agent:", error);
+    console.error("[internal/agents] Failed to get agent:", error);
     return NextResponse.json({ error: "Failed to get agent" }, { status: 500 });
   }
 }

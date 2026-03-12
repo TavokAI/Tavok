@@ -6,6 +6,7 @@ import {
   broadcastStreamError,
   broadcastToChannel,
 } from "@/lib/gateway-client";
+import { updateMessage } from "@/lib/internal-api-client";
 
 /**
  * POST /api/v1/webhooks/{token}/stream — Send streaming tokens (DEC-0045)
@@ -164,7 +165,7 @@ export async function POST(
       nextTokenOffset: tokenIndex,
     });
   } catch (err) {
-    console.error("Webhook stream failed:", err);
+    console.error("[v1/webhooks/stream] Webhook stream failed:", err);
     return NextResponse.json(
       { error: "Failed to process stream" },
       { status: 500 },
@@ -190,7 +191,7 @@ async function verifyWebhookMessageOwnership(
       },
     });
   } catch (err) {
-    console.error("Ownership check DB query failed:", err);
+    console.error("[v1/webhooks/stream] Ownership check DB query failed:", err);
     return {
       valid: false,
       error: "Internal error during ownership verification",
@@ -229,26 +230,3 @@ async function verifyWebhookMessageOwnership(
   return { valid: true };
 }
 
-/**
- * Update a message via the internal API.
- */
-async function updateMessage(messageId: string, data: Record<string, unknown>) {
-  const internalUrl = process.env.NEXTAUTH_URL || "http://localhost:5555";
-
-  const response = await fetch(
-    `${internalUrl}/api/internal/messages/${messageId}`,
-    {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-        "x-internal-secret": process.env.INTERNAL_API_SECRET || "",
-      },
-      body: JSON.stringify(data),
-    },
-  );
-
-  if (!response.ok) {
-    const errorBody = await response.text().catch(() => "unknown");
-    console.error(`Message update failed: ${response.status} ${errorBody}`);
-  }
-}

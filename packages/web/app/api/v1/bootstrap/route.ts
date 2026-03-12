@@ -7,6 +7,7 @@ import { generateId } from "@/lib/ulid";
 import { DEFAULT_PERMISSIONS } from "@/lib/permissions";
 import { authenticateAdminToken } from "@/lib/admin-auth";
 import { RateLimiter, getClientIp } from "@/lib/rate-limit";
+import { getInternalBaseUrl } from "@/lib/internal-auth";
 
 /**
  * POST /api/v1/bootstrap — First-run setup endpoint.
@@ -144,7 +145,7 @@ export async function POST(request: Request) {
 
     const gatewayUrl =
       process.env.NEXT_PUBLIC_GATEWAY_URL || "ws://localhost:4001/socket";
-    const webUrl = process.env.NEXTAUTH_URL || "http://localhost:5555";
+    const webUrl = getInternalBaseUrl();
 
     return NextResponse.json(
       {
@@ -184,7 +185,7 @@ export async function POST(request: Request) {
         { status: 409 },
       );
     }
-    console.error("Bootstrap error:", error);
+    console.error("[v1/bootstrap] Bootstrap error:", error);
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 },

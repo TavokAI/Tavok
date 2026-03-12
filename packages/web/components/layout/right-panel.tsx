@@ -28,7 +28,7 @@ export function RightPanel() {
 
   const openPanels = useMemo(() => panels.filter((p) => !p.isClosed), [panels]);
   const openServerIds = useMemo(
-    () => Array.from(new Set(openPanels.map((p) => p.serverId))).sort(),
+    () => Array.from(new Set(openPanels.map((p) => p.serverId))).sort((a, b) => a.localeCompare(b)),
     [openPanels],
   );
 
@@ -120,9 +120,9 @@ export function RightPanel() {
   }, [openPanels, serverDataById]);
 
   return (
-    <div className="chrome-panel flex h-full flex-col rounded-[28px] overflow-hidden">
+    <div className="chrome-panel flex h-full flex-col rounded-lg overflow-hidden">
       <div className="flex-1 space-y-4 overflow-y-auto p-4">
-        <div className="chrome-card rounded-[24px] p-4">
+        <div className="chrome-card rounded-lg p-4">
           <div className="mb-4 flex items-center justify-between border-b border-border/60 pb-3">
             <div className="flex items-center gap-2 text-[11px] font-semibold tracking-[0.12em] text-text-muted">
               <Bot className="h-4 w-4 text-brand" />
@@ -147,13 +147,13 @@ export function RightPanel() {
               agentList.map((agent) => (
                 <div
                   key={agent.id}
-                  className="flex items-center justify-between rounded-2xl border border-white/6 bg-background-floating/42 px-3 py-2 text-sm"
+                  className="flex items-center justify-between rounded-lg border border-white/6 bg-background-floating/42 px-3 py-2 text-sm"
                 >
                   <div className="flex min-w-0 items-center gap-2.5">
                     <div
                       className={`h-2.5 w-2.5 shrink-0 rounded-full ${
                         agent.isStreaming
-                          ? "bg-accent-green shadow-[0_0_14px_rgba(41,211,145,0.55)]"
+                          ? "bg-accent-green shadow-[0_0_14px_rgba(16,185,129,0.55)]"
                           : "bg-status-offline"
                       }`}
                     />
@@ -177,7 +177,7 @@ export function RightPanel() {
           </div>
         </div>
 
-        <div className="chrome-card rounded-[24px] p-4">
+        <div className="chrome-card rounded-lg p-4">
           <div className="mb-4 flex items-center gap-2 border-b border-border/60 pb-3 text-[11px] font-semibold tracking-[0.12em] text-text-muted">
             <Zap className="h-4 w-4 text-accent-green" />
             TASKS
@@ -194,7 +194,7 @@ export function RightPanel() {
               taskList.map((task, i) => (
                 <div
                   key={`${task.agentName}-${task.label}-${i}`}
-                  className="rounded-2xl border border-white/6 bg-background-floating/34 px-3 py-2.5"
+                  className="rounded-lg border border-white/6 bg-background-floating/34 px-3 py-2.5"
                 >
                   <div
                     className={`text-sm font-medium ${
@@ -221,7 +221,7 @@ export function RightPanel() {
           </div>
         </div>
 
-        <div className="chrome-card rounded-[24px] p-4">
+        <div className="chrome-card rounded-lg p-4">
           <div className="mb-4 flex items-center gap-2 border-b border-border/60 pb-3 text-[11px] font-semibold tracking-[0.12em] text-text-muted">
             <Users className="h-4 w-4 text-accent-cyan" />
             MEMBERS
@@ -235,14 +235,14 @@ export function RightPanel() {
                 return (
                   <div
                     key={member.userId}
-                    className="flex items-center gap-2.5 rounded-2xl border border-white/6 bg-background-floating/34 px-3 py-2 text-sm"
+                    className="flex items-center gap-2.5 rounded-lg border border-white/6 bg-background-floating/34 px-3 py-2 text-sm"
                   >
-                    <div className="h-2 w-2 shrink-0 rounded-full bg-accent-green shadow-[0_0_12px_rgba(41,211,145,0.45)]" />
+                    <div className="h-2 w-2 shrink-0 rounded-full bg-accent-green shadow-[0_0_12px_rgba(16,185,129,0.45)]" />
                     <span className="truncate font-medium text-text-primary">
                       {member.displayName}
                     </span>
                     {isOwner && (
-                      <span className="ml-auto shrink-0 rounded-full border border-brand/20 bg-brand/10 px-2 py-0.5 text-[10px] font-semibold text-orange-100">
+                      <span className="ml-auto shrink-0 rounded-full border border-brand/20 bg-brand/10 px-2 py-0.5 text-[10px] font-semibold text-white">
                         Owner
                       </span>
                     )}
@@ -253,7 +253,7 @@ export function RightPanel() {
           </div>
         </div>
 
-        <div className="chrome-card rounded-[24px] p-4">
+        <div className="chrome-card rounded-lg p-4">
           <div className="mb-4 flex items-center gap-2 border-b border-border/60 pb-3 text-[11px] font-semibold tracking-[0.12em] text-text-muted">
             <Cpu className="h-4 w-4 text-brand" />
             MODELS
@@ -267,7 +267,7 @@ export function RightPanel() {
               modelList.map(({ model, agentName }) => (
                 <div
                   key={model}
-                  className="flex items-center justify-between rounded-2xl border border-white/6 bg-background-floating/34 px-3 py-2"
+                  className="flex items-center justify-between rounded-lg border border-white/6 bg-background-floating/34 px-3 py-2"
                 >
                   <span className="truncate font-mono text-xs text-text-secondary">
                     {model}

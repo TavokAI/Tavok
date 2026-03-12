@@ -139,7 +139,7 @@ export function OverviewSection({
           Server Icon
         </label>
         <div className="flex items-center gap-4">
-          <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl border-2 border-border bg-background-tertiary text-xl font-bold text-text-primary overflow-hidden">
+          <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-lg border-2 border-border bg-background-tertiary text-xl font-bold text-text-primary overflow-hidden">
             {iconUrl ? (
               <Image
                 src={iconUrl}

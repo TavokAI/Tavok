@@ -23,7 +23,7 @@ export function PanelDock() {
   if (minimizedPanels.length === 0) return null;
 
   return (
-    <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-2 rounded-xl border border-border bg-background-floating/80 px-3 py-2 backdrop-blur-md shadow-2xl z-50">
+    <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-2 rounded-lg border border-border bg-background-floating/80 px-3 py-2 backdrop-blur-md shadow-2xl z-50">
       {minimizedPanels.map((panel) => (
         <button
           key={panel.id}

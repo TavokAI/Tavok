@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { ulid } from "ulid";
+import { generateId } from "@/lib/ulid";
 import { validateInternalSecret } from "@/lib/internal-auth";
 
 /**
@@ -29,15 +29,14 @@ export async function POST(
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const { channelId, messageId, content, authorId, authorName, authorType } =
-    body as {
-      channelId: string;
-      messageId: string;
-      content: string;
-      authorId: string;
-      authorName: string;
-      authorType: string;
-    };
+  const channelId = typeof body.channelId === "string" ? body.channelId : "";
+  const messageId = typeof body.messageId === "string" ? body.messageId : "";
+  const content = typeof body.content === "string" ? body.content : "";
+  const authorId = typeof body.authorId === "string" ? body.authorId : "";
+  const authorName =
+    typeof body.authorName === "string" ? body.authorName : "";
+  const authorType =
+    typeof body.authorType === "string" ? body.authorType : "";
 
   if (!channelId || !messageId || !content) {
     return NextResponse.json(
@@ -49,7 +48,7 @@ export async function POST(
   try {
     await prisma.agentMessage.create({
       data: {
-        id: ulid(),
+        id: generateId(),
         agentId,
         channelId,
         messageId,
@@ -64,7 +63,7 @@ export async function POST(
 
     return NextResponse.json({ ok: true });
   } catch (error) {
-    console.error("Agent message enqueue failed:", error);
+    console.error("[internal/enqueue] Agent message enqueue failed:", error);
     return NextResponse.json(
       { error: "Failed to enqueue message" },
       { status: 500 },

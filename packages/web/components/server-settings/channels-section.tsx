@@ -48,6 +48,8 @@ export function ChannelsSection({ serverId }: ChannelsSectionProps) {
             (a: ChannelData, b: ChannelData) => a.position - b.position,
           ),
         );
+      } else {
+        setError("Failed to load channels");
       }
     } catch {
       setError("Failed to load channels");
@@ -139,12 +141,17 @@ export function ChannelsSection({ serverId }: ChannelsSectionProps) {
     setChannels(reordered);
 
     try {
-      await fetch(`/api/servers/${serverId}/channels/reorder`, {
+      const res = await fetch(`/api/servers/${serverId}/channels/reorder`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ channelIds: reordered.map((c) => c.id) }),
       });
+      if (!res.ok) {
+        setError("Failed to reorder channels");
+        await fetchChannels();
+      }
     } catch {
+      setError("Failed to reorder channels");
       await fetchChannels();
     }
   }

@@ -413,8 +413,8 @@ export function MessageInput({
     >
       {/* Drag-and-drop overlay (TASK-0025) */}
       {isDragging && (
-        <div className="pointer-events-none absolute inset-0 z-50 flex items-center justify-center rounded-[22px] border-2 border-dashed border-brand/35 bg-brand/10 backdrop-blur-sm">
-          <div className="flex items-center gap-2 text-sm font-semibold text-orange-100">
+        <div className="pointer-events-none absolute inset-0 z-50 flex items-center justify-center rounded-lg border-2 border-dashed border-brand/35 bg-brand/10 backdrop-blur-sm">
+          <div className="flex items-center gap-2 text-sm font-semibold text-white">
             <svg
               width="20"
               height="20"
@@ -462,7 +462,7 @@ export function MessageInput({
           ))}
         </div>
       )}
-      <div className="relative mt-1 flex items-end gap-3 rounded-[22px] border border-white/10 bg-[linear-gradient(180deg,rgba(20,32,57,0.96),rgba(13,24,45,0.94))] px-4 py-3 shadow-[0_16px_34px_rgba(3,9,22,0.24)]">
+      <div className="relative mt-1 flex items-end gap-3 rounded-lg border border-white/10 bg-background-secondary px-4 py-3">
         <MentionAutocomplete
           query={mentionQuery}
           options={mentionOptions}

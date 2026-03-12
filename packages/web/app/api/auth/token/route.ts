@@ -45,7 +45,7 @@ export async function GET() {
   const now = Math.floor(Date.now() / 1000);
   const jwtSecret = process.env.JWT_SECRET;
   if (!jwtSecret) {
-    console.error("JWT_SECRET is not set");
+    console.error("[auth/token] Required environment variable is not configured");
     return NextResponse.json(
       { error: "Server configuration error" },
       { status: 500 },

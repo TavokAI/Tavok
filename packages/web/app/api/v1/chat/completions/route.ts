@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { ulid } from "ulid";
+import { generateId } from "@/lib/ulid";
 import { authenticateAgentRequest } from "@/lib/agent-auth";
 import {
   broadcastMessageNew,
   fetchChannelSequence,
 } from "@/lib/gateway-client";
+import { getInternalBaseUrl } from "@/lib/internal-auth";
 
 /**
  * POST /api/v1/chat/completions — OpenAI-compatible chat completions (DEC-0046)
@@ -140,14 +141,14 @@ export async function POST(request: NextRequest) {
   }
 
   // Inject user message into channel
-  const userMessageId = ulid();
+  const userMessageId = generateId();
   const sequence = await fetchChannelSequence(channelId);
-  const completionId = `chatcmpl-${ulid()}`;
+  const completionId = `chatcmpl-${generateId()}`;
   const created = Math.floor(Date.now() / 1000);
 
   try {
     // Persist and broadcast user message
-    const internalUrl = process.env.NEXTAUTH_URL || "http://localhost:5555";
+    const internalUrl = getInternalBaseUrl();
     await fetch(`${internalUrl}/api/internal/messages`, {
       method: "POST",
       headers: {
@@ -328,7 +329,7 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error("Chat completions failed:", error);
+    console.error("[v1/chat/completions] Chat completions failed:", error);
     return NextResponse.json(
       {
         error: {

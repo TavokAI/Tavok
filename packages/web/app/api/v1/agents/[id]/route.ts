@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { authenticateAgentById } from "@/lib/agent-auth";
 
 /**
  * GET /api/v1/agents/{id} — Get agent info
@@ -12,41 +13,16 @@ import { prisma } from "@/lib/db";
  * DEC-0040: Agent self-registration
  */
 
-/** Verify the request comes from the agent that owns this registration */
-async function authenticateAgent(
-  request: NextRequest,
-  agentId: string,
-): Promise<{ authorized: boolean; error?: string; status?: number }> {
-  const authHeader = request.headers.get("authorization");
-  if (!authHeader?.startsWith("Bearer ")) {
-    return {
-      authorized: false,
-      error: "Missing Authorization header",
-      status: 401,
-    };
-  }
-
-  const apiKey = authHeader.slice(7); // Remove "Bearer "
-  const crypto = await import("crypto");
-  const apiKeyHash = crypto.createHash("sha256").update(apiKey).digest("hex");
-
-  const registration = await prisma.agentRegistration.findFirst({
-    where: { apiKeyHash, agentId },
-    select: { id: true, agentId: true },
-  });
-
-  if (!registration) {
-    return { authorized: false, error: "Invalid API key", status: 401 };
-  }
-
-  return { authorized: true };
-}
-
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
+
+  const auth = await authenticateAgentById(request, id);
+  if (!auth.authorized) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
+  }
 
   const agent = await prisma.agent.findUnique({
     where: { id },
@@ -102,7 +78,7 @@ export async function PATCH(
 ) {
   const { id } = await params;
 
-  const auth = await authenticateAgent(request, id);
+  const auth = await authenticateAgentById(request, id);
   if (!auth.authorized) {
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
@@ -158,7 +134,7 @@ export async function PATCH(
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("Agent update failed:", error);
+    console.error("[v1/agents] Agent update failed:", error);
     return NextResponse.json({ error: "Update failed" }, { status: 500 });
   }
 }
@@ -169,7 +145,7 @@ export async function DELETE(
 ) {
   const { id } = await params;
 
-  const auth = await authenticateAgent(request, id);
+  const auth = await authenticateAgentById(request, id);
   if (!auth.authorized) {
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
@@ -180,7 +156,7 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("Agent deregistration failed:", error);
+    console.error("[v1/agents] Agent deregistration failed:", error);
     return NextResponse.json(
       { error: "Deregistration failed" },
       { status: 500 },

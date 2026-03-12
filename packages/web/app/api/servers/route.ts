@@ -38,7 +38,7 @@ export async function GET() {
 
     return NextResponse.json({ servers });
   } catch (error) {
-    console.error("Failed to list servers:", error);
+    console.error("[servers] Failed to list servers:", error);
     return NextResponse.json({ error: "Internal error" }, { status: 500 });
   }
 }
@@ -150,7 +150,7 @@ export async function POST(request: NextRequest) {
       { status: 201 },
     );
   } catch (error) {
-    console.error("Failed to create server:", error);
+    console.error("[servers] Failed to create server:", error);
     return NextResponse.json({ error: "Internal error" }, { status: 500 });
   }
 }

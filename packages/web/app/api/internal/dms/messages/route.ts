@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
       sequence: serializeSequence(message.sequence),
     });
   } catch (error) {
-    console.error("Failed to persist DM message:", error);
+    console.error("[internal/dms/messages] Failed to persist DM message:", error);
     return NextResponse.json(
       { error: "Failed to persist message" },
       { status: 500 },
@@ -146,7 +146,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ messages: payload, hasMore });
   } catch (error) {
-    console.error("Failed to fetch DM messages:", error);
+    console.error("[internal/dms/messages] Failed to fetch DM messages:", error);
     return NextResponse.json(
       { error: "Failed to fetch messages" },
       { status: 500 },

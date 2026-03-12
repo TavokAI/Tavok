@@ -21,7 +21,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         >
           <TopBar />
           <LeftPanel />
-          <main className="relative overflow-hidden rounded-[28px] border border-border/60 bg-background-primary/35 shadow-[0_20px_65px_rgba(2,8,20,0.32)]">
+          <main className="relative overflow-hidden rounded-lg border border-border bg-background-primary">
             {children}
           </main>
           <RightPanel />

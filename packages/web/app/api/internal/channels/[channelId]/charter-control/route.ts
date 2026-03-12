@@ -109,7 +109,7 @@ export async function POST(
       status: updated.charterStatus,
     });
   } catch (error) {
-    console.error("Charter control error:", error);
+    console.error("[internal/charter-control] Charter control error:", error);
     return NextResponse.json({ error: "Internal error" }, { status: 500 });
   }
 }

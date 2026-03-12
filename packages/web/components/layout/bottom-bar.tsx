@@ -17,10 +17,10 @@ export function BottomBar() {
   }, [panels]);
 
   return (
-    <div className="chrome-panel col-span-3 flex h-[44px] items-center justify-between rounded-[22px] px-4 text-[13px] font-medium text-text-muted">
+    <div className="chrome-panel col-span-3 flex h-[44px] items-center justify-between rounded-lg px-4 text-[13px] font-medium text-text-muted">
       <div className="flex items-center gap-6">
         <div className="flex cursor-pointer items-center gap-2 text-text-secondary transition-colors hover:text-text-primary">
-          <div className="h-2 w-2 rounded-full bg-accent-green shadow-[0_0_12px_rgba(41,211,145,0.5)]" />
+          <div className="h-2 w-2 rounded-full bg-accent-green shadow-[0_0_12px_rgba(16,185,129,0.5)]" />
           4 services healthy
         </div>
         <div className="flex items-center gap-2 text-text-dim">

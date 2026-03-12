@@ -61,10 +61,14 @@ async function main(): Promise<void> {
 
 function readPackageVersion(): string {
   const packagePath = path.resolve(__dirname, "../package.json");
-  const packageJson = JSON.parse(readFileSync(packagePath, "utf8")) as {
-    version: string;
-  };
-  return packageJson.version;
+  try {
+    const packageJson = JSON.parse(readFileSync(packagePath, "utf8")) as {
+      version: string;
+    };
+    return packageJson.version;
+  } catch {
+    throw new Error(`Failed to read package version from ${packagePath}`);
+  }
 }
 
 void main().catch((error: unknown) => {

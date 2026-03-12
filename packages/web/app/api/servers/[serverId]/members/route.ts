@@ -56,7 +56,7 @@ export async function GET(
 
     return NextResponse.json({ members: payload });
   } catch (error) {
-    console.error("Failed to list members:", error);
+    console.error("[servers/members] Failed to list members:", error);
     return NextResponse.json({ error: "Internal error" }, { status: 500 });
   }
 }

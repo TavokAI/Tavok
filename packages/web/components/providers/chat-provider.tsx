@@ -12,6 +12,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { hasPermission as hasPermissionBit } from "@/lib/permissions";
 import { useUnread } from "@/lib/hooks/use-unread";
 import type { UnreadState } from "@/lib/hooks/use-unread";
+import type { ChannelType } from "@tavok/shared/channel";
 
 interface ServerData {
   id: string;
@@ -24,7 +25,7 @@ interface ServerData {
 interface ChannelData {
   id: string;
   name: string;
-  type: string;
+  type: ChannelType;
   topic: string | null;
   position: number;
   defaultAgentId: string | null;
@@ -51,6 +52,45 @@ interface ServerScopedData {
   channels: ChannelData[];
   members: MemberData[];
   agents: AgentData[];
+}
+
+const EMPTY_SERVER_DATA: ServerScopedData = { channels: [], members: [], agents: [] };
+
+/** Merge a partial update into a single server's scoped data entry. */
+export function mergeServerData(
+  prev: Record<string, ServerScopedData>,
+  id: string,
+  patch: Partial<ServerScopedData>,
+): Record<string, ServerScopedData> {
+  return { ...prev, [id]: { ...EMPTY_SERVER_DATA, ...prev[id], ...patch } };
+}
+
+/**
+ * Generic fetch-parse-set helper that DRYs up the repetitive pattern shared
+ * by refreshChannels, refreshMembers, refreshAgents, and similar functions.
+ *
+ * Fetches `url`, parses JSON, extracts `data[key]`, and passes the result
+ * to `onSuccess`. Logs a consistent `[ChatProvider]` error on failure.
+ */
+export async function fetchAndSet<T>(
+  url: string,
+  key: string,
+  onSuccess: (items: T[]) => void,
+): Promise<Record<string, unknown> | null> {
+  try {
+    const res = await fetch(url);
+    if (!res.ok) {
+      console.error(`[ChatProvider] Failed to fetch ${key}: HTTP ${res.status}`);
+      return null;
+    }
+    const data = await res.json();
+    const items = (data[key] || []) as T[];
+    onSuccess(items);
+    return data as Record<string, unknown>;
+  } catch (error) {
+    console.error(`[ChatProvider] Failed to fetch ${key}:`, error);
+    return null;
+  }
 }
 
 interface ChatContextValue {
@@ -139,7 +179,6 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           }
         }
         keysToRemove.forEach((key) => localStorage.removeItem(key));
-        console.info("[Tavok] Server ID changed — cleared stale localStorage");
       }
       localStorage.setItem("tavok-server-id", serverId);
     } catch {
@@ -148,15 +187,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   }, [serverId]);
 
   const refreshServers = useCallback(async () => {
-    try {
-      const res = await fetch("/api/servers");
-      if (res.ok) {
-        const data = await res.json();
-        setServers(data.servers || []);
-      }
-    } catch (error) {
-      console.error("Failed to fetch servers:", error);
-    }
+    await fetchAndSet<ServerData>("/api/servers", "servers", setServers);
   }, []);
 
   const refreshChannels = useCallback(async () => {
@@ -167,25 +198,17 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       setCurrentServerOwnerId(null);
       return;
     }
-    try {
-      const res = await fetch(`/api/servers/${serverId}`);
-      if (res.ok) {
-        const data = await res.json();
-        const nextChannels = data.channels || [];
+    const data = await fetchAndSet<ChannelData>(
+      `/api/servers/${serverId}`,
+      "channels",
+      (nextChannels) => {
         setChannels(nextChannels);
-        setCurrentServerName(data.name || null);
-        setCurrentServerOwnerId(data.ownerId || null);
-        setServerDataById((prev) => ({
-          ...prev,
-          [serverId]: {
-            channels: nextChannels,
-            members: prev[serverId]?.members || [],
-            agents: prev[serverId]?.agents || [],
-          },
-        }));
-      }
-    } catch (error) {
-      console.error("Failed to fetch channels:", error);
+        setServerDataById((prev) => mergeServerData(prev, serverId, { channels: nextChannels }));
+      },
+    );
+    if (data) {
+      setCurrentServerName((data.name as string) || null);
+      setCurrentServerOwnerId((data.ownerId as string) || null);
     }
   }, [serverId]);
 
@@ -194,24 +217,14 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       setMembers([]);
       return;
     }
-    try {
-      const res = await fetch(`/api/servers/${serverId}/members`);
-      if (res.ok) {
-        const data = await res.json();
-        const nextMembers = data.members || [];
+    await fetchAndSet<MemberData>(
+      `/api/servers/${serverId}/members`,
+      "members",
+      (nextMembers) => {
         setMembers(nextMembers);
-        setServerDataById((prev) => ({
-          ...prev,
-          [serverId]: {
-            channels: prev[serverId]?.channels || [],
-            members: nextMembers,
-            agents: prev[serverId]?.agents || [],
-          },
-        }));
-      }
-    } catch (error) {
-      console.error("Failed to fetch members:", error);
-    }
+        setServerDataById((prev) => mergeServerData(prev, serverId, { members: nextMembers }));
+      },
+    );
   }, [serverId]);
 
   const refreshAgents = useCallback(async () => {
@@ -219,26 +232,15 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       setAgents([]);
       return;
     }
-    try {
-      const res = await fetch(`/api/servers/${serverId}/agents`);
-      if (res.ok) {
-        const data = await res.json();
-        const nextAgents = (data.agents || []).filter(
-          (b: AgentData) => b.isActive,
-        );
+    await fetchAndSet<AgentData>(
+      `/api/servers/${serverId}/agents`,
+      "agents",
+      (allAgents) => {
+        const nextAgents = allAgents.filter((b) => b.isActive);
         setAgents(nextAgents);
-        setServerDataById((prev) => ({
-          ...prev,
-          [serverId]: {
-            channels: prev[serverId]?.channels || [],
-            members: prev[serverId]?.members || [],
-            agents: nextAgents,
-          },
-        }));
-      }
-    } catch (error) {
-      console.error("Failed to fetch agents:", error);
-    }
+        setServerDataById((prev) => mergeServerData(prev, serverId, { agents: nextAgents }));
+      },
+    );
   }, [serverId]);
 
   const refreshPermissions = useCallback(async () => {
@@ -255,11 +257,12 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         setUserPermissions(BigInt(data.permissions || "0"));
         setIsOwner(!!data.isOwner);
       } else {
+        console.error(`[ChatProvider] Failed to fetch permissions: HTTP ${res.status}`);
         setUserPermissions(BigInt(0));
         setIsOwner(false);
       }
     } catch (error) {
-      console.error("Failed to fetch permissions:", error);
+      console.error("[ChatProvider] Failed to fetch permissions:", error);
       setUserPermissions(BigInt(0));
       setIsOwner(false);
     }
@@ -375,18 +378,15 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           ? await agentsRes.json()
           : { agents: [] };
 
-        setServerDataById((prev) => ({
-          ...prev,
-          [targetServerId]: {
-            channels: serverJson.channels || [],
-            members: membersJson.members || [],
-            agents: (agentsJson.agents || []).filter(
-              (b: AgentData) => b.isActive,
-            ),
-          },
+        setServerDataById((prev) => mergeServerData(prev, targetServerId, {
+          channels: serverJson.channels || [],
+          members: membersJson.members || [],
+          agents: (agentsJson.agents || []).filter(
+            (b: AgentData) => b.isActive,
+          ),
         }));
       } catch (error) {
-        console.error("Failed to refresh server scoped data:", error);
+        console.error("[ChatProvider] Failed to refresh server scoped data:", error);
       }
     },
     [],

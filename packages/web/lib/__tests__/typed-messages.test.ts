@@ -1,5 +1,6 @@
+// @ts-nocheck — test mocks use partial objects that don't satisfy full Prisma types
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { createInternalMessagesPostHandler } from "../route-handlers.js";
+import { createInternalMessagesPostHandler } from "../route-handlers";
 
 /**
  * Tests for TASK-0039: Typed Messages + Metadata

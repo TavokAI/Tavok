@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { ulid } from "ulid";
+import { generateId } from "@/lib/ulid";
 import crypto from "crypto";
 import { validateInternalSecret } from "@/lib/internal-auth";
+import { persistMessage, updateMessage } from "@/lib/internal-api-client";
 import {
   broadcastMessageNew,
   broadcastStreamStart,
@@ -10,6 +11,42 @@ import {
   broadcastStreamComplete,
   fetchChannelSequence,
 } from "@/lib/gateway-client";
+
+/** Parsed SSE event from an agent webhook stream. */
+interface SseTokenEvent {
+  token?: string;
+  done?: boolean;
+  finalContent?: string;
+  metadata?: Record<string, unknown>;
+}
+
+/**
+ * Parse SSE data lines from a buffered chunk, returning parsed events and
+ * the remaining (incomplete) buffer.
+ */
+export function parseSseChunk(
+  buffer: string,
+  chunk: string,
+): { events: SseTokenEvent[]; remaining: string } {
+  const combined = buffer + chunk;
+  const lines = combined.split("\n");
+  const remaining = lines.pop() || "";
+  const events: SseTokenEvent[] = [];
+
+  for (const line of lines) {
+    if (!line.startsWith("data: ")) continue;
+    const data = line.slice(6).trim();
+    if (data === "[DONE]") continue;
+
+    try {
+      events.push(JSON.parse(data) as SseTokenEvent);
+    } catch {
+      // Skip malformed SSE data
+    }
+  }
+
+  return { events, remaining };
+}
 
 /**
  * POST /api/internal/agents/{agentId}/dispatch — Webhook dispatch (DEC-0043)
@@ -39,13 +76,21 @@ export async function POST(
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const { channelId, triggerMessageId, triggerContent, contextMessages } =
-    body as {
-      channelId: string;
-      triggerMessageId: string;
-      triggerContent: string;
-      contextMessages: Array<{ role: string; content: string }>;
-    };
+  const channelId = typeof body.channelId === "string" ? body.channelId : "";
+  const triggerMessageId =
+    typeof body.triggerMessageId === "string" ? body.triggerMessageId : "";
+  const triggerContent =
+    typeof body.triggerContent === "string" ? body.triggerContent : "";
+  const contextMessages = Array.isArray(body.contextMessages)
+    ? body.contextMessages
+    : [];
+
+  if (!channelId || !triggerMessageId) {
+    return NextResponse.json(
+      { error: "channelId and triggerMessageId are required" },
+      { status: 400 },
+    );
+  }
 
   // Load agent registration
   const registration = await prisma.agentRegistration.findUnique({
@@ -68,7 +113,7 @@ export async function POST(
   }
 
   // Build outbound payload
-  const deliveryId = ulid();
+  const deliveryId = generateId();
   const payload = {
     event: "message",
     timestamp: new Date().toISOString(),
@@ -121,7 +166,7 @@ export async function POST(
     }
 
     if (!response.ok) {
-      console.error(`Webhook dispatch failed: ${response.status}`);
+      console.error(`[internal/dispatch] Webhook dispatch failed: ${response.status}`);
       return NextResponse.json(
         { error: `Agent returned ${response.status}` },
         { status: 502 },
@@ -132,7 +177,7 @@ export async function POST(
 
     // Handle SSE streaming response
     if (contentType.includes("text/event-stream") && response.body) {
-      const messageId = ulid();
+      const messageId = generateId();
       const sequence = await fetchChannelSequence(channelId);
 
       // Persist streaming placeholder before broadcasting
@@ -169,45 +214,34 @@ export async function POST(
           const { done, value } = await reader.read();
           if (done) break;
 
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split("\n");
-          buffer = lines.pop() || "";
+          const chunk = decoder.decode(value, { stream: true });
+          const { events, remaining } = parseSseChunk(buffer, chunk);
+          buffer = remaining;
 
-          for (const line of lines) {
-            if (line.startsWith("data: ")) {
-              const data = line.slice(6).trim();
-              if (data === "[DONE]") continue;
-
-              try {
-                const parsed = JSON.parse(data);
-                if (parsed.token) {
-                  fullContent += parsed.token;
-                  await broadcastStreamToken(channelId, {
-                    messageId,
-                    token: parsed.token,
-                    index: tokenIndex++,
-                  });
-                }
-                if (parsed.done) {
-                  const resolvedFinalContent =
-                    parsed.finalContent || fullContent;
-                  await broadcastStreamComplete(channelId, {
-                    messageId,
-                    finalContent: resolvedFinalContent,
-                    metadata: parsed.metadata || null,
-                  });
-                  await updateMessage(messageId, {
-                    content: resolvedFinalContent,
-                    streamingStatus: "COMPLETE",
-                    metadata: parsed.metadata
-                      ? JSON.stringify(parsed.metadata)
-                      : undefined,
-                  });
-                  streamCompleted = true;
-                }
-              } catch {
-                // Skip malformed SSE data
-              }
+          for (const evt of events) {
+            if (evt.token) {
+              fullContent += evt.token;
+              await broadcastStreamToken(channelId, {
+                messageId,
+                token: evt.token,
+                index: tokenIndex++,
+              });
+            }
+            if (evt.done) {
+              const resolvedFinalContent = evt.finalContent || fullContent;
+              await broadcastStreamComplete(channelId, {
+                messageId,
+                finalContent: resolvedFinalContent,
+                metadata: evt.metadata || null,
+              });
+              await updateMessage(messageId, {
+                content: resolvedFinalContent,
+                streamingStatus: "COMPLETE",
+                metadata: evt.metadata
+                  ? JSON.stringify(evt.metadata)
+                  : undefined,
+              });
+              streamCompleted = true;
             }
           }
         }
@@ -226,12 +260,12 @@ export async function POST(
         }
       } catch (streamErr) {
         // Stream read error — persist error state
-        console.error("SSE stream read error:", streamErr);
+        console.error("[internal/dispatch] SSE stream read error:", streamErr);
         if (!streamCompleted) {
           await updateMessage(messageId, {
             streamingStatus: "ERROR",
             content: fullContent || "*[Error: Stream read failed]*",
-          }).catch((e) => console.error("Failed to persist stream error:", e));
+          }).catch((e) => console.error("[internal/dispatch] Failed to persist stream error:", e));
         }
       } finally {
         reader.releaseLock();
@@ -243,10 +277,20 @@ export async function POST(
     // Handle sync JSON response
     const responseBody = await response.json().catch(() => null);
     if (responseBody?.content) {
-      const messageId = ulid();
+      const messageId = generateId();
       const sequence = await fetchChannelSequence(channelId);
 
-      // Persist and broadcast
+      // Persist first, then broadcast (matches streaming path order)
+      await persistMessage({
+        id: messageId,
+        channelId,
+        authorId: agentId,
+        authorType: "AGENT",
+        content: responseBody.content,
+        type: "STANDARD",
+        sequence,
+      });
+
       await broadcastMessageNew(channelId, {
         id: messageId,
         channelId,
@@ -261,17 +305,6 @@ export async function POST(
         createdAt: new Date().toISOString(),
       });
 
-      // Persist via internal API
-      await persistMessage({
-        id: messageId,
-        channelId,
-        authorId: agentId,
-        authorType: "AGENT",
-        content: responseBody.content,
-        type: "STANDARD",
-        sequence,
-      });
-
       return NextResponse.json({ ok: true, mode: "sync", messageId });
     }
 
@@ -280,7 +313,7 @@ export async function POST(
     if ((error as Error).name === "AbortError") {
       return NextResponse.json({ error: "Webhook timed out" }, { status: 504 });
     }
-    console.error("Webhook dispatch error:", error);
+    console.error("[internal/dispatch] Webhook dispatch error:", error);
     return NextResponse.json(
       { error: "Webhook dispatch failed" },
       { status: 502 },
@@ -288,52 +321,3 @@ export async function POST(
   }
 }
 
-async function persistMessage(data: {
-  id: string;
-  channelId: string;
-  authorId: string;
-  authorType: string;
-  content: string;
-  type: string;
-  streamingStatus?: string;
-  sequence: string;
-}) {
-  const internalUrl = process.env.NEXTAUTH_URL || "http://localhost:5555";
-
-  const response = await fetch(`${internalUrl}/api/internal/messages`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-internal-secret": process.env.INTERNAL_API_SECRET || "",
-    },
-    body: JSON.stringify(data),
-  });
-
-  if (!response.ok && response.status !== 409) {
-    const errorBody = await response.text().catch(() => "unknown");
-    console.error(
-      `Message persistence failed: ${response.status} ${errorBody}`,
-    );
-  }
-}
-
-async function updateMessage(messageId: string, data: Record<string, unknown>) {
-  const internalUrl = process.env.NEXTAUTH_URL || "http://localhost:5555";
-
-  const response = await fetch(
-    `${internalUrl}/api/internal/messages/${messageId}`,
-    {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-        "x-internal-secret": process.env.INTERNAL_API_SECRET || "",
-      },
-      body: JSON.stringify(data),
-    },
-  );
-
-  if (!response.ok) {
-    const errorBody = await response.text().catch(() => "unknown");
-    console.error(`Message update failed: ${response.status} ${errorBody}`);
-  }
-}

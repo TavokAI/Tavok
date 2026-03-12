@@ -77,7 +77,7 @@ export async function PUT(
 
     return NextResponse.json({ success: true, roleIds: validRoleIds });
   } catch (error) {
-    console.error("Failed to update member roles:", error);
+    console.error("[servers/roles] Failed to update member roles:", error);
     return NextResponse.json({ error: "Internal error" }, { status: 500 });
   }
 }
