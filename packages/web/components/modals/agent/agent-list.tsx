@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import type { AgentListItem } from "./types";
 import { getMethodBadgeClasses, getMethodLabel } from "./types";
+import { Download, Upload } from "lucide-react";
 
 interface AgentListProps {
   agents: AgentListItem[];
@@ -21,6 +22,9 @@ export function AgentList({
   onRefresh,
 }: AgentListProps) {
   const [deletingAgentId, setDeletingAgentId] = useState<string | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
+  const [importing, setImporting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const activeAgents = agents.filter((a) => a.isActive);
   const inactiveAgents = agents.filter((a) => !a.isActive);
@@ -43,6 +47,63 @@ export function AgentList({
     }
   }
 
+  async function handleExport(agentId: string, agentName: string) {
+    try {
+      const res = await fetch(
+        `/api/servers/${serverId}/agents/${agentId}/export`,
+      );
+      if (!res.ok) return;
+      const template = await res.json();
+      const blob = new Blob([JSON.stringify(template, null, 2)], {
+        type: "application/json",
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${agentName.replace(/[^a-zA-Z0-9_-]/g, "_")}.tavok-agent.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      console.error("Failed to export agent");
+    }
+  }
+
+  async function handleImportFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImportError(null);
+    setImporting(true);
+
+    try {
+      const text = await file.text();
+      const template = JSON.parse(text);
+      if (!template || typeof template !== "object" || !template.name) {
+        setImportError("Invalid template: missing 'name' field");
+        return;
+      }
+
+      const res = await fetch(`/api/servers/${serverId}/agents/import`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ template }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        setImportError(data.error || "Import failed");
+        return;
+      }
+
+      onRefresh();
+    } catch {
+      setImportError("Failed to parse template file");
+    } finally {
+      setImporting(false);
+      // Reset file input so the same file can be re-imported
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
+
   return (
     <div>
       {/* Active Agents */}
@@ -60,6 +121,7 @@ export function AgentList({
                 onEdit={() => onEditAgent(agent)}
                 onDelete={() => handleDelete(agent.id)}
                 onBlurDelete={() => setDeletingAgentId(null)}
+                onExport={() => handleExport(agent.id, agent.name)}
               />
             ))}
           </div>
@@ -81,6 +143,7 @@ export function AgentList({
                 onEdit={() => onEditAgent(agent)}
                 onDelete={() => handleDelete(agent.id)}
                 onBlurDelete={() => setDeletingAgentId(null)}
+                onExport={() => handleExport(agent.id, agent.name)}
               />
             ))}
           </div>
@@ -93,7 +156,30 @@ export function AgentList({
         </p>
       )}
 
-      <div className="mt-4 flex items-center justify-end">
+      {importError && (
+        <p className="text-sm text-status-danger mb-2">{importError}</p>
+      )}
+
+      <div className="mt-4 flex items-center justify-between">
+        <div>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".json,.tavok-agent.json"
+            onChange={handleImportFile}
+            className="hidden"
+            data-testid="agent-import-input"
+          />
+          <Button
+            variant="ghost"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={importing}
+            data-testid="agent-import-btn"
+          >
+            <Upload className="h-4 w-4 mr-1.5" />
+            {importing ? "Importing..." : "Import"}
+          </Button>
+        </div>
         <Button onClick={onAddAgent}>Add Agent</Button>
       </div>
     </div>
@@ -106,12 +192,14 @@ function AgentRow({
   onEdit,
   onDelete,
   onBlurDelete,
+  onExport,
 }: {
   agent: AgentListItem;
   deletingAgentId: string | null;
   onEdit: () => void;
   onDelete: () => void;
   onBlurDelete: () => void;
+  onExport: () => void;
 }) {
   return (
     <div className="flex items-center justify-between rounded bg-background-primary p-3">
@@ -134,6 +222,14 @@ function AgentRow({
         </p>
       </div>
       <div className="flex gap-1">
+        <button
+          onClick={onExport}
+          title="Export agent template"
+          data-testid={`agent-export-btn-${agent.name.replace(/\s+/g, "-").toLowerCase()}`}
+          className="rounded px-2 py-1 text-xs text-text-secondary hover:bg-background-secondary hover:text-text-primary"
+        >
+          <Download className="h-3.5 w-3.5" />
+        </button>
         {agent.connectionMethod === null && (
           <button
             onClick={onEdit}
