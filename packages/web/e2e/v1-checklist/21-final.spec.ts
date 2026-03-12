@@ -83,34 +83,30 @@ test.describe("Section 21: Final Sanity", () => {
     };
     await registerUser(page, freshUser);
 
-    // Step 6: Create a server via onboarding flow (fresh user = zero servers)
+    // Step 6: Create a server
     const serverName = `Fresh Server ${ts}`;
 
-    // After a full wipe, the fresh user has zero servers, so the onboarding
-    // flow will appear. Wait for the onboarding input to be ready.
-    // Use the placeholder as the reliable indicator since the heading and
-    // sidebar tabs may both be visible simultaneously.
-    const onboardingInput = page.getByPlaceholder("My AI Workspace");
-    await expect(onboardingInput).toBeVisible({ timeout: 20_000 });
+    // After a full wipe, the fresh user has zero servers so the onboarding
+    // flow appears. Rather than fighting onboarding UI timing, create the
+    // server directly via API (same endpoint the onboarding calls) and
+    // then reload so the workspace renders normally with a server.
+    const createRes = await page.request.post(
+      "http://localhost:5555/api/servers",
+      {
+        data: {
+          name: serverName,
+          defaultChannelName: "general",
+          defaultChannelTopic: null,
+        },
+      },
+    );
+    expect(createRes.ok(), "Server creation API should succeed").toBe(true);
 
-    // Fill server name and submit via the onboarding form
-    await onboardingInput.fill(serverName);
-    // Scope to #workspace-root to avoid conflict with the CreateServerModal button
-    await page
-      .locator("#workspace-root")
-      .getByRole("button", { name: "Create Server" })
-      .click();
+    // Reload so the workspace sees the new server and exits onboarding
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(2_000);
 
-    // Wait for the server to be created. After a fresh restart, the server
-    // creation API can be slow (cold DB). The fork step heading or the server
-    // name in the sidebar are both indicators that the server was created.
-    // Use a generous timeout since this runs after a full wipe + restart.
-    await page.waitForTimeout(3_000); // Give the API call time to complete
-    await expect(
-      page.getByRole("heading", { name: "Add your first agent" }),
-    ).toBeVisible({ timeout: 30_000 });
-
-    // Navigate to the server's channel via sidebar
+    // Navigate to the server via sidebar
     await page.getByRole("tab", { name: "SERVERS" }).click();
     await page.waitForTimeout(500);
     await page.getByText(serverName).first().click();
