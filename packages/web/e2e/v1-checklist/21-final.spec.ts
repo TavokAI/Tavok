@@ -101,13 +101,18 @@ test.describe("Section 21: Final Sanity", () => {
       .getByRole("button", { name: "Create Server" })
       .click();
 
-    // Wait for the fork step ("Add your first agent") or the channel to load
+    // Wait for the server to be created. After a fresh restart, the server
+    // creation API can be slow (cold DB). The fork step heading or the server
+    // name in the sidebar are both indicators that the server was created.
+    // Use a generous timeout since this runs after a full wipe + restart.
+    await page.waitForTimeout(3_000); // Give the API call time to complete
     await expect(
       page.getByRole("heading", { name: "Add your first agent" }),
-    ).toBeVisible({ timeout: 10_000 });
+    ).toBeVisible({ timeout: 30_000 });
 
     // Navigate to the server's channel via sidebar
     await page.getByRole("tab", { name: "SERVERS" }).click();
+    await page.waitForTimeout(500);
     await page.getByText(serverName).first().click();
     await page.waitForTimeout(500);
 
