@@ -99,3 +99,45 @@ export const authLimiter = new RateLimiter({ max: 10, windowSec: 60 });
 
 /** Webhook inbound: 60 requests per 60s per token */
 export const webhookLimiter = new RateLimiter({ max: 60, windowSec: 60 });
+
+/**
+ * Agent API rate limiter — enforces per-agent request limits.
+ *
+ * Default: 30 requests per 10s per agent (message send + stream token).
+ * Each agent can override via AgentRegistration.maxTokensSec which
+ * is checked at the route level using checkAgentRateLimit().
+ */
+export const agentLimiter = new RateLimiter({ max: 30, windowSec: 10 });
+
+// ── Per-agent dynamic rate limiting ──
+
+/**
+ * Map of agentId → custom RateLimiter for agents with non-default maxTokensSec.
+ * Lazily created on first use. Cleaned up when the base agentLimiter cleans up.
+ */
+const agentCustomLimiters = new Map<string, RateLimiter>();
+
+/**
+ * Check rate limit for an agent, respecting custom maxTokensSec if set.
+ *
+ * @param agentId - The agent's ID (used as rate limit key)
+ * @param maxTokensSec - From AgentRegistration.maxTokensSec (default 100)
+ * @returns Rate limit check result
+ */
+export function checkAgentRateLimit(
+  agentId: string,
+  maxTokensSec?: number,
+): { allowed: boolean; remaining: number; resetAt: number } {
+  // Use custom limiter if agent has non-default maxTokensSec
+  if (maxTokensSec && maxTokensSec !== 100) {
+    let limiter = agentCustomLimiters.get(agentId);
+    if (!limiter) {
+      limiter = new RateLimiter({ max: maxTokensSec, windowSec: 1 });
+      agentCustomLimiters.set(agentId, limiter);
+    }
+    return limiter.check(agentId);
+  }
+
+  // Default: use shared limiter (30 req / 10s)
+  return agentLimiter.check(agentId);
+}

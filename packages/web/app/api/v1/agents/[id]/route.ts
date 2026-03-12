@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { authenticateAgentById } from "@/lib/agent-auth";
+import { logAgentAction } from "@/lib/agent-audit";
 
 /**
  * GET /api/v1/agents/{id} — Get agent info
@@ -107,6 +108,19 @@ export async function PATCH(
   };
 
   try {
+    // Fetch serverId for audit log
+    const agentRecord = await prisma.agent.findUnique({
+      where: { id },
+      select: { serverId: true },
+    });
+
+    logAgentAction({
+      agentId: id,
+      serverId: agentRecord?.serverId || "unknown",
+      action: "agent_update",
+      metadata: { fields: Object.keys(body) },
+    });
+
     await prisma.$transaction(async (tx) => {
       // Update Agent fields if provided
       const agentUpdate: Record<string, unknown> = {};
@@ -151,6 +165,18 @@ export async function DELETE(
   }
 
   try {
+    // Fetch serverId for audit log before deletion
+    const agentRecord = await prisma.agent.findUnique({
+      where: { id },
+      select: { serverId: true },
+    });
+
+    logAgentAction({
+      agentId: id,
+      serverId: agentRecord?.serverId || "unknown",
+      action: "agent_deregister",
+    });
+
     // Delete Agent — AgentRegistration cascades via onDelete: Cascade
     await prisma.agent.delete({ where: { id } });
 

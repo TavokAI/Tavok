@@ -8,6 +8,8 @@ import {
   broadcastToChannel,
 } from "@/lib/gateway-client";
 import { updateMessage } from "@/lib/internal-api-client";
+import { checkAgentRateLimit } from "@/lib/rate-limit";
+import { logAgentAction } from "@/lib/agent-audit";
 
 /**
  * POST /api/v1/agents/{id}/messages/{messageId}/stream — Stream tokens (DEC-0043)
@@ -37,6 +39,21 @@ export async function POST(
     return NextResponse.json(
       { error: "Invalid or missing API key" },
       { status: 401 },
+    );
+  }
+
+  // ── Rate limiting (per-agent, critical for stream token flood prevention) ──
+  const rateCheck = checkAgentRateLimit(agent.agentId);
+  if (!rateCheck.allowed) {
+    logAgentAction({
+      agentId: agent.agentId,
+      serverId: agent.serverId,
+      action: "rate_limited",
+      messageId,
+    });
+    return NextResponse.json(
+      { error: "Rate limit exceeded", retryAfterMs: rateCheck.resetAt - Date.now() },
+      { status: 429, headers: { "Retry-After": String(Math.ceil((rateCheck.resetAt - Date.now()) / 1000)) } },
     );
   }
 
@@ -101,6 +118,14 @@ export async function POST(
   try {
     // Handle error
     if (error) {
+      logAgentAction({
+        agentId: agent.agentId,
+        serverId: agent.serverId,
+        action: "stream_error",
+        channelId: resolvedChannelId,
+        messageId,
+        metadata: { error },
+      });
       await broadcastStreamError(resolvedChannelId, {
         messageId,
         error,
@@ -140,6 +165,14 @@ export async function POST(
 
     // Handle completion
     if (done) {
+      logAgentAction({
+        agentId: agent.agentId,
+        serverId: agent.serverId,
+        action: "stream_complete",
+        channelId: resolvedChannelId,
+        messageId,
+        metadata: { tokensReceived: tokens?.length || 0 },
+      });
       const resolvedContent = finalContent || (tokens ? tokens.join("") : "");
 
       await broadcastStreamComplete(resolvedChannelId, {

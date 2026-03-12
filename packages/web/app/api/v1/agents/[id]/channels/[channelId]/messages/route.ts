@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { authenticateAgentRequest } from "@/lib/agent-auth";
 import { serializeSequence } from "@/lib/api-safety";
+import { checkAgentRateLimit } from "@/lib/rate-limit";
+import { logAgentAction } from "@/lib/agent-audit";
 
 /**
  * GET /api/v1/agents/{id}/channels/{channelId}/messages — Channel history
@@ -42,6 +44,41 @@ export async function GET(
       { status: 403 },
     );
   }
+
+  // ── Channel ACL: verify agent is assigned to this channel ──
+  const channelAgent = await prisma.channelAgent.findFirst({
+    where: { channelId, agentId: agent.agentId },
+    select: { id: true },
+  });
+
+  if (!channelAgent) {
+    return NextResponse.json(
+      { error: "Agent is not assigned to this channel" },
+      { status: 403 },
+    );
+  }
+
+  // ── Rate limiting (per-agent) ──
+  const rateCheck = checkAgentRateLimit(agent.agentId);
+  if (!rateCheck.allowed) {
+    logAgentAction({
+      agentId: agent.agentId,
+      serverId: agent.serverId,
+      action: "rate_limited",
+      channelId,
+    });
+    return NextResponse.json(
+      { error: "Rate limit exceeded", retryAfterMs: rateCheck.resetAt - Date.now() },
+      { status: 429, headers: { "Retry-After": String(Math.ceil((rateCheck.resetAt - Date.now()) / 1000)) } },
+    );
+  }
+
+  logAgentAction({
+    agentId: agent.agentId,
+    serverId: agent.serverId,
+    action: "channel_history_read",
+    channelId,
+  });
 
   const { searchParams } = new URL(request.url);
   const limit = Math.min(

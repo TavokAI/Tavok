@@ -9,6 +9,8 @@ import {
 } from "@/lib/gateway-client";
 import { getInternalBaseUrl } from "@/lib/internal-auth";
 import { persistMessage } from "@/lib/internal-api-client";
+import { checkAgentRateLimit } from "@/lib/rate-limit";
+import { logAgentAction } from "@/lib/agent-audit";
 
 /**
  * GET /api/v1/agents/{id}/messages — Poll for messages (DEC-0043, Phase 4)
@@ -43,6 +45,13 @@ export async function GET(
   const limit = Math.min(parseInt(searchParams.get("limit") || "50", 10), 100);
   const ack = searchParams.get("ack") === "true";
   const wait = Math.min(parseInt(searchParams.get("wait") || "0", 10), 30);
+
+  logAgentAction({
+    agentId: agent.agentId,
+    serverId: agent.serverId,
+    action: "message_poll",
+    channelId: channelId || undefined,
+  });
 
   try {
     // Build query
@@ -165,6 +174,22 @@ export async function POST(
     );
   }
 
+  // ── Rate limiting (per-agent) ──
+  const rateCheck = checkAgentRateLimit(agent.agentId);
+  if (!rateCheck.allowed) {
+    logAgentAction({
+      agentId: agent.agentId,
+      serverId: agent.serverId,
+      action: "rate_limited",
+      channelId,
+      metadata: { resetAt: rateCheck.resetAt },
+    });
+    return NextResponse.json(
+      { error: "Rate limit exceeded", retryAfterMs: rateCheck.resetAt - Date.now() },
+      { status: 429, headers: { "Retry-After": String(Math.ceil((rateCheck.resetAt - Date.now()) / 1000)) } },
+    );
+  }
+
   // Verify channel belongs to agent's server
   const channel = await prisma.channel.findUnique({
     where: { id: channelId },
@@ -178,11 +203,31 @@ export async function POST(
     );
   }
 
+  // ── Channel ACL: verify agent is assigned to this channel ──
+  const channelAgent = await prisma.channelAgent.findFirst({
+    where: { channelId, agentId: agent.agentId },
+    select: { id: true },
+  });
+
+  if (!channelAgent) {
+    return NextResponse.json(
+      { error: "Agent is not assigned to this channel" },
+      { status: 403 },
+    );
+  }
+
   const messageId = generateId();
   const sequence = await fetchChannelSequence(channelId);
 
   try {
     if (streaming) {
+      logAgentAction({
+        agentId: agent.agentId,
+        serverId: agent.serverId,
+        action: "stream_start",
+        channelId,
+      });
+
       // Start streaming
       await persistMessage({
         id: messageId,
@@ -214,6 +259,13 @@ export async function POST(
         { status: 201 },
       );
     }
+
+    logAgentAction({
+      agentId: agent.agentId,
+      serverId: agent.serverId,
+      action: "message_send",
+      channelId,
+    });
 
     // Simple message
     if (!content || typeof content !== "string") {

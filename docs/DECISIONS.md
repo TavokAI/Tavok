@@ -1336,3 +1336,25 @@ Replace "orchestration/orchestrator" with "stream management/stream manager" in 
 **Rationale**: Accurate documentation prevents developers from putting code in the wrong service. It also prevents external users from expecting LangGraph-style orchestration when evaluating Tavok. DEC-0019's original intent (clear ownership, no split-brain) is preserved — the boundaries are just described more precisely.
 
 **Consequences**: Updated ARCHITECTURE.md, README.md, CLAUDE.md, AGENTS.md, INSTALL.md, PROTOCOL.md. The Go/Elixir boundary is unchanged in code — only the documentation now matches the implementation.
+
+---
+
+## DEC-0065: Agent sandbox hardening — rate limits, channel ACL, key rotation, audit logging
+
+**Date**: 2026-03-12
+**Status**: Accepted
+**Context**: Security audit found that agents have no per-agent rate limiting (schema field exists but unenforced), no per-channel access control (ChannelAgent junction table exists but isn't checked on send/read), no API key rotation mechanism, and zero audit logging. A rogue agent with a valid API key can flood all channels, read all message history, and operate undetected indefinitely.
+
+**Decision**: Ship four security guardrails:
+
+1. **Per-agent rate limiting** — `checkAgentRateLimit()` in `lib/rate-limit.ts`. Default 30 requests/10s per agent. Agents with custom `maxTokensSec` get a dedicated limiter instance. Enforced on message send, channel history read, and stream token routes. Returns 429 with `Retry-After` header.
+
+2. **Per-channel agent ACL** — All agent API routes now check `ChannelAgent` table before allowing send/read. An agent can only access channels it's assigned to (via `ChannelAgent` records created on agent setup). This turns the existing junction table from a Gateway-only hint into a real access control boundary.
+
+3. **API key rotation** — `POST /api/v1/agents/{id}/rotate-key`. Agent authenticates with current key, receives a new key, old key is immediately invalid. New SHA-256 hash replaces old in `AgentRegistration.apiKeyHash`.
+
+4. **Structured audit logging** — `logAgentAction()` in `lib/agent-audit.ts`. Logs agentId, serverId, action, channelId, and metadata as structured JSON to stdout. Covers: message_send, message_poll, channel_history_read, stream_start/complete/error, agent_update, agent_deregister, key_rotate, rate_limited. Designed for `docker logs | jq` in dev and log aggregator ingestion in production.
+
+**Rationale**: These guardrails are prerequisite for any cross-user agent sharing (agent templates, SDK self-registration). They also immediately improve security for existing BYOK and SDK agents. The ChannelAgent ACL is the most impactful change — it converts a routing hint into a permission boundary.
+
+**Consequences**: Agents that were previously able to send to any channel in their server are now restricted to assigned channels. Since agents are auto-assigned to all channels on creation (DEC-0061), this is backward-compatible for existing agents. Future agents that should be restricted to specific channels can have ChannelAgent records selectively created.
