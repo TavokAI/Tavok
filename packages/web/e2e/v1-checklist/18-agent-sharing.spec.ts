@@ -1,10 +1,5 @@
 import { test, expect } from "@playwright/test";
-import {
-  login,
-  DEMO_USER,
-  selectServer,
-  createServerViaAPI,
-} from "./helpers";
+import { login, DEMO_USER, selectServer, createServerViaAPI } from "./helpers";
 import { ensureMockAgent, MOCK_AGENT_NAME } from "./streaming-fixture";
 import * as path from "path";
 import * as fs from "fs";
@@ -117,14 +112,15 @@ test.describe("Section 18: Agent Sharing via Config Templates", () => {
     await selectServer(page, serverName);
 
     // Open manage agents modal via server settings
-    await page.getByRole("button", { name: /settings/i }).first().click();
+    await page
+      .getByRole("button", { name: /settings/i })
+      .first()
+      .click();
     await page.getByText("Manage Agents").click();
     await page.waitForTimeout(500);
 
     // The export button should be visible for each agent
-    const exportBtn = page.locator(
-      `[data-testid^="agent-export-btn-"]`,
-    );
+    const exportBtn = page.locator(`[data-testid^="agent-export-btn-"]`);
     await expect(exportBtn.first()).toBeVisible({ timeout: 5_000 });
   });
 
@@ -132,7 +128,10 @@ test.describe("Section 18: Agent Sharing via Config Templates", () => {
     await login(page, DEMO_USER.email, DEMO_USER.password);
     await selectServer(page, serverName);
 
-    await page.getByRole("button", { name: /settings/i }).first().click();
+    await page
+      .getByRole("button", { name: /settings/i })
+      .first()
+      .click();
     await page.getByText("Manage Agents").click();
     await page.waitForTimeout(500);
 
@@ -156,12 +155,18 @@ test.describe("Section 18: Agent Sharing via Config Templates", () => {
       maxTokens: 1024,
       triggerMode: "ALWAYS",
     };
-    const tmpFile = path.join(os.tmpdir(), `tavok-agent-test-${Date.now()}.json`);
+    const tmpFile = path.join(
+      os.tmpdir(),
+      `tavok-agent-test-${Date.now()}.json`,
+    );
     fs.writeFileSync(tmpFile, JSON.stringify(template, null, 2));
 
     try {
       // Open manage agents modal
-      await page.getByRole("button", { name: /settings/i }).first().click();
+      await page
+        .getByRole("button", { name: /settings/i })
+        .first()
+        .click();
       await page.getByText("Manage Agents").click();
       await page.waitForTimeout(500);
 

@@ -55,8 +55,7 @@ export async function POST(
   }
 
   // Validate required fields
-  const name =
-    typeof template.name === "string" ? template.name.trim() : null;
+  const name = typeof template.name === "string" ? template.name.trim() : null;
   if (!name) {
     return NextResponse.json(
       { error: "Template must include a 'name'" },
@@ -65,9 +64,7 @@ export async function POST(
   }
 
   const llmProvider =
-    typeof template.llmProvider === "string"
-      ? template.llmProvider
-      : "openai";
+    typeof template.llmProvider === "string" ? template.llmProvider : "openai";
   const llmModel =
     typeof template.llmModel === "string" ? template.llmModel : "gpt-4o";
   const apiEndpoint =
