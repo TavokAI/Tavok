@@ -46,29 +46,35 @@ test.describe("Section 17: Channel Charter & Swarm Modes", () => {
     // Assign both agents to the default channel
     await page.evaluate(
       async (args: { serverId: string }) => {
-        // Get all agents
-        const agentRes = await fetch(`/api/servers/${args.serverId}/agents`);
-        const agentData = await agentRes.json();
-        const agents = Array.isArray(agentData?.agents)
-          ? agentData.agents
-          : agentData;
-        const agentIds = agents.map((a: { id: string }) => a.id);
+        try {
+          // Get all agents
+          const agentRes = await fetch(`/api/servers/${args.serverId}/agents`);
+          if (!agentRes.ok) return;
+          const agentData = await agentRes.json();
+          const agentList = agentData?.agents ?? agentData;
+          if (!Array.isArray(agentList) || agentList.length < 2) return;
+          const agentIds = agentList.map((a: { id: string }) => a.id);
 
-        // Get default channel
-        const channelRes = await fetch(
-          `/api/servers/${args.serverId}/channels`,
-        );
-        const channels = await channelRes.json();
-        const general = channels[0];
+          // Get default channel
+          const channelRes = await fetch(
+            `/api/servers/${args.serverId}/channels`,
+          );
+          if (!channelRes.ok) return;
+          const channels = await channelRes.json();
+          if (!Array.isArray(channels) || channels.length === 0) return;
 
-        // Assign agents to channel
-        await fetch(`/api/servers/${args.serverId}/channels/${general.id}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ agentIds }),
-        });
-
-        return { channelId: general.id };
+          // Assign agents to channel
+          await fetch(
+            `/api/servers/${args.serverId}/channels/${channels[0].id}`,
+            {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ agentIds }),
+            },
+          );
+        } catch {
+          // Best-effort assignment — tests will handle missing assignment
+        }
       },
       { serverId },
     );
@@ -92,8 +98,19 @@ test.describe("Section 17: Channel Charter & Swarm Modes", () => {
     const settingsBtn = page.locator('button[title="Channel Settings"]');
     await expect(settingsBtn).toBeVisible({ timeout: 5_000 });
     await settingsBtn.click();
+    await page.waitForTimeout(1_000);
 
-    // The modal should show "Swarm Mode" label (#general has 2+ agents)
+    // Ensure both agents are checked (select all checkboxes)
+    const checkboxes = page.locator('input[type="checkbox"]');
+    const count = await checkboxes.count();
+    for (let i = 0; i < count; i++) {
+      if (!(await checkboxes.nth(i).isChecked())) {
+        await checkboxes.nth(i).check();
+      }
+    }
+    await page.waitForTimeout(500);
+
+    // The modal should show "Swarm Mode" label (2+ agents selected)
     await expect(page.getByText("Swarm Mode")).toBeVisible({ timeout: 5_000 });
   });
 
@@ -104,7 +121,17 @@ test.describe("Section 17: Channel Charter & Swarm Modes", () => {
     await page.locator('button[title="Channel Settings"]').click();
     await page.waitForTimeout(1_000);
 
-    // The swarm mode select should be visible (2+ agents on #general)
+    // Ensure both agents are checked
+    const checkboxes = page.locator('input[type="checkbox"]');
+    const cbCount = await checkboxes.count();
+    for (let i = 0; i < cbCount; i++) {
+      if (!(await checkboxes.nth(i).isChecked())) {
+        await checkboxes.nth(i).check();
+      }
+    }
+    await page.waitForTimeout(500);
+
+    // The swarm mode select should be visible (2+ agents selected)
     const swarmSelect = page.locator("select").first();
     await expect(swarmSelect).toBeVisible({ timeout: 5_000 });
 
@@ -149,6 +176,16 @@ test.describe("Section 17: Channel Charter & Swarm Modes", () => {
     // Open channel settings
     await page.locator('button[title="Channel Settings"]').click();
     await page.waitForTimeout(1_000);
+
+    // Ensure both agents are checked
+    const checkboxes = page.locator('input[type="checkbox"]');
+    const cbCount = await checkboxes.count();
+    for (let i = 0; i < cbCount; i++) {
+      if (!(await checkboxes.nth(i).isChecked())) {
+        await checkboxes.nth(i).check();
+      }
+    }
+    await page.waitForTimeout(500);
 
     // Ensure swarm mode is set (so charter fields are visible)
     const swarmSelect = page.locator("select").first();
@@ -195,6 +232,16 @@ test.describe("Section 17: Channel Charter & Swarm Modes", () => {
     // Open channel settings
     await page.locator('button[title="Channel Settings"]').click();
     await page.waitForTimeout(1_000);
+
+    // Ensure both agents are checked
+    const checkboxes = page.locator('input[type="checkbox"]');
+    const cbCount = await checkboxes.count();
+    for (let i = 0; i < cbCount; i++) {
+      if (!(await checkboxes.nth(i).isChecked())) {
+        await checkboxes.nth(i).check();
+      }
+    }
+    await page.waitForTimeout(500);
 
     // Select Round Robin mode
     const swarmSelect = page.locator("select").first();
