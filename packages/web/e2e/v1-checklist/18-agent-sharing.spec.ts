@@ -1,5 +1,11 @@
 import { test, expect } from "@playwright/test";
-import { login, DEMO_USER, selectServer, createServerViaAPI } from "./helpers";
+import {
+  login,
+  DEMO_USER,
+  selectServer,
+  openChannel,
+  createServerViaAPI,
+} from "./helpers";
 import { ensureMockAgent, MOCK_AGENT_NAME } from "./streaming-fixture";
 import * as path from "path";
 import * as fs from "fs";
@@ -117,11 +123,10 @@ test.describe("Section 18: Agent Sharing via Config Templates", () => {
   }) => {
     await login(page, DEMO_USER.email, DEMO_USER.password);
     await selectServer(page, serverName);
+    await openChannel(page, "general");
 
     // The "Manage Agents" button is in the channel sidebar
-    const manageBtn = page.locator("button").filter({
-      has: page.locator('text="Manage Agents"'),
-    });
+    const manageBtn = page.getByText("Manage Agents");
     await expect(manageBtn.first()).toBeVisible({ timeout: 10_000 });
     await manageBtn.first().click();
     await page.waitForTimeout(1_000);
@@ -138,6 +143,7 @@ test.describe("Section 18: Agent Sharing via Config Templates", () => {
   test("import agent via file upload in UI", async ({ page }) => {
     await login(page, DEMO_USER.email, DEMO_USER.password);
     await selectServer(page, serverName);
+    await openChannel(page, "general");
 
     // Write a temporary template file
     const template = {
@@ -159,9 +165,7 @@ test.describe("Section 18: Agent Sharing via Config Templates", () => {
 
     try {
       // Open manage agents modal from sidebar
-      const manageBtn = page.locator("button").filter({
-        has: page.locator('text="Manage Agents"'),
-      });
+      const manageBtn = page.getByText("Manage Agents");
       await expect(manageBtn.first()).toBeVisible({ timeout: 10_000 });
       await manageBtn.first().click();
       await page.waitForTimeout(1_000);

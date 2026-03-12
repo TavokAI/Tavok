@@ -85,9 +85,20 @@ export async function POST(
       ? template.triggerMode
       : "ALWAYS";
 
-  // Optional fields
-  const thinkingSteps = template.thinkingSteps ?? null;
-  const enabledTools = template.enabledTools ?? null;
+  // Optional fields — use undefined (not null) so Prisma skips them
+  const thinkingSteps = template.thinkingSteps
+    ? JSON.stringify(template.thinkingSteps)
+    : undefined;
+  const enabledTools = template.enabledTools
+    ? JSON.stringify(template.enabledTools)
+    : undefined;
+
+  // API key: required (non-nullable in schema) — encrypt provided key or empty placeholder
+  const apiKey =
+    typeof body.apiKey === "string" && body.apiKey.trim()
+      ? body.apiKey.trim()
+      : "";
+  const apiKeyEncrypted = encrypt(apiKey);
 
   // Build agent data — match existing creation pattern (explicit id + serverId)
   const agentId = generateId();
@@ -98,6 +109,7 @@ export async function POST(
     llmProvider,
     llmModel,
     apiEndpoint,
+    apiKeyEncrypted,
     systemPrompt,
     temperature,
     maxTokens,
@@ -106,15 +118,6 @@ export async function POST(
     enabledTools,
     isActive: true,
   };
-
-  // Optional API key from the importing user
-  const apiKey =
-    typeof body.apiKey === "string" && body.apiKey.trim()
-      ? body.apiKey.trim()
-      : null;
-  if (apiKey) {
-    agentData.apiKeyEncrypted = encrypt(apiKey);
-  }
 
   // Create agent + auto-assign to all channels (same pattern as agent creation route)
   const channels = await prisma.channel.findMany({
