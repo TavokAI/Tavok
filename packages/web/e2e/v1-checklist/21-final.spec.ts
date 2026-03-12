@@ -85,18 +85,45 @@ test.describe("Section 21: Final Sanity", () => {
     };
     await registerUser(page, freshUser);
 
-    await expect(page.getByRole("tab", { name: "SERVERS" })).toBeVisible({
+    // Step 6: Use the onboarding flow (shown when user has zero servers)
+    const serverName = `Fresh Server ${ts}`;
+
+    // The onboarding flow should appear for a fresh user with no servers
+    const onboardingHeading = page.getByRole("heading", {
+      name: "Welcome to Tavok",
+    });
+    const serversTab = page.getByRole("tab", { name: "SERVERS" });
+
+    // Wait for either the onboarding flow or the servers tab
+    await expect(onboardingHeading.or(serversTab)).toBeVisible({
       timeout: 15_000,
     });
 
-    // Step 6: Create a server
-    const serverName = `Fresh Server ${ts}`;
-    await createServerViaUI(page, serverName);
+    if (await onboardingHeading.isVisible()) {
+      // Onboarding path: fill server name and create via onboarding flow
+      await page.getByPlaceholder("My AI Workspace").fill(serverName);
+      await page.getByRole("button", { name: "Create Server" }).click();
+
+      // Wait for the fork step ("Add your first agent")
+      await expect(
+        page.getByRole("heading", { name: "Add your first agent" }),
+      ).toBeVisible({ timeout: 10_000 });
+
+      // Pick the BYOK path to skip SDK setup, then go back to test messaging
+      // Actually, we just need to get to a channel — use "I have an API key" then back out
+      // Simpler: navigate directly to the server's channel via sidebar
+      await page.getByRole("tab", { name: "SERVERS" }).click();
+      await page.getByText(serverName).first().click();
+      await page.waitForTimeout(500);
+    } else {
+      // Fallback: use the modal-based flow (existing servers in DB)
+      await createServerViaUI(page, serverName);
+      await page.getByRole("tab", { name: "SERVERS" }).click();
+      await page.getByText(serverName).first().click();
+      await page.waitForTimeout(500);
+    }
 
     // Step 7: Send a message
-    await page.getByRole("tab", { name: "SERVERS" }).click();
-    await page.getByText(serverName).first().click();
-    await page.waitForTimeout(500);
     await openChannel(page, "general");
     await waitForWebSocket(page, "general");
 
