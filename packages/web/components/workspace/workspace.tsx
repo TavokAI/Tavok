@@ -1,15 +1,30 @@
-﻿"use client";
+"use client";
 
 import { useWorkspaceContext } from "@/components/providers/workspace-provider";
+import { useChatContext } from "@/components/providers/chat-provider";
 import { ChatPanel } from "./chat-panel";
 import { PanelDock } from "./panel-dock";
+import { OnboardingFlow } from "@/components/onboarding/onboarding-flow";
 
 export function Workspace() {
   const { panels, isLoaded } = useWorkspaceContext();
+  const { servers, serversLoaded } = useChatContext();
   const activePanels = panels.filter((panel) => !panel.isClosed);
   const visiblePanels = activePanels.filter((panel) => !panel.isMinimized);
 
   if (!isLoaded) return null;
+
+  // First-run: show onboarding when user has zero servers
+  if (serversLoaded && servers.length === 0) {
+    return (
+      <div
+        id="workspace-root"
+        className="relative h-full w-full overflow-hidden bg-background-primary"
+      >
+        <OnboardingFlow />
+      </div>
+    );
+  }
 
   return (
     <div

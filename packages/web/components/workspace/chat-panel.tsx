@@ -447,6 +447,12 @@ export function ChatPanel({ panel }: ChatPanelProps) {
           onEditMessage={editMessage}
           onDeleteMessage={handleDeleteRequest}
           activeStreamCount={activeStreamCount}
+          hasAgents={
+            !!(
+              channelData?.defaultAgentId ||
+              (channelData?.agentIds && channelData.agentIds.length > 0)
+            )
+          }
         />
         <TypingIndicator typingUsers={typingUsers} />
         {agentTriggerHint && (

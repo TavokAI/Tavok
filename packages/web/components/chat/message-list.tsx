@@ -109,6 +109,8 @@ interface MessageListProps {
   lastReadSeq?: string | null;
   /** TASK-0012: number of concurrently active streams */
   activeStreamCount?: number;
+  /** Whether the channel has agents assigned (for empty state messaging) */
+  hasAgents?: boolean;
 }
 
 export function MessageList({
@@ -122,6 +124,7 @@ export function MessageList({
   onDeleteMessage,
   lastReadSeq,
   activeStreamCount = 0,
+  hasAgents = false,
 }: MessageListProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const isAtBottomRef = useRef(true);
@@ -345,16 +348,29 @@ export function MessageList({
         </div>
       )}
 
-      {/* Empty state */}
+      {/* Empty state — agent-aware messaging */}
       {messages.length === 0 && (
         <div className="flex h-full items-center justify-center px-4 py-10">
           <div className="chrome-card rounded-lg px-8 py-10 text-center">
-            <p className="font-display text-xl font-semibold text-white">
-              No messages yet
-            </p>
-            <p className="mt-2 text-sm text-text-muted">
-              Be the first to send a message!
-            </p>
+            {hasAgents ? (
+              <>
+                <p className="font-display text-xl font-semibold text-white">
+                  Agents are ready
+                </p>
+                <p className="mt-2 text-sm text-text-muted">
+                  Send a message to get started!
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="font-display text-xl font-semibold text-white">
+                  No messages yet
+                </p>
+                <p className="mt-2 text-sm text-text-muted">
+                  Be the first to send a message!
+                </p>
+              </>
+            )}
           </div>
         </div>
       )}

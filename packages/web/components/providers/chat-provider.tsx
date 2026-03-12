@@ -101,6 +101,7 @@ export async function fetchAndSet<T>(
 
 interface ChatContextValue {
   servers: ServerData[];
+  serversLoaded: boolean;
   currentServerId: string | null;
   currentChannelId: string | null;
   currentServerName: string | null;
@@ -154,6 +155,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const { serverId, channelId } = parsePathIds(pathname);
 
   const [servers, setServers] = useState<ServerData[]>([]);
+  const [serversLoaded, setServersLoaded] = useState(false);
   const [channels, setChannels] = useState<ChannelData[]>([]);
   const [members, setMembers] = useState<MemberData[]>([]);
   const [agents, setAgents] = useState<AgentData[]>([]);
@@ -194,6 +196,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
   const refreshServers = useCallback(async () => {
     await fetchAndSet<ServerData>("/api/servers", "servers", setServers);
+    setServersLoaded(true);
   }, []);
 
   const refreshChannels = useCallback(async () => {
@@ -480,6 +483,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     <ChatContext.Provider
       value={{
         servers,
+        serversLoaded,
         currentServerId: serverId,
         currentChannelId: channelId,
         currentServerName,

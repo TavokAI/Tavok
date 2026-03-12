@@ -152,6 +152,7 @@ export function ChatArea({
         onDeleteMessage={handleDeleteRequest}
         lastReadSeq={lastReadSeqRef.current}
         activeStreamCount={activeStreamCount}
+        hasAgents={agents.length > 0}
       />
       <TypingIndicator typingUsers={typingUsers} />
       {agentTriggerHint && (
