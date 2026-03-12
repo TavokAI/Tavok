@@ -3,8 +3,6 @@ import { execSync } from "child_process";
 import {
   registerUser,
   login,
-  createServerViaUI,
-  selectServer,
   openChannel,
   waitForWebSocket,
   sendMessage,
@@ -85,44 +83,33 @@ test.describe("Section 21: Final Sanity", () => {
     };
     await registerUser(page, freshUser);
 
-    // Step 6: Use the onboarding flow (shown when user has zero servers)
+    // Step 6: Create a server via onboarding flow (fresh user = zero servers)
     const serverName = `Fresh Server ${ts}`;
 
-    // Wait for page to load — the servers tab should be visible once the app is ready
-    await expect(page.getByRole("tab", { name: "SERVERS" })).toBeVisible({
-      timeout: 15_000,
-    });
+    // After a full wipe, the fresh user has zero servers, so the onboarding
+    // flow will appear. Wait for the onboarding input to be ready.
+    // Use the placeholder as the reliable indicator since the heading and
+    // sidebar tabs may both be visible simultaneously.
+    const onboardingInput = page.getByPlaceholder("My AI Workspace");
+    await expect(onboardingInput).toBeVisible({ timeout: 20_000 });
 
-    // Check if the onboarding flow appeared (fresh user with zero servers)
-    const onboardingVisible = await page
-      .getByRole("heading", { name: "Welcome to Tavok" })
-      .isVisible()
-      .catch(() => false);
+    // Fill server name and submit via the onboarding form
+    await onboardingInput.fill(serverName);
+    // Scope to #workspace-root to avoid conflict with the CreateServerModal button
+    await page
+      .locator("#workspace-root")
+      .getByRole("button", { name: "Create Server" })
+      .click();
 
-    if (onboardingVisible) {
-      // Onboarding path: fill server name and create via onboarding flow
-      await page.getByPlaceholder("My AI Workspace").fill(serverName);
-      await page
-        .locator("#workspace-root")
-        .getByRole("button", { name: "Create Server" })
-        .click();
+    // Wait for the fork step ("Add your first agent") or the channel to load
+    await expect(
+      page.getByRole("heading", { name: "Add your first agent" }),
+    ).toBeVisible({ timeout: 10_000 });
 
-      // Wait for the fork step ("Add your first agent")
-      await expect(
-        page.getByRole("heading", { name: "Add your first agent" }),
-      ).toBeVisible({ timeout: 10_000 });
-
-      // Navigate to the server's channel via sidebar
-      await page.getByRole("tab", { name: "SERVERS" }).click();
-      await page.getByText(serverName).first().click();
-      await page.waitForTimeout(500);
-    } else {
-      // Fallback: use the modal-based flow (existing servers in DB)
-      await createServerViaUI(page, serverName);
-      await page.getByRole("tab", { name: "SERVERS" }).click();
-      await page.getByText(serverName).first().click();
-      await page.waitForTimeout(500);
-    }
+    // Navigate to the server's channel via sidebar
+    await page.getByRole("tab", { name: "SERVERS" }).click();
+    await page.getByText(serverName).first().click();
+    await page.waitForTimeout(500);
 
     // Step 7: Send a message
     await openChannel(page, "general");
