@@ -94,7 +94,8 @@ interface UseChannelReturn {
   presenceMap: Map<string, PresenceUser>;
   activeStreamCount: number; // TASK-0012: number of concurrently streaming messages
   charterState: CharterState | null; // TASK-0020: live charter status
-  sendCharterControl: (action: "pause" | "end") => void; // TASK-0020
+  setCharterState: React.Dispatch<React.SetStateAction<CharterState | null>>; // TASK-0020: for optimistic updates
+  sendCharterControl: (action: "start" | "pause" | "resume" | "end") => void; // TASK-0020
 }
 
 // ---------------------------------------------------------------------------
@@ -945,11 +946,14 @@ export function useChannel(channelId: string | null): UseChannelReturn {
     [messages],
   );
 
-  // TASK-0020: Send charter control action (pause/end)
-  const sendCharterControl = useCallback((action: "pause" | "end") => {
-    if (!channelRef.current) return;
-    channelRef.current.push("charter_control", { action });
-  }, []);
+  // TASK-0020: Send charter control action via WebSocket
+  const sendCharterControl = useCallback(
+    (action: "start" | "pause" | "resume" | "end") => {
+      if (!channelRef.current) return;
+      channelRef.current.push("charter_control", { action });
+    },
+    [],
+  );
 
   return {
     messages,
@@ -967,6 +971,7 @@ export function useChannel(channelId: string | null): UseChannelReturn {
     presenceMap,
     activeStreamCount,
     charterState,
+    setCharterState,
     sendCharterControl,
   };
 }

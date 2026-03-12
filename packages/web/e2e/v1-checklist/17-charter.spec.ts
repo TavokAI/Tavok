@@ -43,6 +43,36 @@ test.describe("Section 17: Channel Charter & Swarm Modes", () => {
       { serverId },
     );
 
+    // Assign both agents to the default channel
+    await page.evaluate(
+      async (args: { serverId: string }) => {
+        // Get all agents
+        const agentRes = await fetch(`/api/servers/${args.serverId}/agents`);
+        const agentData = await agentRes.json();
+        const agents = Array.isArray(agentData?.agents)
+          ? agentData.agents
+          : agentData;
+        const agentIds = agents.map((a: { id: string }) => a.id);
+
+        // Get default channel
+        const channelRes = await fetch(
+          `/api/servers/${args.serverId}/channels`,
+        );
+        const channels = await channelRes.json();
+        const general = channels[0];
+
+        // Assign agents to channel
+        await fetch(`/api/servers/${args.serverId}/channels/${general.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ agentIds }),
+        });
+
+        return { channelId: general.id };
+      },
+      { serverId },
+    );
+
     await ctx.close();
   });
 
@@ -50,6 +80,10 @@ test.describe("Section 17: Channel Charter & Swarm Modes", () => {
     await login(page, DEMO_USER.email, DEMO_USER.password);
     await selectServer(page, serverName);
   });
+
+  // -----------------------------------------------------------------------
+  // Settings Modal Tests
+  // -----------------------------------------------------------------------
 
   test("open channel settings — swarm mode visible", async ({ page }) => {
     await openChannel(page, "general");
@@ -105,5 +139,347 @@ test.describe("Section 17: Channel Charter & Swarm Modes", () => {
     await expect(reopenedSelect).toBeVisible({ timeout: 5_000 });
     const selectedValue = await reopenedSelect.inputValue();
     expect(selectedValue).toBe("ROUND_ROBIN");
+  });
+
+  test("charter config persistence — goal, rules, max turns", async ({
+    page,
+  }) => {
+    await openChannel(page, "general");
+
+    // Open channel settings
+    await page.locator('button[title="Channel Settings"]').click();
+    await page.waitForTimeout(1_000);
+
+    // Ensure swarm mode is set (so charter fields are visible)
+    const swarmSelect = page.locator("select").first();
+    await expect(swarmSelect).toBeVisible({ timeout: 5_000 });
+    await swarmSelect.selectOption("STRUCTURED_DEBATE");
+    await page.waitForTimeout(500);
+
+    // Fill in goal
+    const goalInput = page.locator('[data-testid="charter-goal-input"]');
+    await expect(goalInput).toBeVisible({ timeout: 3_000 });
+    await goalInput.fill("Review the authentication module");
+
+    // Fill in rules
+    const rulesInput = page.locator('[data-testid="charter-rules-input"]');
+    await rulesInput.fill("Each agent focuses on one concern");
+
+    // Fill in max turns
+    const maxTurnsInput = page.locator(
+      '[data-testid="charter-max-turns-input"]',
+    );
+    await maxTurnsInput.fill("6");
+
+    // Save
+    await page
+      .getByRole("button", { name: /save|update|apply/i })
+      .last()
+      .click();
+    await page.waitForTimeout(2_000);
+
+    // Reopen and verify persistence
+    await page.locator('button[title="Channel Settings"]').click();
+    await page.waitForTimeout(1_000);
+
+    await expect(goalInput).toHaveValue("Review the authentication module");
+    await expect(rulesInput).toHaveValue("Each agent focuses on one concern");
+    await expect(maxTurnsInput).toHaveValue("6");
+  });
+
+  test("agent order for Round Robin — order controls visible", async ({
+    page,
+  }) => {
+    await openChannel(page, "general");
+
+    // Open channel settings
+    await page.locator('button[title="Channel Settings"]').click();
+    await page.waitForTimeout(1_000);
+
+    // Select Round Robin mode
+    const swarmSelect = page.locator("select").first();
+    await expect(swarmSelect).toBeVisible({ timeout: 5_000 });
+    await swarmSelect.selectOption("ROUND_ROBIN");
+    await page.waitForTimeout(500);
+
+    // Agent order list should be visible
+    const orderList = page.locator('[data-testid="agent-order-list"]');
+    await expect(orderList).toBeVisible({ timeout: 3_000 });
+
+    // Should have at least 2 agents listed
+    const orderItems = orderList.locator("> div");
+    await expect(orderItems).toHaveCount(2, { timeout: 3_000 });
+
+    // Up/down buttons should exist
+    const upBtn = page.locator('[data-testid="agent-order-up-1"]');
+    await expect(upBtn).toBeVisible();
+    const downBtn = page.locator('[data-testid="agent-order-down-0"]');
+    await expect(downBtn).toBeVisible();
+  });
+
+  // -----------------------------------------------------------------------
+  // Charter Lifecycle Tests (via API — more reliable than WebSocket timing)
+  // -----------------------------------------------------------------------
+
+  test("start charter — header shows ACTIVE status", async ({ page }) => {
+    await openChannel(page, "general");
+
+    // First ensure we have a non-default swarm mode set via API
+    await page.evaluate(
+      async (args: { serverId: string }) => {
+        // Get the channel
+        const channelRes = await fetch(
+          `/api/servers/${args.serverId}/channels`,
+        );
+        const channels = await channelRes.json();
+        const general = channels[0];
+
+        // Set Round Robin mode
+        await fetch(`/api/servers/${args.serverId}/channels/${general.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            swarmMode: "ROUND_ROBIN",
+            charterMaxTurns: 4,
+          }),
+        });
+      },
+      { serverId },
+    );
+
+    // Reload to pick up charter state
+    await page.reload();
+    await selectServer(page, serverName);
+    await openChannel(page, "general");
+    await page.waitForTimeout(2_000);
+
+    // Should see "Start Charter" button
+    const startBtn = page.locator('[data-testid="charter-start-btn"]');
+    await expect(startBtn).toBeVisible({ timeout: 10_000 });
+    await startBtn.click();
+    await page.waitForTimeout(2_000);
+
+    // Should see ACTIVE charter status (pulsing dot)
+    const statusDot = page.locator('[data-testid="charter-status-dot"]');
+    await expect(statusDot).toBeVisible({ timeout: 5_000 });
+
+    // Should see mode label
+    await expect(page.getByText("Round Robin")).toBeVisible({ timeout: 3_000 });
+  });
+
+  test("pause charter — header shows PAUSED state", async ({ page }) => {
+    await openChannel(page, "general");
+
+    // Ensure charter is ACTIVE via API
+    await page.evaluate(
+      async (args: { serverId: string }) => {
+        const channelRes = await fetch(
+          `/api/servers/${args.serverId}/channels`,
+        );
+        const channels = await channelRes.json();
+        const general = channels[0];
+
+        // Ensure mode is set
+        await fetch(`/api/servers/${args.serverId}/channels/${general.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ swarmMode: "ROUND_ROBIN" }),
+        });
+
+        // Start charter
+        await fetch(
+          `/api/servers/${args.serverId}/channels/${general.id}/charter`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "start" }),
+          },
+        );
+      },
+      { serverId },
+    );
+
+    // Reload to get fresh charter state
+    await page.reload();
+    await selectServer(page, serverName);
+    await openChannel(page, "general");
+    await page.waitForTimeout(2_000);
+
+    // Should see Pause button
+    const pauseBtn = page.locator('[data-testid="charter-pause-btn"]');
+    await expect(pauseBtn).toBeVisible({ timeout: 10_000 });
+    await pauseBtn.click();
+    await page.waitForTimeout(2_000);
+
+    // Should see "Paused" text
+    await expect(page.getByText("Paused")).toBeVisible({ timeout: 5_000 });
+
+    // Should see Resume button
+    const resumeBtn = page.locator('[data-testid="charter-resume-btn"]');
+    await expect(resumeBtn).toBeVisible({ timeout: 5_000 });
+  });
+
+  test("resume charter — returns to ACTIVE", async ({ page }) => {
+    await openChannel(page, "general");
+
+    // Ensure charter is PAUSED via API
+    await page.evaluate(
+      async (args: { serverId: string }) => {
+        const channelRes = await fetch(
+          `/api/servers/${args.serverId}/channels`,
+        );
+        const channels = await channelRes.json();
+        const general = channels[0];
+
+        await fetch(`/api/servers/${args.serverId}/channels/${general.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ swarmMode: "ROUND_ROBIN" }),
+        });
+
+        // Start then pause
+        await fetch(
+          `/api/servers/${args.serverId}/channels/${general.id}/charter`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "start" }),
+          },
+        );
+        await fetch(
+          `/api/servers/${args.serverId}/channels/${general.id}/charter`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "pause" }),
+          },
+        );
+      },
+      { serverId },
+    );
+
+    // Reload to get fresh state
+    await page.reload();
+    await selectServer(page, serverName);
+    await openChannel(page, "general");
+    await page.waitForTimeout(2_000);
+
+    // Should see Resume button
+    const resumeBtn = page.locator('[data-testid="charter-resume-btn"]');
+    await expect(resumeBtn).toBeVisible({ timeout: 10_000 });
+    await resumeBtn.click();
+    await page.waitForTimeout(2_000);
+
+    // Should return to ACTIVE (status dot visible, Pause button visible)
+    const statusDot = page.locator('[data-testid="charter-status-dot"]');
+    await expect(statusDot).toBeVisible({ timeout: 5_000 });
+    const pauseBtn = page.locator('[data-testid="charter-pause-btn"]');
+    await expect(pauseBtn).toBeVisible({ timeout: 5_000 });
+  });
+
+  test("end charter — shows completed state", async ({ page }) => {
+    await openChannel(page, "general");
+
+    // Ensure charter is ACTIVE via API
+    await page.evaluate(
+      async (args: { serverId: string }) => {
+        const channelRes = await fetch(
+          `/api/servers/${args.serverId}/channels`,
+        );
+        const channels = await channelRes.json();
+        const general = channels[0];
+
+        await fetch(`/api/servers/${args.serverId}/channels/${general.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ swarmMode: "ROUND_ROBIN" }),
+        });
+
+        await fetch(
+          `/api/servers/${args.serverId}/channels/${general.id}/charter`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "start" }),
+          },
+        );
+      },
+      { serverId },
+    );
+
+    // Reload
+    await page.reload();
+    await selectServer(page, serverName);
+    await openChannel(page, "general");
+    await page.waitForTimeout(2_000);
+
+    // Should see End button
+    const endBtn = page.locator('[data-testid="charter-end-btn"]');
+    await expect(endBtn).toBeVisible({ timeout: 10_000 });
+    await endBtn.click();
+    await page.waitForTimeout(2_000);
+
+    // Should show completed state
+    const completed = page.locator('[data-testid="charter-completed"]');
+    await expect(completed).toBeVisible({ timeout: 5_000 });
+    await expect(completed).toContainText("Charter completed");
+  });
+
+  test("restart charter from completed — shows ACTIVE again", async ({
+    page,
+  }) => {
+    await openChannel(page, "general");
+
+    // Ensure charter is COMPLETED via API
+    await page.evaluate(
+      async (args: { serverId: string }) => {
+        const channelRes = await fetch(
+          `/api/servers/${args.serverId}/channels`,
+        );
+        const channels = await channelRes.json();
+        const general = channels[0];
+
+        await fetch(`/api/servers/${args.serverId}/channels/${general.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ swarmMode: "ROUND_ROBIN" }),
+        });
+
+        // Start then end
+        await fetch(
+          `/api/servers/${args.serverId}/channels/${general.id}/charter`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "start" }),
+          },
+        );
+        await fetch(
+          `/api/servers/${args.serverId}/channels/${general.id}/charter`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "end" }),
+          },
+        );
+      },
+      { serverId },
+    );
+
+    // Reload
+    await page.reload();
+    await selectServer(page, serverName);
+    await openChannel(page, "general");
+    await page.waitForTimeout(2_000);
+
+    // Should see Restart button next to completed text
+    const restartBtn = page.locator('[data-testid="charter-restart-btn"]');
+    await expect(restartBtn).toBeVisible({ timeout: 10_000 });
+    await restartBtn.click();
+    await page.waitForTimeout(2_000);
+
+    // Should be ACTIVE again
+    const statusDot = page.locator('[data-testid="charter-status-dot"]');
+    await expect(statusDot).toBeVisible({ timeout: 5_000 });
   });
 });

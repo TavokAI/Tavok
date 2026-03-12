@@ -41,6 +41,7 @@ export function ChatArea({
     hasPermission,
     markAsRead,
     unreadMap,
+    currentServerId,
   } = useChatContext();
   const canManageMessages = hasPermission(Permissions.MANAGE_MESSAGES);
 
@@ -71,6 +72,7 @@ export function ChatArea({
     presenceMap,
     activeStreamCount,
     charterState,
+    setCharterState,
     sendCharterControl,
   } = useChannel(channelId);
 
@@ -113,6 +115,68 @@ export function ChatArea({
     prevPresenceSize.current = presenceMap.size;
   }, [presenceMap.size, refreshMembers]);
 
+  // TASK-0020: Fetch initial charter state on channel load
+  useEffect(() => {
+    if (!currentServerId || !channelId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(
+          `/api/servers/${currentServerId}/channels/${channelId}`,
+        );
+        if (!res.ok || cancelled) return;
+        const data = await res.json();
+        if (cancelled) return;
+        if (data.swarmMode) {
+          setCharterState({
+            swarmMode: data.swarmMode,
+            currentTurn: data.charterCurrentTurn ?? 0,
+            maxTurns: data.charterMaxTurns ?? 0,
+            status: data.charterStatus || "INACTIVE",
+          });
+        }
+      } catch {
+        // Non-critical — charter state will update via WebSocket events
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [currentServerId, channelId, setCharterState]);
+
+  // TASK-0020: Charter start/resume via REST (needs session auth + MANAGE_CHANNELS)
+  const canManageChannels = hasPermission(Permissions.MANAGE_CHANNELS);
+  const handleCharterAction = useCallback(
+    async (action: "start" | "resume") => {
+      if (!currentServerId || !channelId) return;
+      try {
+        const res = await fetch(
+          `/api/servers/${currentServerId}/channels/${channelId}/charter`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action }),
+          },
+        );
+        if (!res.ok) {
+          console.error(`Charter ${action} failed:`, await res.text());
+          return;
+        }
+        // Optimistically update local charterState from REST response
+        const data = await res.json();
+        setCharterState((prev) => ({
+          swarmMode: data.swarmMode || prev?.swarmMode || "HUMAN_IN_THE_LOOP",
+          currentTurn: data.charterCurrentTurn ?? 0,
+          maxTurns: data.charterMaxTurns ?? 0,
+          status: data.charterStatus || "ACTIVE",
+        }));
+      } catch (err) {
+        console.error(`Charter ${action} error:`, err);
+      }
+    },
+    [currentServerId, channelId, setCharterState],
+  );
+
   const mentionOptions: MentionOption[] = useMemo(() => {
     const memberOptions: MentionOption[] = members.map((member) => ({
       id: member.userId,
@@ -138,7 +202,13 @@ export function ChatArea({
         channelName={channelName}
         topic={channelTopic}
         charterState={charterState}
+        onCharterStart={
+          canManageChannels ? () => handleCharterAction("start") : undefined
+        }
         onCharterPause={() => sendCharterControl("pause")}
+        onCharterResume={
+          canManageChannels ? () => handleCharterAction("resume") : undefined
+        }
         onCharterEnd={() => sendCharterControl("end")}
       />
       <MessageList

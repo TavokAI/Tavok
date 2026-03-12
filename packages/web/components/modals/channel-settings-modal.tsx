@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
 import { useChatContext } from "@/components/providers/chat-provider";
+import { ChevronUp, ChevronDown } from "lucide-react";
 
 interface Agent {
   id: string;
@@ -51,6 +52,9 @@ const SWARM_MODES = [
   },
 ] as const;
 
+// Modes that enforce turn order and need agent ordering
+const ORDERED_MODES = ["ROUND_ROBIN", "CODE_REVIEW_SPRINT"];
+
 interface ChannelSettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -81,6 +85,7 @@ export function ChannelSettingsModal({
   const [charterGoal, setCharterGoal] = useState("");
   const [charterRules, setCharterRules] = useState("");
   const [charterMaxTurns, setCharterMaxTurns] = useState(0);
+  const [charterAgentOrder, setCharterAgentOrder] = useState<string[]>([]);
 
   const fetchAgents = useCallback(async () => {
     if (!currentServerId) return;
@@ -113,6 +118,9 @@ export function ChannelSettingsModal({
         setCharterGoal(data.charterGoal || "");
         setCharterRules(data.charterRules || "");
         setCharterMaxTurns(data.charterMaxTurns || 0);
+        setCharterAgentOrder(
+          Array.isArray(data.charterAgentOrder) ? data.charterAgentOrder : [],
+        );
       }
     } catch {
       // Silently fail — defaults are fine
@@ -141,15 +149,50 @@ export function ChannelSettingsModal({
     currentDefaultAgentId,
   ]);
 
+  // Build the ordered agent list for ordered modes
+  const orderedAgents = useMemo(() => {
+    const selected = agents.filter((a) => selectedAgentIds.has(a.id));
+    if (charterAgentOrder.length > 0) {
+      // Sort by saved order, with any new agents appended at the end
+      const orderMap = new Map(charterAgentOrder.map((id, i) => [id, i]));
+      return [...selected].sort((a, b) => {
+        const aIdx = orderMap.get(a.id) ?? Infinity;
+        const bIdx = orderMap.get(b.id) ?? Infinity;
+        return aIdx - bIdx;
+      });
+    }
+    return selected;
+  }, [agents, selectedAgentIds, charterAgentOrder]);
+
   function toggleAgent(agentId: string) {
     setSelectedAgentIds((prev) => {
       const next = new Set(prev);
       if (next.has(agentId)) {
         next.delete(agentId);
+        // Remove from agent order too
+        setCharterAgentOrder((order) => order.filter((id) => id !== agentId));
       } else {
         next.add(agentId);
+        // Add to end of agent order
+        setCharterAgentOrder((order) =>
+          order.includes(agentId) ? order : [...order, agentId],
+        );
       }
       return next;
+    });
+  }
+
+  function moveAgent(agentId: string, direction: "up" | "down") {
+    setCharterAgentOrder((prev) => {
+      // Build order from orderedAgents if empty
+      const order =
+        prev.length > 0 ? [...prev] : orderedAgents.map((a) => a.id);
+      const idx = order.indexOf(agentId);
+      if (idx === -1) return order;
+      const newIdx = direction === "up" ? idx - 1 : idx + 1;
+      if (newIdx < 0 || newIdx >= order.length) return order;
+      [order[idx], order[newIdx]] = [order[newIdx], order[idx]];
+      return order;
     });
   }
 
@@ -160,6 +203,11 @@ export function ChannelSettingsModal({
     setError("");
 
     try {
+      // For ordered modes, ensure agent order is populated
+      const agentOrder = ORDERED_MODES.includes(swarmMode)
+        ? orderedAgents.map((a) => a.id)
+        : null;
+
       const res = await fetch(
         `/api/servers/${currentServerId}/channels/${channelId}`,
         {
@@ -171,6 +219,7 @@ export function ChannelSettingsModal({
             charterGoal: charterGoal || null,
             charterRules: charterRules || null,
             charterMaxTurns,
+            charterAgentOrder: agentOrder,
           }),
         },
       );
@@ -188,6 +237,8 @@ export function ChannelSettingsModal({
       setLoading(false);
     }
   }
+
+  const showOrderedModes = ORDERED_MODES.includes(swarmMode);
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={`#${channelName} Settings`}>
@@ -262,6 +313,55 @@ export function ChannelSettingsModal({
               {SWARM_MODES.find((m) => m.value === swarmMode)?.description}
             </p>
 
+            {/* Agent Order — for ordered modes (Round Robin, Code Review Sprint) */}
+            {showOrderedModes && orderedAgents.length >= 2 && (
+              <div className="mt-3">
+                <label className="mb-1 block text-xs font-medium text-text-secondary">
+                  Agent Turn Order
+                </label>
+                <p className="mb-2 text-[10px] text-text-muted">
+                  Agents will take turns in this order.
+                </p>
+                <div className="space-y-1" data-testid="agent-order-list">
+                  {orderedAgents.map((agent, idx) => (
+                    <div
+                      key={agent.id}
+                      className="flex items-center gap-2 rounded border border-background-tertiary bg-background-primary px-3 py-1.5"
+                    >
+                      <span className="text-xs font-bold text-accent-cyan w-5 text-center">
+                        {idx + 1}
+                      </span>
+                      <span className="flex-1 text-sm font-mono text-text-primary truncate">
+                        {agent.name}
+                      </span>
+                      <div className="flex gap-0.5">
+                        <button
+                          type="button"
+                          onClick={() => moveAgent(agent.id, "up")}
+                          disabled={idx === 0}
+                          className="rounded p-0.5 text-text-muted hover:text-text-primary hover:bg-background-tertiary disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                          aria-label={`Move ${agent.name} up`}
+                          data-testid={`agent-order-up-${idx}`}
+                        >
+                          <ChevronUp className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => moveAgent(agent.id, "down")}
+                          disabled={idx === orderedAgents.length - 1}
+                          className="rounded p-0.5 text-text-muted hover:text-text-primary hover:bg-background-tertiary disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                          aria-label={`Move ${agent.name} down`}
+                          data-testid={`agent-order-down-${idx}`}
+                        >
+                          <ChevronDown className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Goal */}
             <div className="mt-3">
               <label className="mb-1 block text-xs font-medium text-text-secondary">
@@ -273,6 +373,7 @@ export function ChannelSettingsModal({
                 onChange={(e) => setCharterGoal(e.target.value)}
                 placeholder="What should the agents accomplish?"
                 className="w-full rounded border border-background-tertiary bg-background-primary px-3 py-2 text-sm text-text-primary placeholder-text-dim focus:border-accent-cyan focus:outline-none"
+                data-testid="charter-goal-input"
               />
             </div>
 
@@ -287,6 +388,7 @@ export function ChannelSettingsModal({
                 placeholder="Custom rules for agents to follow..."
                 rows={3}
                 className="w-full rounded border border-background-tertiary bg-background-primary px-3 py-2 text-sm text-text-primary placeholder-text-dim focus:border-accent-cyan focus:outline-none resize-none"
+                data-testid="charter-rules-input"
               />
             </div>
 
@@ -306,6 +408,7 @@ export function ChannelSettingsModal({
                     )
                   }
                   className="w-20 rounded border border-background-tertiary bg-background-primary px-3 py-2 text-sm text-text-primary focus:border-accent-cyan focus:outline-none"
+                  data-testid="charter-max-turns-input"
                 />
                 <span className="text-xs text-text-muted">
                   {charterMaxTurns === 0

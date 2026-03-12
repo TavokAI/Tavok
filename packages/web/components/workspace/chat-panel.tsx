@@ -11,6 +11,7 @@ import { MessageList } from "@/components/chat/message-list";
 import { MessageInput } from "@/components/chat/message-input";
 import { TypingIndicator } from "@/components/chat/typing-indicator";
 import type { MentionOption } from "@/components/chat/mention-autocomplete";
+import { ChannelHeader } from "@/components/chat/channel-header";
 import { ChannelSettingsModal } from "@/components/modals/channel-settings-modal";
 import { DeleteMessageModal } from "@/components/modals/delete-message-modal";
 import { Permissions } from "@/lib/permissions";
@@ -56,6 +57,9 @@ export function ChatPanel({ panel }: ChatPanelProps) {
     typingUsers,
     sendTyping,
     activeStreamCount,
+    charterState,
+    setCharterState,
+    sendCharterControl,
   } = useChannel(panel.channelId);
 
   const handleDeleteRequest = useCallback(
@@ -306,6 +310,64 @@ export function ChatPanel({ panel }: ChatPanelProps) {
     return scoped?.channels?.find((ch) => ch.id === panel.channelId);
   }, [serverDataById, panel.serverId, panel.channelId]);
 
+  // TASK-0020: Fetch initial charter state on channel load
+  useEffect(() => {
+    if (!panel.serverId || !panel.channelId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(
+          `/api/servers/${panel.serverId}/channels/${panel.channelId}`,
+        );
+        if (!res.ok || cancelled) return;
+        const data = await res.json();
+        if (cancelled) return;
+        if (data.swarmMode) {
+          setCharterState({
+            swarmMode: data.swarmMode,
+            currentTurn: data.charterCurrentTurn ?? 0,
+            maxTurns: data.charterMaxTurns ?? 0,
+            status: data.charterStatus || "INACTIVE",
+          });
+        }
+      } catch {
+        // Non-critical
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [panel.serverId, panel.channelId, setCharterState]);
+
+  // TASK-0020: Charter start/resume via REST (needs MANAGE_CHANNELS permission)
+  const canManageChannels = hasPermission(Permissions.MANAGE_CHANNELS);
+  const handleCharterAction = useCallback(
+    async (action: "start" | "resume") => {
+      if (!panel.serverId || !panel.channelId) return;
+      try {
+        const res = await fetch(
+          `/api/servers/${panel.serverId}/channels/${panel.channelId}/charter`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action }),
+          },
+        );
+        if (!res.ok) return;
+        const data = await res.json();
+        setCharterState((prev) => ({
+          swarmMode: data.swarmMode || prev?.swarmMode || "HUMAN_IN_THE_LOOP",
+          currentTurn: data.charterCurrentTurn ?? 0,
+          maxTurns: data.charterMaxTurns ?? 0,
+          status: data.charterStatus || "ACTIVE",
+        }));
+      } catch {
+        // Silently fail — charter controls are non-critical
+      }
+    },
+    [panel.serverId, panel.channelId, setCharterState],
+  );
+
   const hasActiveStream = messages.some((m) => m.streamingStatus === "ACTIVE");
   const isErrorHint =
     typeof agentTriggerHint === "string" &&
@@ -437,6 +499,23 @@ export function ChatPanel({ panel }: ChatPanelProps) {
 
       {/* Content */}
       <div className="flex flex-1 flex-col overflow-hidden bg-background-primary">
+        {/* TASK-0020: Charter header — only shown when charter has non-default state */}
+        {charterState && charterState.swarmMode !== "HUMAN_IN_THE_LOOP" && (
+          <ChannelHeader
+            channelName={panel.channelName}
+            charterState={charterState}
+            onCharterStart={
+              canManageChannels ? () => handleCharterAction("start") : undefined
+            }
+            onCharterPause={() => sendCharterControl("pause")}
+            onCharterResume={
+              canManageChannels
+                ? () => handleCharterAction("resume")
+                : undefined
+            }
+            onCharterEnd={() => sendCharterControl("end")}
+          />
+        )}
         <MessageList
           messages={messages}
           hasMoreHistory={hasMoreHistory}
