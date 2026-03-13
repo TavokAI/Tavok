@@ -80,6 +80,7 @@ export function UserProfileButton() {
           ref={buttonRef}
           onClick={() => setShowPopover(!showPopover)}
           className="flex w-full items-center gap-3 rounded-md px-2 py-1.5 transition-colors hover:bg-background-floating"
+          data-testid="user-profile-btn"
         >
           {/* Circular avatar with status indicator */}
           <div className="relative">
@@ -116,6 +117,7 @@ export function UserProfileButton() {
           <div
             ref={popoverRef}
             className="absolute bottom-full left-2 right-2 mb-2 rounded-lg border border-border bg-background-floating shadow-xl z-50"
+            data-testid="user-profile-popover"
           >
             {/* User info header */}
             <div className="flex items-center gap-3 px-3 py-3 border-b border-border">
@@ -178,6 +180,7 @@ export function UserProfileButton() {
                   setShowSettings(true);
                 }}
                 className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-sm font-medium text-text-secondary transition-colors hover:bg-background-secondary hover:text-text-primary"
+                data-testid="edit-profile-btn"
               >
                 <Settings2 className="h-4 w-4" />
                 Edit Profile

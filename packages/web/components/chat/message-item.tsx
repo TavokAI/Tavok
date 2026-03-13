@@ -9,6 +9,7 @@ import { ReactionBar } from "./reaction-bar";
 import { FileAttachment, parseFileReferences } from "./file-attachment";
 import { MessageActions } from "./message-actions";
 import { EditMessageInput } from "./edit-message-input";
+import { UserProfileCard } from "@/components/user/user-profile-card";
 import { passthroughImageLoader } from "@/lib/image-loader";
 import { formatTime } from "@/lib/format-time";
 
@@ -33,6 +34,19 @@ export function MessageItem({
 }: MessageItemProps) {
   const { members, agents } = useChatContext();
   const [isEditing, setIsEditing] = useState(false);
+  const [profileCard, setProfileCard] = useState<{
+    top: number;
+    left: number;
+  } | null>(null);
+
+  const handleAuthorClick = useCallback(
+    (e: React.MouseEvent) => {
+      if (message.authorType !== "USER") return;
+      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+      setProfileCard({ top: rect.bottom + 4, left: rect.left });
+    },
+    [message.authorType],
+  );
 
   const mentionNames = useMemo(
     () => [
@@ -160,7 +174,10 @@ export function MessageItem({
       className={`group relative mx-2 mt-3 flex gap-4 rounded-lg border px-4 py-3 transition-colors hover:bg-background-floating/46 ${!isAgent ? "border-brand/20 bg-brand/10" : "border-accent-cyan/20 bg-background-floating/35"}`}
     >
       {/* Avatar */}
-      <div className="flex-shrink-0 pt-0.5">
+      <div
+        className={`flex-shrink-0 pt-0.5 ${!isAgent ? "cursor-pointer" : ""}`}
+        onClick={!isAgent ? handleAuthorClick : undefined}
+      >
         {message.authorAvatarUrl ? (
           <Image
             src={message.authorAvatarUrl}
@@ -184,7 +201,9 @@ export function MessageItem({
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline gap-2 mb-1">
           <span
-            className={`text-sm font-semibold ${isAgent ? "text-accent-cyan" : "text-white"}`}
+            className={`text-sm font-semibold ${isAgent ? "text-accent-cyan" : "text-white cursor-pointer hover:underline"}`}
+            onClick={!isAgent ? handleAuthorClick : undefined}
+            data-testid="message-author-name"
           >
             {!isAgent && <span className="mr-1 text-brand/80">&gt;</span>}
             {message.authorName}
@@ -234,6 +253,13 @@ export function MessageItem({
           canDelete={canDelete}
           onEdit={() => setIsEditing(true)}
           onDelete={() => onDelete?.(message.id)}
+        />
+      )}
+      {profileCard && !isAgent && (
+        <UserProfileCard
+          userId={message.authorId}
+          anchorRect={profileCard}
+          onClose={() => setProfileCard(null)}
         />
       )}
     </div>

@@ -236,7 +236,10 @@ export function ProfileSettingsModal({
       title="Profile Settings"
       size="wide"
     >
-      <div className="space-y-6 max-h-[70vh] overflow-y-auto pr-1">
+      <div
+        className="space-y-6 max-h-[70vh] overflow-y-auto pr-1"
+        data-testid="profile-settings-modal"
+      >
         {/* Avatar Section */}
         <div>
           <label className="mb-2 block text-xs font-bold uppercase text-text-secondary">
@@ -305,6 +308,7 @@ export function ProfileSettingsModal({
               type="file"
               accept="image/jpeg,image/png,image/gif,image/webp"
               className="hidden"
+              data-testid="profile-avatar-upload"
               onChange={(e) => {
                 const file = e.target.files?.[0];
                 if (file) handleAvatarUpload(file);
@@ -324,6 +328,7 @@ export function ProfileSettingsModal({
             value={displayName}
             onChange={(e) => setDisplayName(e.target.value)}
             maxLength={50}
+            data-testid="profile-display-name-input"
           />
           <div>
             <label className="mb-2 block text-xs font-bold uppercase text-text-secondary">
@@ -343,7 +348,11 @@ export function ProfileSettingsModal({
           </div>
           {error && <p className="text-xs text-status-error">{error}</p>}
           {success && <p className="text-xs text-status-success">{success}</p>}
-          <Button onClick={handleSaveProfile} loading={saving}>
+          <Button
+            onClick={handleSaveProfile}
+            loading={saving}
+            data-testid="profile-save-btn"
+          >
             Save Changes
           </Button>
         </div>
@@ -408,6 +417,7 @@ export function ProfileSettingsModal({
             type="password"
             value={currentPassword}
             onChange={(e) => setCurrentPassword(e.target.value)}
+            data-testid="profile-current-password"
           />
           <Input
             id="newPassword"
@@ -415,6 +425,7 @@ export function ProfileSettingsModal({
             type="password"
             value={newPassword}
             onChange={(e) => setNewPassword(e.target.value)}
+            data-testid="profile-new-password"
           />
           <Input
             id="confirmPassword"
@@ -422,6 +433,7 @@ export function ProfileSettingsModal({
             type="password"
             value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}
+            data-testid="profile-confirm-password"
           />
           {passwordError && (
             <p className="text-xs text-status-error">{passwordError}</p>
