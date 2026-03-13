@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useRef, useEffect, useCallback, useMemo, useState } from "react";
 import type { MessagePayload, ReactionData } from "@/lib/hooks/use-channel";
@@ -362,7 +362,7 @@ export function MessageList({
     <div
       ref={containerRef}
       onScroll={handleScroll}
-      className="flex-1 overflow-y-auto px-2 pb-4 pt-3"
+      className="flex-1 overflow-y-auto px-1 pb-4 pt-3"
     >
       {/* Loading indicator at top */}
       {hasMoreHistory && messages.length > 0 && (
@@ -417,8 +417,8 @@ export function MessageList({
       {/* TASK-0012: Active streams indicator for multi-agent channels */}
       {activeStreamCount > 1 && (
         <div className="sticky top-0 z-10 flex justify-center py-2">
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-accent-cyan/20 bg-accent-cyan/10 px-3 py-1.5 text-xs font-medium text-accent-cyan shadow-[0_10px_24px_rgba(89,184,255,0.1)]">
-            <span className="w-1.5 h-1.5 rounded-full bg-accent-agent animate-pulse" />
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-accent-cyan/[0.06] px-3 py-1 text-[10px] font-medium text-accent-cyan">
+            <span className="w-1.5 h-1.5 rounded-full bg-accent-cyan animate-pulse" />
             {activeStreamCount} agents responding
           </span>
         </div>

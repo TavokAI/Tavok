@@ -76,10 +76,10 @@ export function StreamingMessage({
   if (message.isDeleted) {
     if (isGrouped) {
       return (
-        <div className="group flex gap-4 px-4 py-0.5 hover:bg-background-secondary/50 border-l-2 border-transparent">
-          <div className="w-10 flex-shrink-0" />
+        <div className="group mx-2 flex gap-3 px-4 py-0.5 border-l-2 border-transparent">
+          <div className="w-9 flex-shrink-0" />
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-mono text-text-muted italic">
+            <p className="text-[12px] text-text-dim italic">
               [message deleted]
             </p>
           </div>
@@ -87,22 +87,22 @@ export function StreamingMessage({
       );
     }
     return (
-      <div className="group mt-3 flex gap-4 px-4 py-2 hover:bg-background-secondary/50 border-l-2 border-transparent">
+      <div className="group mx-2 mt-[14px] flex gap-3 px-4 py-2 border-l-2 border-transparent">
         <div className="flex-shrink-0 pt-0.5">
-          <div className="flex h-10 w-10 items-center justify-center rounded-sm bg-background-secondary border border-border text-text-dim text-sm font-bold font-mono">
+          <div className="flex h-[34px] w-[34px] items-center justify-center rounded-full bg-background-elevated text-text-dim text-[12px] font-semibold">
             ?
           </div>
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline gap-2 mb-1">
-            <span className="text-sm font-bold font-mono text-text-muted">
+            <span className="text-[12px] font-medium text-text-muted">
               {message.authorName}
             </span>
-            <span className="text-[10px] text-text-muted font-mono">
+            <span className="text-[10px] text-text-dim">
               {formatTime(message.createdAt)}
             </span>
           </div>
-          <p className="text-sm font-mono text-text-muted italic">
+          <p className="text-[12px] text-text-dim italic">
             [message deleted]
           </p>
         </div>
@@ -113,20 +113,20 @@ export function StreamingMessage({
   if (isGrouped) {
     return (
       <div
-        className={`group relative flex gap-4 px-4 py-0.5 hover:bg-background-secondary/50 ${isActive ? "bg-accent-cyan/5 border-l-2 border-accent-cyan/50" : "border-l-2 border-transparent"}`}
+        className={`group relative mx-2 flex gap-3 px-4 py-0.5 transition-colors ${isActive ? "border-l-2 border-accent-cyan bg-accent-cyan/[0.02]" : "border-l-2 border-transparent hover:bg-white/[0.01]"}`}
       >
-        <div className="w-10 flex-shrink-0" />
+        <div className="w-9 flex-shrink-0" />
         <div className="min-w-0 flex-1">
           {isActive && message.thinkingPhase && (
-            <span className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider bg-accent-cyan/10 text-accent-cyan border border-accent-cyan/20 mb-1">
+            <span className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wider bg-accent-cyan/[0.06] text-accent-cyan mb-1">
               <span className="w-1.5 h-1.5 rounded-full bg-accent-cyan animate-pulse" />
               {message.thinkingPhase}
             </span>
           )}
-          <div className="text-sm font-mono text-text-primary leading-relaxed">
+          <div className="text-[12.5px] text-text-secondary leading-[1.65]">
             <MarkdownContent content={text} mentionNames={mentionNames} />
             {isActive && (
-              <span className="inline-block w-2 h-4 ml-1 bg-accent-cyan animate-pulse align-middle" />
+              <span className="streaming-cursor" />
             )}
             {message.editedAt && (
               <span className="text-[10px] text-text-muted font-mono ml-1">
@@ -204,14 +204,14 @@ export function StreamingMessage({
                   <div key={i} className="flex items-center gap-1">
                     {i > 0 && <span className="w-3 h-px bg-text-muted/30" />}
                     <span
-                      className={`inline-flex items-center gap-1 rounded px-1 py-0.5 text-[8px] font-bold uppercase tracking-wider ${
+                      className={`inline-flex items-center gap-1 rounded px-1 py-0.5 text-[8px] font-medium uppercase tracking-wider ${
                         isCurrent
-                          ? "bg-accent-cyan/10 text-accent-cyan border border-accent-cyan/20"
-                          : "bg-background-secondary text-text-muted border border-border"
+                          ? "bg-accent-cyan/[0.06] text-accent-cyan"
+                          : "text-text-dim"
                       }`}
                     >
                       <span
-                        className={`w-1 h-1 rounded-full ${isCurrent ? "bg-accent-cyan animate-pulse" : "bg-accent-cyan/50"}`}
+                        className={`w-1 h-1 rounded-full ${isCurrent ? "bg-accent-cyan animate-pulse" : "bg-text-dim/50"}`}
                       />
                       {entry.phase}
                     </span>
@@ -245,7 +245,7 @@ export function StreamingMessage({
 
   return (
     <div
-      className={`group relative mt-3 flex gap-4 px-4 py-2 hover:bg-background-secondary/50 ${isActive ? "bg-accent-cyan/5 border-l-2 border-accent-cyan" : "border-l-2 border-transparent"}`}
+      className={`group relative mx-2 mt-[14px] flex gap-3 px-4 py-2 transition-colors ${isActive ? "border-l-2 border-accent-cyan bg-accent-cyan/[0.02]" : "border-l-2 border-transparent hover:bg-white/[0.01]"}`}
     >
       {/* Avatar with pulse while streaming */}
       <div className="flex-shrink-0 pt-0.5">
@@ -256,19 +256,19 @@ export function StreamingMessage({
               alt={message.authorName}
               loader={passthroughImageLoader}
               unoptimized
-              width={40}
-              height={40}
-              className="h-10 w-10 rounded-sm object-cover"
+              width={34}
+              height={34}
+              className="h-[34px] w-[34px] rounded-full object-cover"
             />
           ) : (
             <div
-              className={`flex h-10 w-10 items-center justify-center rounded-sm bg-background-secondary border ${isActive ? "border-accent-cyan text-accent-cyan" : "border-text-dim text-text-dim"} text-sm font-bold font-mono`}
+              className={`flex h-[34px] w-[34px] items-center justify-center rounded-full text-[12px] font-semibold ${isActive ? "bg-background-elevated border border-accent-cyan/20 text-text-secondary" : "bg-background-elevated text-text-secondary"}`}
             >
               {message.authorName?.charAt(0)?.toUpperCase() || "?"}
             </div>
           )}
           {isActive && (
-            <span className="absolute -bottom-1 -right-1 h-3 w-3 rounded-full bg-accent-cyan animate-pulse border-2 border-background-primary" />
+            <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-accent-cyan animate-pulse border-2 border-background-floating" />
           )}
         </div>
       </div>
@@ -277,34 +277,34 @@ export function StreamingMessage({
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline gap-2 mb-1">
           <span
-            className={`text-sm font-bold font-mono ${isActive ? "text-accent-cyan" : "text-text-secondary"}`}
+            className={`text-[12px] font-medium ${isActive ? "text-text-primary" : "text-text-primary"}`}
           >
             {message.authorName}
           </span>
           <span
-            className={`inline-flex items-center rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${isActive ? "bg-accent-cyan/20 text-accent-cyan border border-accent-cyan/30" : "bg-background-secondary text-text-muted border border-border"}`}
+            className={`inline-flex items-center rounded px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-[0.08em] ${isActive ? "bg-accent-cyan/10 text-accent-cyan" : "bg-accent-cyan/10 text-accent-cyan-dim"}`}
           >
             AGENT
           </span>
-          <span className="text-[10px] text-text-muted font-mono">
+          <span className="text-[10px] text-text-dim">
             {formatTime(message.createdAt)}
           </span>
           {isActive && message.thinkingPhase && (
-            <span className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider bg-accent-cyan/10 text-accent-cyan border border-accent-cyan/20">
+            <span className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wider bg-accent-cyan/[0.06] text-accent-cyan">
               <span className="w-1.5 h-1.5 rounded-full bg-accent-cyan animate-pulse" />
               {message.thinkingPhase}
             </span>
           )}
           {message.editedAt && (
-            <span className="text-[10px] text-text-muted font-mono">
+            <span className="text-[10px] text-text-dim">
               (edited)
             </span>
           )}
         </div>
-        <div className="text-sm font-mono text-text-primary leading-relaxed">
+        <div className="text-[12.5px] text-text-secondary leading-[1.65]">
           <MarkdownContent content={text} mentionNames={mentionNames} />
           {isActive && (
-            <span className="inline-block w-2 h-4 ml-1 bg-accent-cyan animate-pulse align-middle" />
+            <span className="streaming-cursor" />
           )}
         </div>
         {files.map((file) => (
@@ -377,14 +377,14 @@ export function StreamingMessage({
                 <div key={i} className="flex items-center gap-1">
                   {i > 0 && <span className="w-3 h-px bg-text-muted/30" />}
                   <span
-                    className={`inline-flex items-center gap-1 rounded px-1 py-0.5 text-[8px] font-bold uppercase tracking-wider ${
+                    className={`inline-flex items-center gap-1 rounded px-1 py-0.5 text-[8px] font-medium uppercase tracking-wider ${
                       isCurrent
-                        ? "bg-accent-cyan/10 text-accent-cyan border border-accent-cyan/20"
-                        : "bg-background-secondary text-text-muted border border-border"
+                        ? "bg-accent-cyan/[0.06] text-accent-cyan"
+                        : "text-text-dim"
                     }`}
                   >
                     <span
-                      className={`w-1 h-1 rounded-full ${isCurrent ? "bg-accent-cyan animate-pulse" : "bg-accent-cyan/50"}`}
+                      className={`w-1 h-1 rounded-full ${isCurrent ? "bg-accent-cyan animate-pulse" : "bg-text-dim/50"}`}
                     />
                     {entry.phase}
                   </span>

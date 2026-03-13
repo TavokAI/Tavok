@@ -1,11 +1,11 @@
-﻿"use client";
+"use client";
 
 import React, { useEffect, useMemo, useState } from "react";
 import { useChatContext } from "@/components/providers/chat-provider";
 import { useWorkspaceContext } from "@/components/providers/workspace-provider";
 import { ManageAgentsModal } from "@/components/modals/manage-agents-modal";
 import { Permissions } from "@/lib/permissions";
-import { Bot, Cpu, Users, Zap, Settings2 } from "lucide-react";
+import { Bot, Users, Zap, Settings2 } from "lucide-react";
 
 interface AgentInfo {
   id: string;
@@ -105,72 +105,55 @@ export function RightPanel() {
     return tasks;
   }, [agentList]);
 
-  const modelList = useMemo(() => {
-    const models = new Map<string, string>();
-    for (const panel of openPanels) {
-      const scoped = serverDataById[panel.serverId];
-      if (!scoped) continue;
-      for (const agent of scoped.agents) {
-        if (agent.llmModel && !models.has(agent.llmModel)) {
-          models.set(agent.llmModel, agent.name);
-        }
-      }
-    }
-    return Array.from(models.entries()).map(([model, agentName]) => ({
-      model,
-      agentName,
-    }));
-  }, [openPanels, serverDataById]);
-
   return (
-    <div className="chrome-panel flex h-full flex-col rounded-lg overflow-hidden">
-      <div className="flex-1 space-y-4 overflow-y-auto p-4">
-        <div className="chrome-card rounded-lg p-4">
-          <div className="mb-4 flex items-center justify-between border-b border-border/60 pb-3">
-            <div className="flex items-center gap-2 text-[11px] font-semibold tracking-[0.12em] text-text-muted">
-              <Bot className="h-4 w-4 text-brand" />
+    <div className="chrome-panel flex h-full flex-col overflow-hidden">
+      <div className="flex-1 space-y-1 overflow-y-auto p-2">
+        <div className="rounded-md p-3">
+          <div className="mb-3 flex items-center justify-between">
+            <div className="flex items-center gap-2 text-[10px] font-semibold tracking-[0.14em] text-text-dim">
+              <Bot className="h-3.5 w-3.5" />
               AGENTS
             </div>
             {hasPermission(Permissions.MANAGE_AGENTS) && (
               <button
                 onClick={() => setShowManageAgents(true)}
-                className="rounded-lg p-1 text-text-muted transition-colors hover:bg-background-floating/60 hover:text-brand"
+                className="rounded p-1 text-text-dim transition-colors hover:text-text-muted"
                 title="Manage Agents"
               >
-                <Settings2 className="h-3.5 w-3.5" />
+                <Settings2 className="h-3 w-3" />
               </button>
             )}
           </div>
-          <div className="space-y-2">
+          <div className="space-y-1">
             {agentList.length === 0 ? (
-              <div className="py-2 text-sm text-text-muted">
+              <div className="py-1 text-[11px] text-text-dim">
                 No agents active
               </div>
             ) : (
               agentList.map((agent) => (
                 <div
                   key={agent.id}
-                  className="flex items-center justify-between rounded-lg border border-white/6 bg-background-floating/42 px-3 py-2 text-sm"
+                  className="flex items-center justify-between rounded-md bg-background-floating/40 px-2.5 py-1.5 text-[12px]"
                 >
-                  <div className="flex min-w-0 items-center gap-2.5">
+                  <div className="flex min-w-0 items-center gap-2">
                     <div
-                      className={`h-2.5 w-2.5 shrink-0 rounded-full ${
+                      className={`h-2 w-2 shrink-0 rounded-full ${
                         agent.isStreaming
-                          ? "bg-accent-green shadow-[0_0_14px_rgba(16,185,129,0.55)]"
+                          ? "bg-accent-cyan shadow-[0_0_6px_rgba(34,211,238,0.5)]"
                           : "bg-status-offline"
                       }`}
                     />
-                    <span className="truncate font-medium text-text-primary">
+                    <span className="truncate font-medium text-text-secondary">
                       {agent.name}
                     </span>
                   </div>
                   {agent.isStreaming ? (
-                    <div className="flex items-center gap-1 text-[10px] font-semibold tracking-[0.12em] text-accent-green">
-                      <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent-green" />
+                    <div className="flex items-center gap-1 text-[9px] font-semibold tracking-[0.12em] text-accent-cyan">
+                      <span className="h-1 w-1 animate-pulse rounded-full bg-accent-cyan" />
                       LIVE
                     </div>
                   ) : (
-                    <span className="text-[10px] font-semibold tracking-[0.12em] text-text-dim">
+                    <span className="text-[9px] font-semibold tracking-[0.12em] text-text-dim">
                       IDLE
                     </span>
                   )}
@@ -180,106 +163,71 @@ export function RightPanel() {
           </div>
         </div>
 
-        <div className="chrome-card rounded-lg p-4">
-          <div className="mb-4 flex items-center gap-2 border-b border-border/60 pb-3 text-[11px] font-semibold tracking-[0.12em] text-text-muted">
-            <Zap className="h-4 w-4 text-accent-green" />
-            TASKS
-            <span className="ml-1 font-normal normal-case tracking-normal text-text-dim">
-              (Coming Soon)
-            </span>
-          </div>
-          <div className="space-y-3">
-            {taskList.length === 0 ? (
-              <div className="text-sm text-text-muted">
-                No thinking steps configured
-              </div>
-            ) : (
-              taskList.map((task, i) => (
+        {taskList.length > 0 && (
+          <div className="rounded-md p-3">
+            <div className="mb-3 flex items-center gap-2 text-[10px] font-semibold tracking-[0.14em] text-text-dim">
+              <Zap className="h-3.5 w-3.5" />
+              TASKS
+            </div>
+            <div className="space-y-1.5">
+              {taskList.map((task, i) => (
                 <div
                   key={`${task.agentName}-${task.label}-${i}`}
-                  className="rounded-lg border border-white/6 bg-background-floating/34 px-3 py-2.5"
+                  className="rounded-md bg-background-floating/40 px-2.5 py-2"
                 >
                   <div
-                    className={`text-sm font-medium ${
-                      task.isActive ? "text-text-primary" : "text-text-muted"
+                    className={`text-[12px] font-medium ${
+                      task.isActive ? "text-text-secondary" : "text-text-muted"
                     }`}
                   >
                     {task.label}
                   </div>
-                  <div className="mt-1 text-[11px] text-text-muted">
+                  <div className="mt-1 text-[10px] text-text-dim">
                     @{task.agentName.toLowerCase()}{" "}
                     {task.isActive ? "- active" : "- ready"}
                   </div>
                   {task.isActive && (
-                    <div className="mt-3 h-1 overflow-hidden rounded-full bg-background-tertiary">
+                    <div className="mt-2 h-0.5 overflow-hidden rounded-full bg-background-primary">
                       <div
-                        className="h-full rounded-full bg-accent-green"
+                        className="h-full rounded-full bg-accent-cyan"
                         style={{ width: "60%" }}
                       />
                     </div>
                   )}
                 </div>
-              ))
-            )}
+              ))}
+            </div>
           </div>
-        </div>
+        )}
 
-        <div className="chrome-card rounded-lg p-4">
-          <div className="mb-4 flex items-center gap-2 border-b border-border/60 pb-3 text-[11px] font-semibold tracking-[0.12em] text-text-muted">
-            <Users className="h-4 w-4 text-accent-cyan" />
+        <div className="rounded-md p-3">
+          <div className="mb-3 flex items-center gap-2 text-[10px] font-semibold tracking-[0.14em] text-text-dim">
+            <Users className="h-3.5 w-3.5" />
             MEMBERS
           </div>
-          <div className="space-y-2">
+          <div className="space-y-1">
             {members.length === 0 ? (
-              <div className="text-sm text-text-muted">No members</div>
+              <div className="text-[11px] text-text-dim">No members</div>
             ) : (
               members.map((member) => {
                 const isOwner = member.userId === currentServerOwnerId;
                 return (
                   <div
                     key={member.userId}
-                    className="flex items-center gap-2.5 rounded-lg border border-white/6 bg-background-floating/34 px-3 py-2 text-sm"
+                    className="flex items-center gap-2 rounded-md bg-background-floating/40 px-2.5 py-1.5 text-[12px]"
                   >
-                    <div className="h-2 w-2 shrink-0 rounded-full bg-accent-green shadow-[0_0_12px_rgba(16,185,129,0.45)]" />
-                    <span className="truncate font-medium text-text-primary">
+                    <div className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent-green shadow-[0_0_6px_rgba(34,197,94,0.4)]" />
+                    <span className="truncate font-medium text-text-secondary">
                       {member.displayName}
                     </span>
                     {isOwner && (
-                      <span className="ml-auto shrink-0 rounded-full border border-brand/20 bg-brand/10 px-2 py-0.5 text-[10px] font-semibold text-white">
+                      <span className="ml-auto shrink-0 rounded px-1.5 py-0.5 text-[9px] font-medium bg-brand/8 text-brand">
                         Owner
                       </span>
                     )}
                   </div>
                 );
               })
-            )}
-          </div>
-        </div>
-
-        <div className="chrome-card rounded-lg p-4">
-          <div className="mb-4 flex items-center gap-2 border-b border-border/60 pb-3 text-[11px] font-semibold tracking-[0.12em] text-text-muted">
-            <Cpu className="h-4 w-4 text-brand" />
-            MODELS
-          </div>
-          <div className="space-y-2 text-sm">
-            {modelList.length === 0 ? (
-              <div className="text-sm text-text-muted">
-                No models configured
-              </div>
-            ) : (
-              modelList.map(({ model, agentName }) => (
-                <div
-                  key={model}
-                  className="flex items-center justify-between rounded-lg border border-white/6 bg-background-floating/34 px-3 py-2"
-                >
-                  <span className="truncate font-mono text-xs text-text-secondary">
-                    {model}
-                  </span>
-                  <span className="ml-2 shrink-0 text-[11px] font-medium text-text-muted">
-                    {agentName}
-                  </span>
-                </div>
-              ))
             )}
           </div>
         </div>

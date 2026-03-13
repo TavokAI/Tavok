@@ -218,24 +218,13 @@ export function OnboardingFlow() {
         {step === "welcome" && (
           <form onSubmit={handleCreateServer} className="space-y-6">
             <div className="text-center">
-              <div className="mx-auto mb-5 flex h-[72px] w-[72px] items-center justify-center rounded-lg border border-brand/20 bg-brand/10 text-brand">
-                <svg
-                  width="34"
-                  height="34"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                >
-                  <path d="M12 2L2 7l10 5 10-5-10-5z" />
-                  <path d="M2 17l10 5 10-5" />
-                  <path d="M2 12l10 5 10-5" />
-                </svg>
+              <div className="mb-4 font-display text-sm font-bold tracking-[0.18em] text-brand">
+                TAVOK
               </div>
-              <h1 className="font-display text-3xl font-semibold text-white">
-                Welcome to Tavok
+              <h1 className="font-display text-2xl font-semibold text-text-primary">
+                Welcome
               </h1>
-              <p className="mt-2 text-sm text-text-muted">
+              <p className="mt-2 text-[12.5px] text-text-muted">
                 Create your first server to get started.
               </p>
             </div>
@@ -273,16 +262,16 @@ export function OnboardingFlow() {
               </p>
             </div>
 
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               {/* BYOK Path */}
               <button
                 onClick={() => setStep("byok")}
-                className="group flex flex-col items-start gap-3 rounded-lg border border-background-tertiary bg-background-floating p-5 text-left transition hover:border-accent-cyan hover:bg-background-floating/80"
+                className="group flex flex-col items-start gap-3 rounded-lg border border-white/[0.04] bg-background-floating p-5 text-left transition hover:border-white/[0.08] hover:bg-background-elevated/40"
               >
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-600/20 text-emerald-400">
+                <div className="flex h-9 w-9 items-center justify-center rounded-md bg-brand/8 text-brand">
                   <svg
-                    width="20"
-                    height="20"
+                    width="18"
+                    height="18"
                     viewBox="0 0 16 16"
                     fill="currentColor"
                   >
@@ -290,10 +279,10 @@ export function OnboardingFlow() {
                   </svg>
                 </div>
                 <div>
-                  <h3 className="text-sm font-semibold text-white">
+                  <h3 className="text-[13px] font-semibold text-text-primary">
                     I have an API key
                   </h3>
-                  <p className="mt-1 text-xs leading-relaxed text-text-muted">
+                  <p className="mt-1 text-[11px] leading-relaxed text-text-muted">
                     Connect to OpenAI, Anthropic, Gemini, or any provider.
                     Fastest path — streaming in 30 seconds.
                   </p>
@@ -304,12 +293,12 @@ export function OnboardingFlow() {
               <button
                 onClick={handleCreateSdkAgent}
                 disabled={loading}
-                className="group flex flex-col items-start gap-3 rounded-lg border border-background-tertiary bg-background-floating p-5 text-left transition hover:border-accent-cyan hover:bg-background-floating/80 disabled:opacity-50"
+                className="group flex flex-col items-start gap-3 rounded-lg border border-white/[0.04] bg-background-floating p-5 text-left transition hover:border-white/[0.08] hover:bg-background-elevated/40 disabled:opacity-50"
               >
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent-cyan/20 text-accent-cyan">
+                <div className="flex h-9 w-9 items-center justify-center rounded-md bg-accent-cyan/[0.06] text-accent-cyan">
                   <svg
-                    width="20"
-                    height="20"
+                    width="18"
+                    height="18"
                     viewBox="0 0 16 16"
                     fill="currentColor"
                   >
@@ -317,10 +306,10 @@ export function OnboardingFlow() {
                   </svg>
                 </div>
                 <div>
-                  <h3 className="text-sm font-semibold text-white">
+                  <h3 className="text-[13px] font-semibold text-text-primary">
                     {loading ? "Creating agent..." : "I'm building my own"}
                   </h3>
-                  <p className="mt-1 text-xs leading-relaxed text-text-muted">
+                  <p className="mt-1 text-[11px] leading-relaxed text-text-muted">
                     Get SDK credentials and a Python snippet. Bring LangGraph,
                     CrewAI, or any framework.
                   </p>

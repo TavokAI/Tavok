@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { usePathname, useRouter } from "next/navigation";
@@ -419,7 +419,7 @@ export function ChatPanel({ panel }: ChatPanelProps) {
   return (
     <div
       onMouseDown={focusAndSyncRoute}
-      className="chrome-panel absolute flex flex-col overflow-hidden rounded-lg border border-white/10"
+      className="scanline absolute flex flex-col overflow-hidden rounded-lg border border-white/[0.04] bg-background-floating panel-shadow"
       style={{
         left: panel.x,
         top: panel.y,
@@ -431,13 +431,13 @@ export function ChatPanel({ panel }: ChatPanelProps) {
       {/* Titlebar */}
       <div
         onMouseDown={handleMouseDownDrag}
-        className={`flex h-[44px] shrink-0 items-center justify-between border-b border-border bg-background-secondary px-4 ${
+        className={`flex h-[40px] shrink-0 items-center justify-between border-b border-white/[0.04] bg-background-elevated px-3 ${
           panel.isMaximized
             ? "cursor-default"
             : "cursor-grab active:cursor-grabbing"
         }`}
       >
-        <div className="flex items-center gap-3.5">
+        <div className="flex items-center gap-3">
           {osVariant === "mac" && (
             <div
               onMouseDown={(e) => e.stopPropagation()}
@@ -445,103 +445,103 @@ export function ChatPanel({ panel }: ChatPanelProps) {
             >
               <button
                 onClick={handleClosePanel}
-                className="h-3 w-3 rounded-full bg-status-dnd opacity-70 transition-opacity hover:opacity-100"
+                className="h-3 w-3 rounded-full bg-status-dnd opacity-60 transition-opacity hover:opacity-100"
                 aria-label="Close panel"
               />
               <button
                 onClick={handleMinimizePanel}
-                className="h-3 w-3 rounded-full bg-brand opacity-70 transition-opacity hover:opacity-100"
+                className="h-3 w-3 rounded-full bg-brand opacity-60 transition-opacity hover:opacity-100"
                 aria-label="Minimize panel"
               />
               <button
                 onClick={handleToggleMaximize}
-                className="h-3 w-3 rounded-full bg-status-online opacity-70 transition-opacity hover:opacity-100"
+                className="h-3 w-3 rounded-full bg-status-online opacity-60 transition-opacity hover:opacity-100"
                 aria-label={
                   panel.isMaximized ? "Restore panel" : "Maximize panel"
                 }
               />
             </div>
           )}
-          <span className="flex items-center gap-1.5 font-display text-sm font-semibold text-white select-none">
-            <Hash className="h-3.5 w-3.5" />
+          <span className="flex items-center gap-1.5 font-display text-[13px] font-semibold text-text-primary select-none">
+            <Hash className="h-3.5 w-3.5 text-text-dim" />
             {panel.channelName}
           </span>
           {panelServerName && (
-            <span className="rounded-full border border-white/6 bg-background-tertiary/45 px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.16em] text-text-muted select-none">
-              @{panelServerName}
+            <span className="text-[11px] text-text-muted select-none">
+              · {panelServerName}
             </span>
           )}
           {hasPermission(Permissions.MANAGE_CHANNELS) && (
             <button
               onMouseDown={(e) => e.stopPropagation()}
               onClick={() => setShowChannelSettings(true)}
-              className="ml-1 rounded-lg p-1 text-text-dim transition-colors hover:bg-background-tertiary/55 hover:text-text-primary"
+              className="rounded p-1 text-text-dim transition-colors hover:text-text-muted"
               title="Channel Settings"
             >
-              <Settings2 className="h-3.5 w-3.5" />
+              <Settings2 className="h-3 w-3" />
             </button>
           )}
           {/* TASK-0022: Search toggle */}
           <button
             onMouseDown={(e) => e.stopPropagation()}
             onClick={() => setIsSearchOpen((prev) => !prev)}
-            className={`ml-1 rounded-lg p-1 transition-colors ${
+            className={`rounded p-1 transition-colors ${
               isSearchOpen
-                ? "bg-background-tertiary text-text-primary"
-                : "text-text-dim hover:bg-background-tertiary/55 hover:text-text-primary"
+                ? "text-text-primary"
+                : "text-text-dim hover:text-text-muted"
             }`}
             data-testid="search-toggle-btn"
             aria-label="Search messages"
             title="Search messages"
           >
-            <Search className="h-3.5 w-3.5" />
+            <Search className="h-3 w-3" />
           </button>
         </div>
-        <div className="flex items-center gap-2.5 text-xs select-none">
+        <div className="flex items-center gap-2 text-[10px] select-none">
           {hasActiveStream ? (
-            <div className="flex items-center gap-1.5 rounded-full border border-accent-green/20 bg-accent-green/10 px-2.5 py-1 font-semibold tracking-[0.16em] text-accent-green">
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-accent-cyan opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-accent-cyan"></span>
+            <div className="flex items-center gap-1.5 font-semibold tracking-[0.12em] text-accent-cyan">
+              <span className="relative flex h-1.5 w-1.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-accent-cyan opacity-60"></span>
+                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-accent-cyan shadow-[0_0_6px_rgba(34,211,238,0.5)]"></span>
               </span>
               LIVE
             </div>
           ) : (
-            <span className="rounded-full border border-white/8 bg-background-tertiary/45 px-2.5 py-1 font-semibold tracking-[0.16em] text-text-dim">
+            <span className="font-semibold tracking-[0.12em] text-text-dim">
               IDLE
             </span>
           )}
           {osVariant === "windows" && (
             <div
               onMouseDown={(e) => e.stopPropagation()}
-              className="ml-1 flex items-center overflow-hidden rounded-lg border border-white/10 bg-background-tertiary/48"
+              className="ml-1 flex items-center"
             >
               <button
                 onClick={handleMinimizePanel}
-                className="flex h-7 w-8 items-center justify-center text-text-secondary transition hover:bg-background-primary/70 hover:text-text-primary"
+                className="flex h-6 w-7 items-center justify-center text-text-dim transition hover:text-text-muted"
                 aria-label="Minimize panel"
               >
-                <Minus className="h-3 w-3" />
+                <Minus className="h-2.5 w-2.5" />
               </button>
               <button
                 onClick={handleToggleMaximize}
-                className="flex h-7 w-8 items-center justify-center text-text-secondary transition hover:bg-background-primary/70 hover:text-text-primary"
+                className="flex h-6 w-7 items-center justify-center text-text-dim transition hover:text-text-muted"
                 aria-label={
                   panel.isMaximized ? "Restore panel" : "Maximize panel"
                 }
               >
                 {panel.isMaximized ? (
-                  <Minimize2 className="h-3 w-3" />
+                  <Minimize2 className="h-2.5 w-2.5" />
                 ) : (
-                  <Maximize2 className="h-3 w-3" />
+                  <Maximize2 className="h-2.5 w-2.5" />
                 )}
               </button>
               <button
                 onClick={handleClosePanel}
-                className="flex h-7 w-8 items-center justify-center text-text-secondary transition hover:bg-status-dnd hover:text-white"
+                className="flex h-6 w-7 items-center justify-center text-text-dim transition hover:text-status-dnd"
                 aria-label="Close panel"
               >
-                <X className="h-3 w-3" />
+                <X className="h-2.5 w-2.5" />
               </button>
             </div>
           )}
@@ -549,7 +549,7 @@ export function ChatPanel({ panel }: ChatPanelProps) {
       </div>
 
       {/* Content */}
-      <div className="relative flex flex-1 flex-col overflow-hidden bg-background-primary">
+      <div className="relative flex flex-1 flex-col overflow-hidden bg-background-floating">
         {/* TASK-0020: Charter header — only shown when charter has non-default state */}
         {charterState && charterState.swarmMode !== "HUMAN_IN_THE_LOOP" && (
           <ChannelHeader
@@ -613,7 +613,7 @@ export function ChatPanel({ panel }: ChatPanelProps) {
               : "CONNECTING TO CHANNEL GATEWAY..."}
           </div>
         )}
-        <div className="mt-auto border-t border-white/8 bg-background-secondary/58 pt-2">
+        <div className="mt-auto border-t border-white/[0.03] pt-2">
           <MessageInput
             onSend={sendMessage}
             onTyping={sendTyping}

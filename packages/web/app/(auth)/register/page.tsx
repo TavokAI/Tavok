@@ -85,9 +85,10 @@ function RegisterForm() {
   }
 
   return (
-    <div className="rounded-lg border border-border/80 bg-background-floating p-8 shadow-xl">
+    <div className="rounded-lg border border-white/[0.04] bg-background-floating p-8 panel-shadow">
       <div className="mb-6 text-center">
-        <h1 className="text-2xl font-bold text-text-primary">
+        <div className="mb-3 font-display text-sm font-bold tracking-[0.18em] text-brand">TAVOK</div>
+        <h1 className="text-xl font-semibold text-text-primary">
           Create an account
         </h1>
       </div>

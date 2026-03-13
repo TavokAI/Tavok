@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import React, { useMemo } from "react";
 import { useWorkspaceContext } from "@/components/providers/workspace-provider";
@@ -17,31 +17,31 @@ export function BottomBar() {
   }, [panels]);
 
   return (
-    <div className="chrome-panel col-span-3 flex h-[44px] items-center justify-between rounded-lg px-4 text-[13px] font-medium text-text-muted">
-      <div className="flex items-center gap-6">
-        <div className="flex cursor-pointer items-center gap-2 text-text-secondary transition-colors hover:text-text-primary">
-          <div className="h-2 w-2 rounded-full bg-accent-green shadow-[0_0_12px_rgba(16,185,129,0.5)]" />
+    <div className="chrome-panel col-span-3 flex items-center justify-between px-4 text-[10px] font-medium text-text-dim">
+      <div className="flex items-center gap-5">
+        <div className="flex items-center gap-1.5">
+          <div className="h-1.5 w-1.5 rounded-full bg-accent-green shadow-[0_0_6px_rgba(34,197,94,0.4)]" />
           4 services healthy
         </div>
-        <div className="flex items-center gap-2 text-text-dim">
-          <Activity className="h-3.5 w-3.5 text-accent-cyan" />
+        <div className="flex items-center gap-1.5">
+          <Activity className="h-3 w-3 text-accent-cyan" />
           {activeStreams.size} active streams
         </div>
-        <div className="flex items-center gap-2 text-text-dim">
-          <Box className="h-3.5 w-3.5" />
+        <div className="flex items-center gap-1.5">
+          <Box className="h-3 w-3" />
           {openCount} panels / {minimizedCount} minimized
         </div>
       </div>
-      <div className="flex items-center gap-6 text-text-dim">
-        <div className="flex cursor-pointer items-center gap-1.5 transition-colors hover:text-text-primary">
-          <Database className="h-3.5 w-3.5" />
+      <div className="flex items-center gap-5">
+        <div className="flex items-center gap-1.5">
+          <Database className="h-3 w-3" />
           PostgreSQL 16
         </div>
-        <div className="flex cursor-pointer items-center gap-1.5 transition-colors hover:text-text-primary">
-          <Server className="h-3.5 w-3.5" />
+        <div className="flex items-center gap-1.5">
+          <Server className="h-3 w-3" />
           Redis 7
         </div>
-        <div className="rounded-full border border-white/5 bg-background-tertiary/50 px-2.5 py-1 font-mono text-xs text-text-secondary">
+        <div className="text-[9px] tracking-[0.1em] text-text-dim">
           v1.0.0
         </div>
       </div>

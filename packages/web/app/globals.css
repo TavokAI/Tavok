@@ -1,23 +1,27 @@
-﻿@tailwind base;
+@tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
   :root {
-    --background-primary: #0a0a0a;
-    --background-secondary: #111111;
-    --background-tertiary: #0a0a0a;
-    --background-floating: #161616;
-    --border-default: rgba(255, 255, 255, 0.1);
-    --border-bright: rgba(255, 255, 255, 0.2);
-    --text-primary: #ffffff;
-    --text-secondary: #a1a1aa;
-    --text-muted: #71717a;
-    --text-dim: #52525b;
-    --text-link: #10b981;
-    --brand: #10b981;
-    --brand-hover: #34d399;
-    --brand-glow: rgba(16, 185, 129, 0.1);
+    --background-primary: #050505;
+    --background-secondary: #0c0c0c;
+    --background-tertiary: #050505;
+    --background-floating: #141414;
+    --background-elevated: #1c1c1c;
+    --border-default: rgba(255, 255, 255, 0.04);
+    --border-bright: rgba(255, 255, 255, 0.08);
+    --text-primary: #f5f5f5;
+    --text-secondary: #a3a3a3;
+    --text-muted: #666666;
+    --text-dim: #444444;
+    --text-link: #22d3ee;
+    --brand: #e8a830;
+    --brand-hover: #f0b844;
+    --brand-glow: rgba(232, 168, 48, 0.08);
+    --streaming: #22d3ee;
+    --streaming-glow: rgba(34, 211, 238, 0.04);
+    --streaming-dim: #0e7490;
   }
 
   .light {
@@ -25,20 +29,25 @@
     --background-secondary: #f4f4f5;
     --background-tertiary: #e4e4e7;
     --background-floating: #ffffff;
-    --border-default: rgba(0, 0, 0, 0.1);
-    --border-bright: rgba(0, 0, 0, 0.2);
+    --background-elevated: #f9f9f9;
+    --border-default: rgba(0, 0, 0, 0.08);
+    --border-bright: rgba(0, 0, 0, 0.14);
     --text-primary: #18181b;
     --text-secondary: #3f3f46;
     --text-muted: #71717a;
     --text-dim: #a1a1aa;
-    --text-link: #059669;
-    --brand: #059669;
-    --brand-hover: #10b981;
-    --brand-glow: rgba(5, 150, 105, 0.1);
+    --text-link: #0e7490;
+    --brand: #d49725;
+    --brand-hover: #e8a830;
+    --brand-glow: rgba(212, 151, 37, 0.1);
+    --streaming: #0891b2;
+    --streaming-glow: rgba(8, 145, 178, 0.06);
+    --streaming-dim: #155e75;
   }
 
   html {
     color-scheme: dark;
+    background: #000;
   }
 
   * {
@@ -49,53 +58,85 @@
     min-height: 100vh;
     background-color: var(--background-tertiary);
     color: var(--text-primary);
-    font-family: var(--font-sans), sans-serif;
+    font-family: var(--font-mono), monospace;
   }
 
   button,
   input,
   textarea {
     transition:
-      color 160ms ease,
-      background-color 160ms ease,
-      border-color 160ms ease,
-      box-shadow 160ms ease,
-      opacity 160ms ease;
+      color 150ms ease,
+      background-color 150ms ease,
+      border-color 150ms ease,
+      box-shadow 150ms ease,
+      opacity 150ms ease;
   }
 
   ::selection {
-    background: rgba(16, 185, 129, 0.3);
+    background: rgba(232, 168, 48, 0.3);
     color: #ffffff;
   }
 }
 
 @layer components {
   .app-shell {
-    background-color: var(--background-primary);
+    background-color: #000;
   }
 
   .chrome-panel {
     background: var(--background-secondary);
-    border: 1px solid var(--border-default);
   }
 
   .chrome-card {
-    background: var(--background-secondary);
-    border: 1px solid var(--border-default);
+    background: var(--background-floating);
+    border: 1px solid rgba(255, 255, 255, 0.04);
   }
 
   .chrome-pill {
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid var(--border-default);
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.04);
+  }
+
+  .workspace-floor {
+    background-color: var(--background-primary);
+    background-image: radial-gradient(
+      rgba(255, 255, 255, 0.015) 1px,
+      transparent 1px
+    );
+    background-size: 20px 20px;
+  }
+
+  .panel-shadow {
+    box-shadow:
+      0 0 0 1px rgba(255, 255, 255, 0.04),
+      0 8px 24px rgba(0, 0, 0, 0.4),
+      0 20px 48px rgba(0, 0, 0, 0.3);
+  }
+
+  .panel-shadow-focused {
+    box-shadow:
+      0 0 0 1px rgba(255, 255, 255, 0.06),
+      0 12px 32px rgba(0, 0, 0, 0.5),
+      0 24px 56px rgba(0, 0, 0, 0.35);
+  }
+
+  .scanline::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      rgba(18, 16, 16, 0) 50%,
+      rgba(0, 0, 0, 0.04) 50%
+    );
+    background-size: 100% 2px;
+    pointer-events: none;
+    border-radius: inherit;
   }
 }
 
-/* workspace-root: no ambient glow — clean flat background */
-
-/* Scrollbar Styling */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
@@ -103,10 +144,30 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  background-color: rgba(255, 255, 255, 0.15);
+  background-color: rgba(255, 255, 255, 0.08);
   border-radius: 999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background-color: rgba(255, 255, 255, 0.25);
+  background-color: rgba(255, 255, 255, 0.15);
+}
+
+@keyframes cursor-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+
+.streaming-cursor {
+  display: inline-block;
+  width: 2px;
+  height: 14px;
+  background: #22d3ee;
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  animation: cursor-blink 0.8s infinite;
 }

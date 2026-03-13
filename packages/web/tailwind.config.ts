@@ -1,4 +1,4 @@
-﻿import type { Config } from "tailwindcss";
+import type { Config } from "tailwindcss";
 
 const config: Config = {
   darkMode: "class",
@@ -11,6 +11,7 @@ const config: Config = {
           secondary: "var(--background-secondary)",
           tertiary: "var(--background-tertiary)",
           floating: "var(--background-floating)",
+          elevated: "var(--background-elevated)",
         },
         border: {
           DEFAULT: "var(--border-default)",
@@ -29,25 +30,25 @@ const config: Config = {
           glow: "var(--brand-glow)",
         },
         accent: {
-          cyan: "#10b981",
-          "cyan-dim": "#064e3b",
-          "cyan-glow": "rgba(16, 185, 129, 0.1)",
-          green: "#10b981",
-          "green-dim": "#064e3b",
+          cyan: "#22d3ee",
+          "cyan-dim": "#0e7490",
+          "cyan-glow": "rgba(34, 211, 238, 0.04)",
+          green: "#22c55e",
+          "green-dim": "#166534",
           red: "#ef4444",
-          orange: "#f59e0b",
-          purple: "#8b5cf6",
-          agent: "#34d399",
+          orange: "#f97316",
+          purple: "#a78bfa",
+          agent: "#22d3ee",
         },
         status: {
-          online: "#10b981",
+          online: "#22c55e",
           idle: "#f59e0b",
           dnd: "#ef4444",
           offline: "#52525b",
-          streaming: "#10b981",
+          streaming: "#22d3ee",
           error: "#ef4444",
           warning: "#f59e0b",
-          success: "#10b981",
+          success: "#22c55e",
         },
       },
       fontFamily: {

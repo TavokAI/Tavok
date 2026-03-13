@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import {
   useState,
@@ -462,7 +462,7 @@ export function MessageInput({
           ))}
         </div>
       )}
-      <div className="relative mt-1 flex items-end gap-3 rounded-lg border border-white/10 bg-background-secondary px-4 py-3">
+      <div className="relative mt-1 flex items-end gap-3 rounded-lg border border-white/[0.04] bg-background-primary px-4 py-3 transition-colors focus-within:border-brand/20">
         <MentionAutocomplete
           query={mentionQuery}
           options={mentionOptions}
@@ -502,9 +502,6 @@ export function MessageInput({
           )}
         </button>
         <div className="flex min-h-[24px] flex-1 items-end">
-          <span className="mb-[5px] mr-1.5 select-none text-sm leading-none text-brand opacity-90">
-            &#9658;
-          </span>
           <textarea
             ref={textareaRef}
             value={value}
@@ -517,7 +514,7 @@ export function MessageInput({
               channelName ? `Message #${channelName}` : "Type here..."
             }
             rows={1}
-            className="max-h-[200px] flex-1 resize-none bg-transparent py-0.5 text-sm leading-7 text-text-primary placeholder:text-text-dim outline-none"
+            className="max-h-[200px] flex-1 resize-none bg-transparent py-0.5 text-[12px] leading-[1.65] text-text-primary placeholder:text-text-dim outline-none"
           />
         </div>
         <button

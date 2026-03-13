@@ -48,7 +48,7 @@ export function Modal({
       }}
     >
       <div
-        className={`w-full ${size === "wide" ? "max-w-2xl" : "max-w-md"} rounded-lg bg-background-floating p-6 shadow-xl`}
+        className={`w-full ${size === "wide" ? "max-w-2xl" : "max-w-md"} rounded-lg border border-white/[0.04] bg-background-floating p-6 panel-shadow`}
       >
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-xl font-bold text-text-primary">{title}</h2>

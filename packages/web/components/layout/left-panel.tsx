@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useState } from "react";
 import Image from "next/image";
@@ -49,57 +49,57 @@ export function LeftPanel() {
 
   return (
     <>
-      <div className="chrome-panel flex h-full flex-col rounded-lg overflow-hidden">
-        <div className="border-b border-border/60 px-3 pb-3 pt-3">
+      <div className="chrome-panel flex h-full flex-col overflow-hidden">
+        <div className="px-3 pb-2 pt-3">
           <div
             role="tablist"
-            className="grid h-[44px] grid-cols-3 gap-1 rounded-lg border border-white/5 bg-background-tertiary/55 p-1"
+            className="grid h-[36px] grid-cols-3 gap-1 rounded-md bg-background-primary/60 p-0.5"
           >
             <button
               role="tab"
               aria-selected={activeTab === "servers"}
               onClick={() => setActiveTab("servers")}
-              className={`flex items-center justify-center gap-1.5 rounded-lg text-[11px] font-semibold tracking-[0.08em] transition-all ${
+              className={`flex items-center justify-center gap-1.5 rounded text-[10px] font-semibold tracking-[0.1em] transition-all ${
                 activeTab === "servers"
-                  ? "border border-brand/20 bg-brand/10 text-white "
-                  : "text-text-muted hover:bg-background-floating/60 hover:text-text-primary"
+                  ? "bg-brand/8 text-brand"
+                  : "text-text-muted hover:text-text-secondary"
               }`}
             >
-              <ServerIcon className="h-3.5 w-3.5" />
+              <ServerIcon className="h-3 w-3" />
               SERVERS
             </button>
             <button
               role="tab"
               aria-selected={activeTab === "channels"}
               onClick={() => setActiveTab("channels")}
-              className={`flex items-center justify-center gap-1.5 rounded-lg text-[11px] font-semibold tracking-[0.08em] transition-all ${
+              className={`flex items-center justify-center gap-1.5 rounded text-[10px] font-semibold tracking-[0.1em] transition-all ${
                 activeTab === "channels"
-                  ? "border border-brand/20 bg-brand/10 text-white "
-                  : "text-text-muted hover:bg-background-floating/60 hover:text-text-primary"
+                  ? "bg-brand/8 text-brand"
+                  : "text-text-muted hover:text-text-secondary"
               }`}
             >
-              <Hash className="h-3.5 w-3.5" />
+              <Hash className="h-3 w-3" />
               CHANNELS
             </button>
             <button
               role="tab"
               aria-selected={activeTab === "messages"}
               onClick={() => setActiveTab("messages")}
-              className={`flex items-center justify-center gap-1.5 rounded-lg text-[11px] font-semibold tracking-[0.08em] transition-all ${
+              className={`flex items-center justify-center gap-1.5 rounded text-[10px] font-semibold tracking-[0.1em] transition-all ${
                 activeTab === "messages"
-                  ? "border border-brand/20 bg-brand/10 text-white "
-                  : "text-text-muted hover:bg-background-floating/60 hover:text-text-primary"
+                  ? "bg-brand/8 text-brand"
+                  : "text-text-muted hover:text-text-secondary"
               }`}
             >
-              <MessageSquare className="h-3.5 w-3.5" />
+              <MessageSquare className="h-3 w-3" />
               DMs
             </button>
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-3.5 py-3">
+        <div className="flex-1 overflow-y-auto px-2 py-2">
           {activeTab === "servers" ? (
-            <div className="space-y-1.5">
+            <div className="space-y-0.5">
               {servers.map((server) => {
                 const isActive = currentServerId === server.id;
                 return (
@@ -109,21 +109,21 @@ export function LeftPanel() {
                       router.push(`/servers/${server.id}`);
                       setActiveTab("channels");
                     }}
-                    className={`flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-sm font-medium transition-all ${
+                    className={`flex w-full items-center gap-3 rounded-md px-2.5 py-2 text-[12px] font-medium transition-all ${
                       isActive
-                        ? "border-brand/30 bg-brand/10 text-white "
-                        : "border-transparent text-text-secondary hover:border-white/5 hover:bg-background-floating/55 hover:text-text-primary"
+                        ? "bg-brand/6 text-text-primary"
+                        : "text-text-muted hover:bg-white/[0.02] hover:text-text-secondary"
                     }`}
                   >
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-white/10 bg-background-floating text-xs font-bold text-text-primary ">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-md bg-background-floating text-[11px] font-bold text-text-secondary">
                       {server.iconUrl ? (
                         <Image
                           src={server.iconUrl}
                           alt=""
                           loader={passthroughImageLoader}
                           unoptimized
-                          width={36}
-                          height={36}
+                          width={32}
+                          height={32}
                           className="h-full w-full object-cover"
                         />
                       ) : (
@@ -134,35 +134,35 @@ export function LeftPanel() {
                   </button>
                 );
               })}
-              <div className="mt-3 border-t border-border/50 pt-3">
+              <div className="mt-3 pt-2">
                 <button
                   onClick={() => setShowCreateServer(true)}
-                  className="flex w-full items-center gap-3 rounded-lg border border-dashed border-white/10 px-3 py-2.5 text-sm font-medium text-text-muted transition-all hover:border-brand/20 hover:bg-background-floating/45 hover:text-text-primary"
+                  className="flex w-full items-center gap-3 rounded-md px-2.5 py-2 text-[12px] font-medium text-text-dim transition-all hover:bg-white/[0.02] hover:text-text-muted"
                 >
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-dashed border-current/50 bg-background-tertiary/60">
-                    <Plus className="h-4 w-4" />
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-dashed border-white/6 bg-background-primary/60">
+                    <Plus className="h-3.5 w-3.5" />
                   </div>
                   <span>New Server</span>
                 </button>
               </div>
             </div>
           ) : activeTab === "messages" ? (
-            <div className="space-y-1.5">
-              <div className="mb-3 flex items-center justify-between px-1">
-                <span className="text-[11px] font-semibold tracking-[0.12em] text-text-muted">
+            <div className="space-y-0.5">
+              <div className="mb-2 flex items-center justify-between px-2.5">
+                <span className="text-[10px] font-semibold tracking-[0.14em] text-text-dim">
                   DIRECT MESSAGES
                 </span>
-                <button className="rounded-lg p-1 text-text-muted hover:bg-background-floating/55 hover:text-text-primary">
+                <button className="rounded p-1 text-text-muted hover:bg-white/[0.04] hover:text-text-secondary">
                   <Plus className="h-3.5 w-3.5" />
                 </button>
               </div>
 
               {dmsLoading ? (
-                <div className="px-2 text-xs text-text-muted">Loading...</div>
+                <div className="px-2.5 text-[11px] text-text-dim">Loading...</div>
               ) : dmConversations.length === 0 ? (
-                <div className="rounded-lg border border-dashed border-white/10 bg-background-tertiary/45 px-3 py-5 text-center text-xs text-text-muted">
+                <div className="mx-2 rounded-md bg-background-primary/50 px-3 py-4 text-center text-[11px] text-text-dim">
                   No direct messages yet.
-                  <span className="mt-1 block text-text-dim">
+                  <span className="mt-1 block text-text-dim/60">
                     Click a member to start a conversation.
                   </span>
                 </div>
@@ -173,13 +173,13 @@ export function LeftPanel() {
                     <button
                       key={dm.id}
                       onClick={() => router.push(`/dms/${dm.id}`)}
-                      className={`flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-sm transition-all ${
+                      className={`flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-[12px] transition-all ${
                         isActive
-                          ? "border-brand/30 bg-brand/10 text-white "
-                          : "border-transparent text-text-secondary hover:border-white/5 hover:bg-background-floating/55 hover:text-text-primary"
+                          ? "bg-brand/6 text-text-primary"
+                          : "text-text-muted hover:bg-white/[0.02] hover:text-text-secondary"
                       }`}
                     >
-                      <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full border border-white/10 bg-background-floating text-xs font-bold text-text-primary ">
+                      <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-background-floating text-[11px] font-bold text-text-secondary">
                         {dm.otherUser.displayName.charAt(0).toUpperCase()}
                       </div>
                       <div className="min-w-0 flex-1 text-left">
@@ -187,7 +187,7 @@ export function LeftPanel() {
                           {dm.otherUser.displayName}
                         </div>
                         {dm.lastMessage && (
-                          <div className="mt-0.5 truncate text-xs text-text-muted">
+                          <div className="mt-0.5 truncate text-[11px] text-text-dim">
                             {dm.lastMessage.content}
                           </div>
                         )}
@@ -198,37 +198,37 @@ export function LeftPanel() {
               )}
             </div>
           ) : (
-            <div className="space-y-4">
+            <div>
               {currentServerId ? (
                 <div>
-                  <div className="mb-3 flex items-center justify-between px-1">
-                    <span className="truncate pr-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-text-muted">
+                  <div className="mb-2 flex items-center justify-between px-2.5">
+                    <span className="truncate pr-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-text-dim">
                       {currentServerName}
                     </span>
                     <div className="flex shrink-0 items-center gap-1">
                       {hasPermission(Permissions.MANAGE_CHANNELS) && (
                         <button
                           onClick={() => setShowCreateChannel(true)}
-                          className="rounded-lg p-1 text-text-muted transition-colors hover:bg-background-floating/60 hover:text-text-primary"
+                          className="rounded p-1.5 text-text-secondary transition-colors hover:bg-white/[0.06] hover:text-text-primary"
                           title="Create Channel"
                         >
-                          <Plus className="h-3.5 w-3.5" />
+                          <Plus className="h-4 w-4" />
                         </button>
                       )}
                       {(isOwner ||
                         hasPermission(Permissions.MANAGE_SERVER)) && (
                         <button
                           onClick={() => setShowServerSettings(true)}
-                          className="rounded-lg p-1 text-text-muted transition-colors hover:bg-background-floating/60 hover:text-text-primary"
+                          className="rounded p-1.5 text-text-secondary transition-colors hover:bg-white/[0.06] hover:text-text-primary"
                           title="Server Settings"
                           data-testid="server-settings-btn"
                         >
-                          <Settings2 className="h-3.5 w-3.5" />
+                          <Settings2 className="h-4 w-4" />
                         </button>
                       )}
                     </div>
                   </div>
-                  <div className="space-y-1.5">
+                  <div className="space-y-0.5">
                     {channels.map((channel) => {
                       const isOpen = openChannelIds.has(channel.id);
                       const isStreaming = activeStreams.has(channel.id);
@@ -248,20 +248,20 @@ export function LeftPanel() {
                               `/servers/${currentServerId}/channels/${channel.id}`,
                             );
                           }}
-                          className={`group flex w-full items-center justify-between rounded-lg border px-3 py-2 text-sm font-medium transition-all ${
+                          className={`group flex w-full items-center justify-between rounded-md px-2.5 py-1.5 text-[12px] font-medium transition-all ${
                             isOpen
-                              ? "border-brand/20 bg-brand/10 text-white "
+                              ? "bg-brand/6 text-text-primary"
                               : hasUnread
-                                ? "border-transparent text-text-primary hover:border-white/5 hover:bg-background-floating/55"
-                                : "border-transparent text-text-secondary hover:border-white/5 hover:bg-background-floating/55 hover:text-text-primary"
+                                ? "text-text-primary hover:bg-white/[0.02]"
+                                : "text-text-muted hover:bg-white/[0.02] hover:text-text-secondary"
                           }`}
                         >
-                          <div className="flex items-center gap-2.5 truncate">
+                          <div className="flex items-center gap-2 truncate">
                             <Hash
-                              className={`h-4 w-4 shrink-0 ${
+                              className={`h-3.5 w-3.5 shrink-0 ${
                                 isOpen
                                   ? "text-brand"
-                                  : "text-text-muted group-hover:text-text-primary"
+                                  : "text-text-dim group-hover:text-text-muted"
                               }`}
                             />
                             <span
@@ -271,26 +271,26 @@ export function LeftPanel() {
                             </span>
                           </div>
                           {isStreaming && (
-                            <span className="relative mr-1 flex h-2.5 w-2.5 shrink-0">
-                              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent-green opacity-75" />
-                              <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-accent-green shadow-[0_0_14px_rgba(16,185,129,0.55)]" />
+                            <span className="relative mr-0.5 flex h-2 w-2 shrink-0">
+                              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent-cyan opacity-60" />
+                              <span className="relative inline-flex h-2 w-2 rounded-full bg-accent-cyan shadow-[0_0_6px_rgba(34,211,238,0.5)]" />
                             </span>
                           )}
                         </button>
                       );
                     })}
                     {channels.length === 0 && (
-                      <div className="px-2 pt-2 text-sm text-text-muted">
+                      <div className="px-2.5 pt-2 text-[11px] text-text-dim">
                         No channels found
                       </div>
                     )}
                   </div>
                 </div>
               ) : (
-                <div className="rounded-lg border border-dashed border-white/10 bg-background-tertiary/45 px-4 py-8 text-center text-sm text-text-muted">
-                  <ServerIcon className="mx-auto mb-3 h-8 w-8 text-text-dim" />
+                <div className="mx-2 rounded-md bg-background-primary/50 px-3 py-6 text-center text-[12px] text-text-dim">
+                  <ServerIcon className="mx-auto mb-2 h-6 w-6 text-text-dim/60" />
                   Select a server from the{" "}
-                  <span className="font-semibold text-text-secondary">
+                  <span className="font-medium text-text-muted">
                     SERVERS
                   </span>{" "}
                   tab to view channels.

@@ -75,16 +75,15 @@ export function UserProfileButton() {
 
   return (
     <>
-      <div className="relative shrink-0 border-t border-border px-3 py-2">
+      <div className="relative shrink-0 px-3 py-2">
         <button
           ref={buttonRef}
           onClick={() => setShowPopover(!showPopover)}
-          className="flex w-full items-center gap-3 rounded-md px-2 py-1.5 transition-colors hover:bg-background-floating"
+          className="flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 transition-colors hover:bg-white/[0.02]"
           data-testid="user-profile-btn"
         >
-          {/* Circular avatar with status indicator */}
           <div className="relative">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand text-sm font-bold text-white overflow-hidden">
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-background-elevated text-[11px] font-semibold text-text-secondary overflow-hidden">
               {avatarUrl ? (
                 <Image
                   src={avatarUrl}
@@ -100,15 +99,14 @@ export function UserProfileButton() {
               )}
             </div>
             <div
-              className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-background-primary ${statusColor(currentStatus)}`}
+              className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-background-secondary ${statusColor(currentStatus)}`}
             />
           </div>
-          {/* Name + username */}
           <div className="min-w-0 flex-1 text-left">
-            <div className="truncate text-sm font-medium text-text-primary">
+            <div className="truncate text-[12px] font-medium text-text-secondary">
               {displayName}
             </div>
-            <div className="truncate text-xs text-text-muted">@{username}</div>
+            <div className="truncate text-[10px] text-text-dim">@{username}</div>
           </div>
         </button>
 
@@ -116,13 +114,13 @@ export function UserProfileButton() {
         {showPopover && (
           <div
             ref={popoverRef}
-            className="absolute bottom-full left-2 right-2 mb-2 rounded-lg border border-border bg-background-floating shadow-xl z-50"
+            className="absolute bottom-full left-2 right-2 mb-2 rounded-lg border border-white/[0.04] bg-background-floating panel-shadow z-50"
             data-testid="user-profile-popover"
           >
             {/* User info header */}
-            <div className="flex items-center gap-3 px-3 py-3 border-b border-border">
+            <div className="flex items-center gap-3 px-3 py-3 border-b border-white/[0.04]">
               <div className="relative">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand text-base font-bold text-white overflow-hidden">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-background-elevated text-[13px] font-semibold text-text-secondary overflow-hidden">
                   {avatarUrl ? (
                     <Image
                       src={avatarUrl}
@@ -152,7 +150,7 @@ export function UserProfileButton() {
             </div>
 
             {/* Status selector */}
-            <div className="p-1.5 border-b border-border">
+            <div className="p-1.5 border-b border-white/[0.04]">
               <p className="px-2.5 py-1 text-[10px] font-bold uppercase text-text-muted tracking-wide">
                 Status
               </p>
@@ -185,7 +183,7 @@ export function UserProfileButton() {
                 <Settings2 className="h-4 w-4" />
                 Edit Profile
               </button>
-              <div className="my-1 border-t border-border" />
+              <div className="my-1 border-t border-white/[0.04]" />
               <button
                 onClick={() => signOut({ callbackUrl: "/login" })}
                 className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-sm font-medium text-status-error transition-colors hover:bg-status-error/10"
