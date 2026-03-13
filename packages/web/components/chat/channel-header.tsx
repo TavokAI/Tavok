@@ -1,5 +1,6 @@
 "use client";
 
+import { Search } from "lucide-react";
 import type { CharterState } from "@/lib/hooks/use-channel";
 
 // TASK-0020: Human-readable swarm mode labels
@@ -21,6 +22,8 @@ interface ChannelHeaderProps {
   onCharterPause?: () => void; // TASK-0020
   onCharterResume?: () => void; // TASK-0020: Resume paused charter
   onCharterEnd?: () => void; // TASK-0020
+  onSearchToggle?: () => void; // TASK-0022
+  isSearchOpen?: boolean; // TASK-0022
 }
 
 export function ChannelHeader({
@@ -31,6 +34,8 @@ export function ChannelHeader({
   onCharterPause,
   onCharterResume,
   onCharterEnd,
+  onSearchToggle,
+  isSearchOpen,
 }: ChannelHeaderProps) {
   const isCharterActive =
     charterState &&
@@ -166,6 +171,23 @@ export function ChannelHeader({
           </>
         )}
       </div>
+
+      {/* TASK-0022: Search toggle button */}
+      {onSearchToggle && (
+        <button
+          onClick={onSearchToggle}
+          className={`ml-2 rounded p-1.5 transition-colors ${
+            isSearchOpen
+              ? "bg-background-tertiary text-text-primary"
+              : "text-text-muted hover:bg-background-tertiary/55 hover:text-text-primary"
+          }`}
+          data-testid="search-toggle-btn"
+          aria-label="Search messages"
+          title="Search messages"
+        >
+          <Search className="h-4 w-4" />
+        </button>
+      )}
     </div>
   );
 }

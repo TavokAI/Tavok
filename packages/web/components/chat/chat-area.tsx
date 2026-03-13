@@ -10,6 +10,7 @@ import { MessageList } from "./message-list";
 import { MessageInput } from "./message-input";
 import { TypingIndicator } from "./typing-indicator";
 import { DeleteMessageModal } from "@/components/modals/delete-message-modal";
+import { SearchPanel } from "@/components/search/search-panel";
 import type { MentionOption } from "./mention-autocomplete";
 import type { MessagePayload } from "@/lib/hooks/use-channel";
 
@@ -38,6 +39,7 @@ export function ChatArea({
     refreshMembers,
     members,
     agents,
+    channels,
     hasPermission,
     markAsRead,
     unreadMap,
@@ -75,6 +77,10 @@ export function ChatArea({
     setCharterState,
     sendCharterControl,
   } = useChannel(channelId);
+
+  // TASK-0022: Search state
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [scrollToMessageId, setScrollToMessageId] = useState<string | null>(null);
 
   // Delete modal state (TASK-0014)
   const [deleteTarget, setDeleteTarget] = useState<MessagePayload | null>(null);
@@ -196,8 +202,27 @@ export function ChatArea({
     typeof agentTriggerHint === "string" &&
     agentTriggerHint.startsWith("Agent response failed:");
 
+  // TASK-0022: Search panel data
+  const searchChannels = useMemo(
+    () => channels.map((ch) => ({ id: ch.id, name: ch.name })),
+    [channels],
+  );
+  const searchMembers = useMemo(
+    () => members.map((m) => ({ id: m.userId, name: m.displayName })),
+    [members],
+  );
+
+  const handleJumpToMessage = useCallback(
+    (_channelId: string, messageId: string) => {
+      // For v1: only jump within current channel's loaded messages
+      setScrollToMessageId(messageId);
+      setIsSearchOpen(false);
+    },
+    [],
+  );
+
   return (
-    <div className="flex flex-1 flex-col overflow-hidden">
+    <div className="relative flex flex-1 flex-col overflow-hidden">
       <ChannelHeader
         channelName={channelName}
         topic={channelTopic}
@@ -210,6 +235,8 @@ export function ChatArea({
           canManageChannels ? () => handleCharterAction("resume") : undefined
         }
         onCharterEnd={() => sendCharterControl("end")}
+        onSearchToggle={() => setIsSearchOpen((prev) => !prev)}
+        isSearchOpen={isSearchOpen}
       />
       <MessageList
         messages={messages}
@@ -223,6 +250,8 @@ export function ChatArea({
         lastReadSeq={lastReadSeqRef.current}
         activeStreamCount={activeStreamCount}
         hasAgents={agents.length > 0}
+        scrollToMessageId={scrollToMessageId}
+        onScrollToMessageComplete={() => setScrollToMessageId(null)}
       />
       <TypingIndicator typingUsers={typingUsers} />
       {agentTriggerHint && (
@@ -267,6 +296,18 @@ export function ChatArea({
         messagePreview={deleteTarget?.content || ""}
         authorName={deleteTarget?.authorName || ""}
       />
+
+      {/* TASK-0022: Search panel (slide-in from right) */}
+      {isSearchOpen && currentServerId && (
+        <SearchPanel
+          serverId={currentServerId}
+          mode="server"
+          channels={searchChannels}
+          members={searchMembers}
+          onClose={() => setIsSearchOpen(false)}
+          onJumpToMessage={handleJumpToMessage}
+        />
+      )}
     </div>
   );
 }

@@ -16,7 +16,8 @@ import { ChannelSettingsModal } from "@/components/modals/channel-settings-modal
 import { DeleteMessageModal } from "@/components/modals/delete-message-modal";
 import { Permissions } from "@/lib/permissions";
 import { PanelState } from "@/lib/hooks/use-panel-state";
-import { X, Minus, Maximize2, Minimize2, Settings2, Hash } from "lucide-react";
+import { X, Minus, Maximize2, Minimize2, Settings2, Hash, Search } from "lucide-react";
+import { SearchPanel } from "@/components/search/search-panel";
 
 interface ChatPanelProps {
   panel: PanelState;
@@ -43,6 +44,9 @@ export function ChatPanel({ panel }: ChatPanelProps) {
   const canManageMessages = hasPermission(Permissions.MANAGE_MESSAGES);
   const [showChannelSettings, setShowChannelSettings] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<MessagePayload | null>(null);
+  // TASK-0022: Search state
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [scrollToMessageId, setScrollToMessageId] = useState<string | null>(null);
   const {
     messages,
     agentTriggerHint,
@@ -310,6 +314,28 @@ export function ChatPanel({ panel }: ChatPanelProps) {
     return scoped?.channels?.find((ch) => ch.id === panel.channelId);
   }, [serverDataById, panel.serverId, panel.channelId]);
 
+  // TASK-0022: Search panel data
+  const searchChannels = useMemo(() => {
+    const scoped = serverDataById[panel.serverId];
+    return (scoped?.channels || []).map((ch) => ({ id: ch.id, name: ch.name }));
+  }, [serverDataById, panel.serverId]);
+
+  const searchMembers = useMemo(() => {
+    const scoped = serverDataById[panel.serverId];
+    return (scoped?.members || []).map((m) => ({
+      id: m.userId,
+      name: m.displayName,
+    }));
+  }, [serverDataById, panel.serverId]);
+
+  const handleJumpToMessage = useCallback(
+    (channelId: string, messageId: string) => {
+      setScrollToMessageId(messageId);
+      setIsSearchOpen(false);
+    },
+    [],
+  );
+
   // TASK-0020: Fetch initial charter state on channel load
   useEffect(() => {
     if (!panel.serverId || !panel.channelId) return;
@@ -445,6 +471,21 @@ export function ChatPanel({ panel }: ChatPanelProps) {
               <Settings2 className="h-3.5 w-3.5" />
             </button>
           )}
+          {/* TASK-0022: Search toggle */}
+          <button
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={() => setIsSearchOpen((prev) => !prev)}
+            className={`ml-1 rounded-lg p-1 transition-colors ${
+              isSearchOpen
+                ? "bg-background-tertiary text-text-primary"
+                : "text-text-dim hover:bg-background-tertiary/55 hover:text-text-primary"
+            }`}
+            data-testid="search-toggle-btn"
+            aria-label="Search messages"
+            title="Search messages"
+          >
+            <Search className="h-3.5 w-3.5" />
+          </button>
         </div>
         <div className="flex items-center gap-2.5 text-xs select-none">
           {hasActiveStream ? (
@@ -498,7 +539,7 @@ export function ChatPanel({ panel }: ChatPanelProps) {
       </div>
 
       {/* Content */}
-      <div className="flex flex-1 flex-col overflow-hidden bg-background-primary">
+      <div className="relative flex flex-1 flex-col overflow-hidden bg-background-primary">
         {/* TASK-0020: Charter header — only shown when charter has non-default state */}
         {charterState && charterState.swarmMode !== "HUMAN_IN_THE_LOOP" && (
           <ChannelHeader
@@ -532,6 +573,8 @@ export function ChatPanel({ panel }: ChatPanelProps) {
               (channelData?.agentIds && channelData.agentIds.length > 0)
             )
           }
+          scrollToMessageId={scrollToMessageId}
+          onScrollToMessageComplete={() => setScrollToMessageId(null)}
         />
         <TypingIndicator typingUsers={typingUsers} />
         {agentTriggerHint && (
@@ -569,6 +612,18 @@ export function ChatPanel({ panel }: ChatPanelProps) {
             mentionOptions={mentionOptions}
           />
         </div>
+
+        {/* TASK-0022: Search panel */}
+        {isSearchOpen && (
+          <SearchPanel
+            serverId={panel.serverId}
+            mode="server"
+            channels={searchChannels}
+            members={searchMembers}
+            onClose={() => setIsSearchOpen(false)}
+            onJumpToMessage={handleJumpToMessage}
+          />
+        )}
       </div>
 
       {/* Resize Handle */}

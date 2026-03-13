@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useRef, useEffect, useCallback, useMemo } from "react";
+import { useRef, useEffect, useCallback, useMemo, useState } from "react";
 import type { MessagePayload, ReactionData } from "@/lib/hooks/use-channel";
 import { MessageItem } from "./message-item";
 import { StreamingMessage } from "./streaming-message";
@@ -25,6 +25,7 @@ function MessageRow({
   canManageMessages,
   onEditMessage,
   onDeleteMessage,
+  isHighlighted,
 }: {
   message: MessagePayload;
   prevMessage?: MessagePayload;
@@ -35,6 +36,7 @@ function MessageRow({
   canManageMessages?: boolean;
   onEditMessage?: (messageId: string, content: string) => Promise<boolean>;
   onDeleteMessage?: (messageId: string) => void;
+  isHighlighted?: boolean;
 }) {
   let isGrouped =
     prevMessage?.authorId === message.authorId &&
@@ -58,6 +60,11 @@ function MessageRow({
       data-message-id={message.id}
       data-message-author-type={message.authorType}
       data-message-type={message.type}
+      className={
+        isHighlighted
+          ? "rounded transition-colors duration-1000 bg-accent-cyan/15"
+          : undefined
+      }
     >
       {showDivider && <UnreadDivider />}
       {children}
@@ -111,6 +118,10 @@ interface MessageListProps {
   activeStreamCount?: number;
   /** Whether the channel has agents assigned (for empty state messaging) */
   hasAgents?: boolean;
+  /** TASK-0022: scroll to and highlight this message */
+  scrollToMessageId?: string | null;
+  /** TASK-0022: callback when scroll-to animation completes */
+  onScrollToMessageComplete?: () => void;
 }
 
 export function MessageList({
@@ -125,6 +136,8 @@ export function MessageList({
   lastReadSeq,
   activeStreamCount = 0,
   hasAgents = false,
+  scrollToMessageId,
+  onScrollToMessageComplete,
 }: MessageListProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const isAtBottomRef = useRef(true);
@@ -132,6 +145,8 @@ export function MessageList({
   const seenMessageIdsRef = useRef<Set<string>>(new Set());
   const hasSeededSeenMessageIdsRef = useRef(false);
   const prioritizedIncomingUserMessageIdRef = useRef<string | null>(null);
+  // TASK-0022: Highlighted message for search jump
+  const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
   const latestOwnUserMessageId = useMemo(() => {
     if (!currentUserId) return null;
     for (let i = messages.length - 1; i >= 0; i -= 1) {
@@ -319,6 +334,28 @@ export function MessageList({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages.length > 0]);
 
+  // TASK-0022: Scroll to and highlight a specific message (search jump)
+  useEffect(() => {
+    if (!scrollToMessageId) return;
+    const el = containerRef.current;
+    if (!el) return;
+
+    const target = el.querySelector<HTMLElement>(
+      `[data-message-id="${scrollToMessageId}"]`,
+    );
+    if (target) {
+      target.scrollIntoView({ behavior: "smooth", block: "center" });
+      setHighlightedMessageId(scrollToMessageId);
+      // Clear highlight after animation
+      const timeout = setTimeout(() => {
+        setHighlightedMessageId(null);
+      }, 2000);
+      onScrollToMessageComplete?.();
+      return () => clearTimeout(timeout);
+    }
+    onScrollToMessageComplete?.();
+  }, [scrollToMessageId, onScrollToMessageComplete]);
+
   return (
     <div
       ref={containerRef}
@@ -398,6 +435,7 @@ export function MessageList({
           canManageMessages={canManageMessages}
           onEditMessage={onEditMessage}
           onDeleteMessage={onDeleteMessage}
+          isHighlighted={message.id === highlightedMessageId}
         />
       ))}
     </div>

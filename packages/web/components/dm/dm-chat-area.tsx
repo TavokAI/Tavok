@@ -8,9 +8,11 @@ import { MessageInput } from "@/components/chat/message-input";
 import { MarkdownContent } from "@/components/chat/markdown-content";
 import { EditMessageInput } from "@/components/chat/edit-message-input";
 import { DeleteMessageModal } from "@/components/modals/delete-message-modal";
+import { SearchPanel } from "@/components/search/search-panel";
 import { ReactionBar } from "@/components/chat/reaction-bar";
 import type { ReactionData } from "@/lib/hooks/use-channel";
 import { formatTime } from "@/lib/format-time";
+import { Search } from "lucide-react";
 
 interface DmChatAreaProps {
   dmId: string;
@@ -37,6 +39,9 @@ export function DmChatArea({ dmId, otherUserName }: DmChatAreaProps) {
     sendTyping,
   } = useDmChannel(dmId);
 
+  // TASK-0022: Search state
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+
   // Delete modal state
   const [deleteTarget, setDeleteTarget] = useState<DmMessagePayload | null>(
     null,
@@ -56,9 +61,13 @@ export function DmChatArea({ dmId, otherUserName }: DmChatAreaProps) {
   }, [deleteTarget, deleteMessage]);
 
   return (
-    <div className="flex flex-1 flex-col overflow-hidden">
+    <div className="relative flex flex-1 flex-col overflow-hidden">
       {/* DM Header */}
-      <DmHeader otherUserName={otherUserName} />
+      <DmHeader
+        otherUserName={otherUserName}
+        onSearchToggle={() => setIsSearchOpen((prev) => !prev)}
+        isSearchOpen={isSearchOpen}
+      />
 
       {/* Message List */}
       <DmMessageList
@@ -90,21 +99,57 @@ export function DmChatArea({ dmId, otherUserName }: DmChatAreaProps) {
         messagePreview={deleteTarget?.content || ""}
         authorName={deleteTarget?.authorName || ""}
       />
+
+      {/* TASK-0022: DM Search panel */}
+      {isSearchOpen && (
+        <SearchPanel
+          dmId={dmId}
+          mode="dm"
+          onClose={() => setIsSearchOpen(false)}
+          onJumpToMessage={() => {
+            // DM search jumps within same DM — just close panel
+            setIsSearchOpen(false);
+          }}
+        />
+      )}
     </div>
   );
 }
 
 // ---- DM Header ----
 
-function DmHeader({ otherUserName }: { otherUserName: string }) {
+function DmHeader({
+  otherUserName,
+  onSearchToggle,
+  isSearchOpen,
+}: {
+  otherUserName: string;
+  onSearchToggle?: () => void;
+  isSearchOpen?: boolean;
+}) {
   return (
     <div className="flex h-12 items-center border-b border-background-tertiary px-4">
-      <div className="flex items-center gap-2">
+      <div className="flex flex-1 items-center gap-2">
         <span className="text-xl text-text-muted">@</span>
         <h1 className="text-base font-bold text-text-primary">
           {otherUserName}
         </h1>
       </div>
+      {onSearchToggle && (
+        <button
+          onClick={onSearchToggle}
+          className={`ml-2 rounded p-1.5 transition-colors ${
+            isSearchOpen
+              ? "bg-background-tertiary text-text-primary"
+              : "text-text-muted hover:bg-background-tertiary/55 hover:text-text-primary"
+          }`}
+          data-testid="search-toggle-btn"
+          aria-label="Search messages"
+          title="Search messages"
+        >
+          <Search className="h-4 w-4" />
+        </button>
+      )}
     </div>
   );
 }
