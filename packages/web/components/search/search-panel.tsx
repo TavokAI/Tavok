@@ -101,7 +101,9 @@ export function SearchPanel({
           {channels && channels.length > 0 && (
             <select
               value={filters.channelId || ""}
-              onChange={(e) => setFilters({ channelId: e.target.value || undefined })}
+              onChange={(e) =>
+                setFilters({ channelId: e.target.value || undefined })
+              }
               className="rounded border border-background-tertiary bg-background-secondary px-2 py-1 text-xs text-text-secondary focus:border-accent-cyan focus:outline-none"
               data-testid="search-filter-channel"
             >
@@ -118,7 +120,9 @@ export function SearchPanel({
           {members && members.length > 0 && (
             <select
               value={filters.userId || ""}
-              onChange={(e) => setFilters({ userId: e.target.value || undefined })}
+              onChange={(e) =>
+                setFilters({ userId: e.target.value || undefined })
+              }
               className="rounded border border-background-tertiary bg-background-secondary px-2 py-1 text-xs text-text-secondary focus:border-accent-cyan focus:outline-none"
               data-testid="search-filter-user"
             >
@@ -190,7 +194,8 @@ export function SearchPanel({
             result={result}
             mode={mode}
             onClick={() => {
-              const targetId = mode === "server" ? result.channelId! : result.dmId!;
+              const targetId =
+                mode === "server" ? result.channelId! : result.dmId!;
               onJumpToMessage(targetId, result.id);
             }}
           />

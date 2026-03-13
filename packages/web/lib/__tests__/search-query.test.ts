@@ -69,9 +69,7 @@ describe("parseSearchFilters", () => {
   });
 
   it("parses has filter with single value", () => {
-    const result = parseSearchFilters(
-      makeParams({ q: "test", has: "file" }),
-    );
+    const result = parseSearchFilters(makeParams({ q: "test", has: "file" }));
     expect(result.hasFile).toBe(true);
     expect(result.hasLink).toBe(false);
     expect(result.hasMention).toBe(false);
@@ -95,12 +93,12 @@ describe("parseSearchFilters", () => {
     expect(
       parseSearchFilters(makeParams({ q: "test", page: "abc" })).page,
     ).toBe(1);
-    expect(
-      parseSearchFilters(makeParams({ q: "test", page: "0" })).page,
-    ).toBe(1);
-    expect(
-      parseSearchFilters(makeParams({ q: "test", page: "-1" })).page,
-    ).toBe(1);
+    expect(parseSearchFilters(makeParams({ q: "test", page: "0" })).page).toBe(
+      1,
+    );
+    expect(parseSearchFilters(makeParams({ q: "test", page: "-1" })).page).toBe(
+      1,
+    );
   });
 
   it("returns undefined for omitted optional filters", () => {

@@ -82,7 +82,9 @@ export function parseSearchFilters(searchParams: URLSearchParams): {
     throw new Error("Search query is required");
   }
   if (query.length > MAX_QUERY_LENGTH) {
-    throw new Error(`Search query must be ${MAX_QUERY_LENGTH} characters or less`);
+    throw new Error(
+      `Search query must be ${MAX_QUERY_LENGTH} characters or less`,
+    );
   }
 
   const hasParam = searchParams.get("has") || "";

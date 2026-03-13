@@ -146,7 +146,9 @@ export function MessageList({
   const hasSeededSeenMessageIdsRef = useRef(false);
   const prioritizedIncomingUserMessageIdRef = useRef<string | null>(null);
   // TASK-0022: Highlighted message for search jump
-  const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
+  const [highlightedMessageId, setHighlightedMessageId] = useState<
+    string | null
+  >(null);
   const latestOwnUserMessageId = useMemo(() => {
     if (!currentUserId) return null;
     for (let i = messages.length - 1; i >= 0; i -= 1) {

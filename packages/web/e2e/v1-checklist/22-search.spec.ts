@@ -120,7 +120,9 @@ test.describe("Section 22: Message Search", () => {
     await page.locator('[data-testid="search-input"]').fill(searchTerm);
 
     // Wait for results
-    const highlightEl = page.locator('[data-testid="search-result-highlight"] mark');
+    const highlightEl = page.locator(
+      '[data-testid="search-result-highlight"] mark',
+    );
     await expect(highlightEl.first()).toBeVisible({ timeout: 10_000 });
   });
 
@@ -149,14 +151,14 @@ test.describe("Section 22: Message Search", () => {
     await waitForWebSocket(page, "general");
 
     await page.locator('[data-testid="search-toggle-btn"]').click();
-    await expect(
-      page.locator('[data-testid="search-panel"]'),
-    ).toBeVisible({ timeout: 3_000 });
+    await expect(page.locator('[data-testid="search-panel"]')).toBeVisible({
+      timeout: 3_000,
+    });
 
     await page.locator('[data-testid="search-close-btn"]').click();
-    await expect(
-      page.locator('[data-testid="search-panel"]'),
-    ).not.toBeVisible({ timeout: 3_000 });
+    await expect(page.locator('[data-testid="search-panel"]')).not.toBeVisible({
+      timeout: 3_000,
+    });
   });
 
   test("No results for gibberish query shows empty state", async ({ page }) => {

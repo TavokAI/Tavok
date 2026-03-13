@@ -80,7 +80,9 @@ export function ChatArea({
 
   // TASK-0022: Search state
   const [isSearchOpen, setIsSearchOpen] = useState(false);
-  const [scrollToMessageId, setScrollToMessageId] = useState<string | null>(null);
+  const [scrollToMessageId, setScrollToMessageId] = useState<string | null>(
+    null,
+  );
 
   // Delete modal state (TASK-0014)
   const [deleteTarget, setDeleteTarget] = useState<MessagePayload | null>(null);

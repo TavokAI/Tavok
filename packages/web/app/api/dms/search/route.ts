@@ -54,7 +54,8 @@ export async function GET(request: NextRequest) {
   }
 
   // If filtering by specific DM, verify user is a participant
-  const dmIdFilter = filters.channelId || request.nextUrl.searchParams.get("dmId") || undefined;
+  const dmIdFilter =
+    filters.channelId || request.nextUrl.searchParams.get("dmId") || undefined;
   if (dmIdFilter && !participantDmIds.includes(dmIdFilter)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
@@ -77,25 +78,27 @@ export async function GET(request: NextRequest) {
 
   // Batch-load author info
   const authorIds = new Set(resultRows.map((r) => r.authorId));
-  const users = authorIds.size > 0
-    ? await prisma.user.findMany({
-        where: { id: { in: [...authorIds] } },
-        select: { id: true, displayName: true, avatarUrl: true },
-      })
-    : [];
+  const users =
+    authorIds.size > 0
+      ? await prisma.user.findMany({
+          where: { id: { in: [...authorIds] } },
+          select: { id: true, displayName: true, avatarUrl: true },
+        })
+      : [];
   const userMap = new Map(users.map((u) => [u.id, u]));
 
   // Load DM participant names for context (the "other" participant)
   const dmIds = new Set(resultRows.map((r) => r.dmId));
-  const otherParticipants = dmIds.size > 0
-    ? await prisma.dmParticipant.findMany({
-        where: {
-          dmId: { in: [...dmIds] },
-          userId: { not: session.user.id },
-        },
-        include: { user: { select: { id: true, displayName: true } } },
-      })
-    : [];
+  const otherParticipants =
+    dmIds.size > 0
+      ? await prisma.dmParticipant.findMany({
+          where: {
+            dmId: { in: [...dmIds] },
+            userId: { not: session.user.id },
+          },
+          include: { user: { select: { id: true, displayName: true } } },
+        })
+      : [];
   const dmParticipantMap = new Map(
     otherParticipants.map((p) => [p.dmId, p.user.displayName]),
   );

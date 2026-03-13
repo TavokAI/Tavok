@@ -29,7 +29,11 @@ interface UseSearchReturn {
 
 const DEBOUNCE_MS = 300;
 
-export function useSearch({ serverId, dmId, mode }: UseSearchOptions): UseSearchReturn {
+export function useSearch({
+  serverId,
+  dmId,
+  mode,
+}: UseSearchOptions): UseSearchReturn {
   const [query, setQuery] = useState("");
   const [filters, setFiltersState] = useState<SearchFilters>({});
   const [results, setResults] = useState<SearchResult[]>([]);
@@ -71,12 +75,7 @@ export function useSearch({ serverId, dmId, mode }: UseSearchOptions): UseSearch
   }, [query, filters, serverId, dmId, mode]);
 
   const fetchResults = useCallback(
-    async (
-      q: string,
-      f: SearchFilters,
-      p: number,
-      append: boolean,
-    ) => {
+    async (q: string, f: SearchFilters, p: number, append: boolean) => {
       // Cancel any in-flight request
       if (abortRef.current) {
         abortRef.current.abort();

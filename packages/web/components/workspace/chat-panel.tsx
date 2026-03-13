@@ -16,7 +16,15 @@ import { ChannelSettingsModal } from "@/components/modals/channel-settings-modal
 import { DeleteMessageModal } from "@/components/modals/delete-message-modal";
 import { Permissions } from "@/lib/permissions";
 import { PanelState } from "@/lib/hooks/use-panel-state";
-import { X, Minus, Maximize2, Minimize2, Settings2, Hash, Search } from "lucide-react";
+import {
+  X,
+  Minus,
+  Maximize2,
+  Minimize2,
+  Settings2,
+  Hash,
+  Search,
+} from "lucide-react";
 import { SearchPanel } from "@/components/search/search-panel";
 
 interface ChatPanelProps {
@@ -46,7 +54,9 @@ export function ChatPanel({ panel }: ChatPanelProps) {
   const [deleteTarget, setDeleteTarget] = useState<MessagePayload | null>(null);
   // TASK-0022: Search state
   const [isSearchOpen, setIsSearchOpen] = useState(false);
-  const [scrollToMessageId, setScrollToMessageId] = useState<string | null>(null);
+  const [scrollToMessageId, setScrollToMessageId] = useState<string | null>(
+    null,
+  );
   const {
     messages,
     agentTriggerHint,
