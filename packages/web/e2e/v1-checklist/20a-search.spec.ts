@@ -43,6 +43,10 @@ test.beforeAll(async ({ browser }) => {
   await createChannelViaAPI(pgOwner, serverId, "testing");
   const inviteCode = await createInviteViaAPI(pgOwner, serverId);
 
+  // Reload so sidebar sees the new server
+  await pgOwner.reload({ waitUntil: "domcontentloaded" });
+  await pgOwner.waitForTimeout(1_000);
+
   // Owner sends searchable messages in general
   await selectServer(pgOwner, serverName);
   await openChannel(pgOwner, "general");

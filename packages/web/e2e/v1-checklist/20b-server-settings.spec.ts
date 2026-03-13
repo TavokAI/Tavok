@@ -105,8 +105,11 @@ test.describe("Section 23: Server Settings", () => {
 
     // Click Members tab
     await page.locator('[data-testid="settings-tab-members"]').click();
-    // Should show member count
-    await expect(page.getByText(/member/i)).toBeVisible({ timeout: 5_000 });
+    // Should show member count text inside the overlay content area
+    const overlay = page.locator('[data-testid="server-settings-overlay"]');
+    await expect(overlay.getByText(/\d+ members?/i)).toBeVisible({
+      timeout: 5_000,
+    });
 
     // Click Invites tab
     await page.locator('[data-testid="settings-tab-invites"]').click();
@@ -158,9 +161,10 @@ test.describe("Section 23: Server Settings", () => {
 
     // Create a new channel
     const channelName = `test-ch-${Date.now()}`;
+    const overlay = page.locator('[data-testid="server-settings-overlay"]');
     await page.locator('[data-testid="settings-create-channel-btn"]').click();
-    await page.getByPlaceholder("channel-name").fill(channelName);
-    await page.getByRole("button", { name: "Create" }).click();
+    await overlay.getByPlaceholder("channel-name").fill(channelName);
+    await overlay.getByRole("button", { name: "Create", exact: true }).click();
 
     // Channel should appear in the list
     await expect(page.getByText(channelName)).toBeVisible({ timeout: 10_000 });
@@ -179,11 +183,12 @@ test.describe("Section 23: Server Settings", () => {
 
     await page.locator('[data-testid="settings-tab-members"]').click();
 
-    // Should show both Demo User and Alice
-    await expect(page.getByText(DEMO_USER.displayName)).toBeVisible({
+    // Should show both Demo User and Alice inside the overlay
+    const overlay = page.locator('[data-testid="server-settings-overlay"]');
+    await expect(overlay.getByText(DEMO_USER.displayName)).toBeVisible({
       timeout: 5_000,
     });
-    await expect(page.getByText(ALICE.displayName)).toBeVisible({
+    await expect(overlay.getByText(ALICE.displayName)).toBeVisible({
       timeout: 5_000,
     });
   });
