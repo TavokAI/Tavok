@@ -5,7 +5,80 @@
  * Tests the parseSearchFilters utility (integration-level) and
  * buildServerSearchQuery / buildDmSearchQuery SQL generation.
  */
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
+
+// Mock @prisma/client to avoid needing generated client in CI
+vi.mock("@prisma/client", () => {
+  class Sql {
+    strings: string[];
+    values: unknown[];
+    constructor(strings: string[], values: unknown[]) {
+      this.strings = strings;
+      this.values = values;
+    }
+  }
+  function sqlTag(
+    strings: TemplateStringsArray,
+    ...values: unknown[]
+  ): InstanceType<typeof Sql> {
+    // Flatten nested Sql objects into the string template (like real Prisma.sql)
+    const flatStrings: string[] = [];
+    const flatValues: unknown[] = [];
+    for (let i = 0; i < strings.length; i++) {
+      const prev = flatStrings.length > 0 ? flatStrings.pop()! : "";
+      flatStrings.push(prev + strings[i]);
+      if (i < values.length) {
+        const val = values[i];
+        if (val instanceof Sql) {
+          // Embed nested SQL inline
+          for (let j = 0; j < val.strings.length; j++) {
+            const base = flatStrings.pop()!;
+            flatStrings.push(base + val.strings[j]);
+            if (j < val.values.length) {
+              const nested = val.values[j];
+              if (nested instanceof Sql) {
+                for (let k = 0; k < nested.strings.length; k++) {
+                  const b2 = flatStrings.pop()!;
+                  flatStrings.push(b2 + nested.strings[k]);
+                  if (k < nested.values.length)
+                    flatValues.push(nested.values[k]);
+                }
+              } else {
+                flatValues.push(nested);
+              }
+            }
+          }
+        } else {
+          flatValues.push(val);
+        }
+      }
+    }
+    return new Sql(flatStrings, flatValues);
+  }
+  return {
+    Prisma: {
+      sql: sqlTag,
+      join: (items: unknown[], sep?: unknown) => {
+        if (items.length === 0) return new Sql([""], []);
+        const strs: string[] = [""];
+        const vals: unknown[] = [];
+        for (let i = 0; i < items.length; i++) {
+          vals.push(items[i]);
+          strs.push(
+            i < items.length - 1
+              ? sep instanceof Sql
+                ? sep.strings.join("")
+                : " AND "
+              : "",
+          );
+        }
+        return new Sql(strs, vals);
+      },
+      empty: new Sql([""], []),
+    },
+  };
+});
+
 import {
   buildServerSearchQuery,
   buildDmSearchQuery,
