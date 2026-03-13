@@ -149,10 +149,18 @@ test.describe("Section 25: File & Image Uploads (Extended)", () => {
     await openChannel(page, "general");
     await waitForWebSocket(page, "general");
 
-    // Simulate a dragenter event on the message input area
-    const inputArea = page.locator(".relative.px-5.pb-5.pt-1");
-    await inputArea.dispatchEvent("dragenter", {
-      dataTransfer: { types: ["Files"] },
+    // Dispatch a real dragenter event with DataTransfer via evaluate
+    // (Playwright's dispatchEvent cannot construct DataTransfer properly)
+    await page.evaluate(() => {
+      const area = document.querySelector(".relative.px-5.pb-5.pt-1");
+      if (!area) throw new Error("Input area not found");
+      const dt = new DataTransfer();
+      dt.items.add(new File(["x"], "test.txt", { type: "text/plain" }));
+      const event = new DragEvent("dragenter", {
+        bubbles: true,
+        dataTransfer: dt,
+      });
+      area.dispatchEvent(event);
     });
 
     // The "Drop files here" overlay should appear
