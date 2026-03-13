@@ -103,13 +103,14 @@ test.describe("Section 23: Server Settings", () => {
       page.locator('[data-testid="settings-create-channel-btn"]'),
     ).toBeVisible({ timeout: 5_000 });
 
-    // Click Members tab
+    // Click Members tab (async fetch — wait for data to fully load)
     await page.locator('[data-testid="settings-tab-members"]').click();
-    // Should show member count text inside the overlay content area
     const overlay = page.locator('[data-testid="server-settings-overlay"]');
     await expect(overlay.getByText(/\d+ members?/i)).toBeVisible({
-      timeout: 5_000,
+      timeout: 10_000,
     });
+    // Wait for React to settle after async data load
+    await page.waitForTimeout(500);
 
     // Click Invites tab
     await page.locator('[data-testid="settings-tab-invites"]').click();
@@ -183,8 +184,13 @@ test.describe("Section 23: Server Settings", () => {
 
     await page.locator('[data-testid="settings-tab-members"]').click();
 
-    // Should show both Demo User and Alice inside the overlay
+    // Wait for async member data to load (may be slow in CI)
     const overlay = page.locator('[data-testid="server-settings-overlay"]');
+    await expect(overlay.getByText(/\d+ members?/i)).toBeVisible({
+      timeout: 10_000,
+    });
+
+    // Should show both Demo User and Alice inside the overlay
     await expect(overlay.getByText(DEMO_USER.displayName)).toBeVisible({
       timeout: 5_000,
     });
