@@ -809,6 +809,24 @@ describe("PUT /api/internal/messages/{messageId} — finalization", () => {
     expect(updateArgs.data.metadata).toEqual(metadata);
   });
 
+  it("rejects non-object metadata", async () => {
+    const res = await PUT(
+      makePutRequest({
+        body: {
+          content: "response",
+          streamingStatus: "COMPLETE",
+          metadata: "{\"model\":\"bad\"}",
+        },
+      }),
+      routeCtx,
+    );
+
+    expect(res.status).toBe(400);
+    await expect(res.json()).resolves.toEqual({
+      error: "metadata must be a JSON object when provided",
+    });
+  });
+
   it("returns 500 when prisma update throws", async () => {
     mockPrismaForRoute.message.update.mockRejectedValue(
       new Error("Connection lost"),

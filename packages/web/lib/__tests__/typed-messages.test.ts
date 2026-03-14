@@ -328,6 +328,27 @@ describe("TASK-0039: Metadata Persistence", () => {
     expect(res.status).toBe(201);
     expect(capturedCreateData.metadata).toEqual({ model: "gpt-4o" });
   });
+
+  it("rejects non-object metadata", async () => {
+    const handler = createInternalMessagesPostHandler({
+      prismaClient: makePrismaClient(),
+    });
+
+    const res = await handler(
+      makeRequest({
+        body: makeTypedMessageBody(
+          "STATUS",
+          JSON.stringify({ state: "thinking", detail: "Working" }),
+          { metadata: "{\"model\":\"bad\"}" },
+        ),
+      }),
+    );
+
+    expect(res.status).toBe(400);
+    await expect(res.json()).resolves.toEqual({
+      error: "metadata must be a JSON object when provided",
+    });
+  });
 });
 
 describe("TASK-0039: AGENT authorType for typed messages", () => {

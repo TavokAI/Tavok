@@ -2,11 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import {
   broadcastStreamToken,
-  broadcastStreamComplete,
   broadcastStreamError,
   broadcastToChannel,
 } from "@/lib/gateway-client";
 import { updateMessage } from "@/lib/internal-api-client";
+import { validateOptionalMessageMetadata } from "@/lib/message-metadata-contract";
+import { finalizeStreamCompletion } from "@/lib/stream-finalization";
 
 /**
  * POST /api/v1/webhooks/{token}/stream — Send streaming tokens (DEC-0045)
@@ -79,6 +80,11 @@ export async function POST(
     );
   }
 
+  const metadataResult = validateOptionalMessageMetadata(metadata);
+  if (!metadataResult.ok) {
+    return NextResponse.json({ error: metadataResult.error }, { status: 400 });
+  }
+
   // Verify the message belongs to this webhook's agent and channel
   const ownership = await verifyWebhookMessageOwnership(
     messageId,
@@ -138,17 +144,11 @@ export async function POST(
       const resolvedContent =
         (finalContent as string) || (tokens ? tokens.join("") : "");
 
-      await broadcastStreamComplete(webhook.channelId, {
+      await finalizeStreamCompletion({
+        channelId: webhook.channelId,
         messageId,
         finalContent: resolvedContent,
-        metadata: metadata || null,
-      });
-
-      // Persist completed message
-      await updateMessage(messageId, {
-        content: resolvedContent,
-        streamingStatus: "COMPLETE",
-        metadata: metadata ? JSON.stringify(metadata) : undefined,
+        metadata: metadataResult.metadata,
       });
 
       return NextResponse.json({

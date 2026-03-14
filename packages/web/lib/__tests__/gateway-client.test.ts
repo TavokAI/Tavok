@@ -235,14 +235,56 @@ describe("gateway-client", () => {
   });
 
   describe("fetchChannelSequence", () => {
-    it("returns a timestamp-based sequence string", async () => {
-      const before = Date.now();
-      const seq = await fetchChannelSequence("ch-1");
-      const after = Date.now();
+    it("requests the next sequence from the Gateway", async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ sequence: "42" }),
+      });
 
-      const num = Number(seq);
-      expect(num).toBeGreaterThanOrEqual(before);
-      expect(num).toBeLessThanOrEqual(after);
+      await expect(fetchChannelSequence("ch-1")).resolves.toBe("42");
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        "http://gateway:4001/api/internal/sequence?channelId=ch-1",
+        {
+          headers: {
+            "x-internal-secret": "test-secret",
+          },
+        },
+      );
+    });
+
+    it("throws when INTERNAL_API_SECRET is not set", async () => {
+      delete process.env.INTERNAL_API_SECRET;
+
+      await expect(fetchChannelSequence("ch-1")).rejects.toThrow(
+        "INTERNAL_API_SECRET is not configured",
+      );
+
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it("throws on non-ok response with status details", async () => {
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 503,
+        statusText: "Service Unavailable",
+        text: () => Promise.resolve("redis down"),
+      });
+
+      await expect(fetchChannelSequence("ch-1")).rejects.toThrow(
+        "Gateway sequence fetch failed: 503 Service Unavailable — redis down",
+      );
+    });
+
+    it("throws when the response body does not include a numeric sequence", async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ sequence: { bad: true } }),
+      });
+
+      await expect(fetchChannelSequence("ch-1")).rejects.toThrow(
+        "Gateway sequence response missing numeric sequence",
+      );
     });
   });
 });

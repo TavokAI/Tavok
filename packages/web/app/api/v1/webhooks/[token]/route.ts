@@ -127,7 +127,7 @@ export async function POST(
 
   const messageId = generateId();
 
-  // Get next sequence (falls back to timestamp if gateway is unavailable)
+  // Get the next Gateway-owned channel sequence.
   const sequence = await fetchChannelSequence(webhook.channelId);
 
   try {

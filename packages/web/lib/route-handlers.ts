@@ -7,6 +7,7 @@ import {
   serializeSequence,
 } from "./api-safety";
 import { parseMentionedUserIds } from "./mention-parser";
+import { validateOptionalMessageMetadata } from "./message-metadata-contract";
 import { generateId } from "./ulid";
 import { validateInternalSecretValue } from "./internal-auth";
 import type { PrismaClient } from "@prisma/client";
@@ -153,7 +154,12 @@ export function createInternalMessagesPostHandler({
       );
     }
 
-    const metadata = body.metadata; // TASK-0039: agent execution metadata (optional)
+    const metadataResult = validateOptionalMessageMetadata(body.metadata);
+    if (!metadataResult.ok) {
+      return NextResponse.json({ error: metadataResult.error }, { status: 400 });
+    }
+
+    const metadata = metadataResult.metadata; // TASK-0039: agent execution metadata (optional)
     const attachmentIds =
       authorType === "USER" ? extractAttachmentIds(content) : [];
 

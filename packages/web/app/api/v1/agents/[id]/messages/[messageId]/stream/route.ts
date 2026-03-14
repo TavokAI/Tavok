@@ -3,13 +3,14 @@ import { prisma } from "@/lib/db";
 import { authenticateAgentRequest } from "@/lib/agent-auth";
 import {
   broadcastStreamToken,
-  broadcastStreamComplete,
   broadcastStreamError,
   broadcastToChannel,
 } from "@/lib/gateway-client";
 import { updateMessage } from "@/lib/internal-api-client";
 import { checkAgentRateLimit } from "@/lib/rate-limit";
 import { logAgentAction } from "@/lib/agent-audit";
+import { validateOptionalMessageMetadata } from "@/lib/message-metadata-contract";
+import { finalizeStreamCompletion } from "@/lib/stream-finalization";
 
 /**
  * POST /api/v1/agents/{id}/messages/{messageId}/stream — Stream tokens (DEC-0043)
@@ -124,6 +125,10 @@ export async function POST(
   }
 
   const resolvedChannelId = ownership.channelId;
+  const metadataResult = validateOptionalMessageMetadata(metadata);
+  if (!metadataResult.ok) {
+    return NextResponse.json({ error: metadataResult.error }, { status: 400 });
+  }
 
   try {
     // Handle error
@@ -185,16 +190,11 @@ export async function POST(
       });
       const resolvedContent = finalContent || (tokens ? tokens.join("") : "");
 
-      await broadcastStreamComplete(resolvedChannelId, {
+      await finalizeStreamCompletion({
+        channelId: resolvedChannelId,
         messageId,
         finalContent: resolvedContent,
-        metadata: metadata || null,
-      });
-
-      await updateMessage(messageId, {
-        content: resolvedContent,
-        streamingStatus: "COMPLETE",
-        metadata: metadata ? JSON.stringify(metadata) : undefined,
+        metadata: metadataResult.metadata,
       });
 
       return NextResponse.json({

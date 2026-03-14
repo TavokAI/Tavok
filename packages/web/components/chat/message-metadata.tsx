@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import { isMessageMetadata } from "@/lib/message-metadata-contract";
 
 interface MessageMetadataProps {
-  metadata: Record<string, unknown>;
+  metadata: unknown;
 }
 
 /**
@@ -13,6 +14,10 @@ interface MessageMetadataProps {
  */
 export function MessageMetadata({ metadata }: MessageMetadataProps) {
   const [expanded, setExpanded] = useState(false);
+
+  if (!isMessageMetadata(metadata)) {
+    return null;
+  }
 
   const model = typeof metadata.model === "string" ? metadata.model : undefined;
   const provider =

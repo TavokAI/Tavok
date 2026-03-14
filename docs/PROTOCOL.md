@@ -1,8 +1,8 @@
 # PROTOCOL.md — Tavok Cross-Service Message Contracts
 
-> **Version**: Protocol v4.0
+> **Version**: Protocol v4.2
 > **Status**: Active
-> **Last updated**: 2026-03-09
+> **Last updated**: 2026-03-14
 
 This document is the single source of truth for every message that crosses a service boundary.
 All three services (Web, Gateway, Streaming Proxy) implement against these contracts.
@@ -937,7 +937,7 @@ For errors:
 
 The `thinkingTimeline` field is optional. If provided, it is a JSON string containing an array of `{phase, timestamp}` objects. Stored in Message.thinkingTimeline for post-completion replay.
 
-The `metadata` field is optional (TASK-0039). If provided, it is a JSON object containing agent execution info (model, provider, tokensIn, tokensOut, latencyMs, costUsd). Stored in Message.metadata for frontend display.
+The `metadata` field is optional (TASK-0039). If provided, it is a JSON object containing agent execution info (model, provider, tokensIn, tokensOut, latencyMs, costUsd). It must be sent as an object, never a pre-serialized JSON string. Stored in `Message.metadata` for frontend display.
 
 The `tokenHistory` field is optional (TASK-0021). If provided, it is a JSON string containing an array of `{o: contentOffset, t: relativeMs}` objects. Each entry marks where a token batch ends in the final content and when it arrived. Stored in Message.tokenHistory for stream rewind replay.
 
@@ -1546,6 +1546,25 @@ Called by the Gateway (internal network only). Require `X-Internal-Secret`.
 
 Gateway Broadcast Controller. Accepts `{topic, event, payload}`, calls `Broadcast.endpoint_broadcast!/3`.
 
+#### GET /api/internal/sequence
+
+Gateway sequence allocator for non-WebSocket agent adapters.
+
+**Query params:**
+
+- `channelId` (required): ULID
+
+**Response:** `200 OK`
+
+```json
+{
+  "sequence": "42"
+}
+```
+
+The Gateway allocates this value from the same Redis `INCR hive:channel:{channelId}:seq`
+counter used by `RoomChannel`, including the same DB-backed reseed behavior after Redis restarts.
+
 #### POST /api/internal/agents/{agentId}/dispatch
 
 Dispatches a trigger to a WEBHOOK agent. Called by Gateway when `connectionMethod=WEBHOOK`. Includes trigger message and context messages. Next.js handles HMAC signing and outbound HTTP call.
@@ -1849,3 +1868,4 @@ When a message is rate-limited, the Gateway replies with an error instead of bro
 | 2026-03-09 | v3.8    | Add GET /api/v1/agents/{id}/server — agent server/channel/agent discovery endpoint. Add topicPattern, dmTopicPattern, serverInfoUrl to registration response. CLI init now shows topic pattern and channel discovery URL.                   |
 | 2026-03-09 | v4.0    | Remove self-registration (DEC-0060), add CLI agent setup via POST /api/v1/bootstrap/agents, add agent_trigger_skipped event (BUG-007), add §10 Rate Limiting with per-user limits (BUG-005), auto channel assignment via ChannelAgent (DEC-0061) |
 | 2026-03-09 | v4.1    | Rename Bot → Agent across all services (DEC-0062): AuthorType.BOT → AGENT, Prisma model Bot → Agent, all API paths /bots/ → /agents/, botId → agentId, fix SDK agent trigger routing (WEBSOCKET skips BYOK), add charter_update delivery to SDK agents on join |
+| 2026-03-14 | v4.2    | Add GET /api/internal/sequence for non-WebSocket adapters, require object-shaped `metadata` for message persistence/finalization, and align adapter stream completion with Prisma JSON storage |

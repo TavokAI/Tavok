@@ -166,12 +166,40 @@ export async function broadcastTypedMessage(
 }
 
 /**
- * Generate a monotonic sequence number for a channel message.
- * Uses Date.now() as the sequence source — the Gateway does not
- * implement a sequence endpoint (the previous fetch was a no-op).
+ * Fetch the next Gateway-owned monotonic sequence for a channel.
  */
 export async function fetchChannelSequence(
-  _channelId: string,
+  channelId: string,
 ): Promise<string> {
-  return String(Date.now());
+  const secret = getInternalApiSecret();
+  if (!secret) {
+    throw new Error("INTERNAL_API_SECRET is not configured");
+  }
+
+  const gatewayUrl = getGatewayInternalUrl();
+  const response = await fetch(
+    `${gatewayUrl}/api/internal/sequence?channelId=${encodeURIComponent(channelId)}`,
+    {
+      headers: {
+        "x-internal-secret": secret,
+      },
+    },
+  );
+
+  if (!response.ok) {
+    const body = await response.text().catch(() => "unknown");
+    throw new Error(
+      `Gateway sequence fetch failed: ${response.status} ${response.statusText} — ${body}`,
+    );
+  }
+
+  const body = (await response.json().catch(() => null)) as
+    | { sequence?: unknown }
+    | null;
+
+  if (typeof body?.sequence !== "string" || !/^\d+$/.test(body.sequence)) {
+    throw new Error("Gateway sequence response missing numeric sequence");
+  }
+
+  return body.sequence;
 }

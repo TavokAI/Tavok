@@ -357,6 +357,26 @@ defmodule TavokGatewayWeb.RoomChannelTest do
     end
   end
 
+  describe "stream_complete metadata validation" do
+    test "rejects non-object metadata for AGENT streams" do
+      socket = %Phoenix.Socket{assigns: %{author_type: "AGENT", channel_id: "channel-1"}}
+
+      {:reply, {:error, %{reason: reason, event: event}}, _socket} =
+        RoomChannel.handle_in(
+          "stream_complete",
+          %{
+            "messageId" => "msg-1",
+            "finalContent" => "done",
+            "metadata" => "{\"model\":\"bad\"}"
+          },
+          socket
+        )
+
+      assert reason == "invalid_payload"
+      assert event == "stream_complete"
+    end
+  end
+
   # ---------------------------------------------------------------------------
   # Typed message permission checks (TASK-0039)
   # ---------------------------------------------------------------------------

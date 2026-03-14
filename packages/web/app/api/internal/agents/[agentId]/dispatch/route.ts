@@ -8,12 +8,13 @@ import {
   broadcastMessageNew,
   broadcastStreamStart,
   broadcastStreamToken,
-  broadcastStreamComplete,
   fetchChannelSequence,
 } from "@/lib/gateway-client";
 
 import { parseSseChunk } from "@/lib/parse-sse-chunk";
 import type { SseTokenEvent } from "@/lib/parse-sse-chunk";
+import { validateOptionalMessageMetadata } from "@/lib/message-metadata-contract";
+import { finalizeStreamCompletion } from "@/lib/stream-finalization";
 
 /**
  * POST /api/internal/agents/{agentId}/dispatch — Webhook dispatch (DEC-0043)
@@ -198,18 +199,18 @@ export async function POST(
             }
             if (evt.done) {
               const resolvedFinalContent = evt.finalContent || fullContent;
-              await broadcastStreamComplete(channelId, {
+              const metadataResult = validateOptionalMessageMetadata(evt.metadata);
+              if (!metadataResult.ok) {
+                throw new Error(metadataResult.error);
+              }
+
+              await finalizeStreamCompletion({
+                channelId,
                 messageId,
                 finalContent: resolvedFinalContent,
-                metadata: evt.metadata || null,
+                metadata: metadataResult.metadata,
               });
-              await updateMessage(messageId, {
-                content: resolvedFinalContent,
-                streamingStatus: "COMPLETE",
-                metadata: evt.metadata
-                  ? JSON.stringify(evt.metadata)
-                  : undefined,
-              });
+
               streamCompleted = true;
             }
           }
@@ -217,13 +218,10 @@ export async function POST(
 
         // If stream ended without explicit done, complete it
         if (!streamCompleted && fullContent && tokenIndex > 0) {
-          await broadcastStreamComplete(channelId, {
+          await finalizeStreamCompletion({
+            channelId,
             messageId,
             finalContent: fullContent,
-          });
-          await updateMessage(messageId, {
-            content: fullContent,
-            streamingStatus: "COMPLETE",
           });
           streamCompleted = true;
         }

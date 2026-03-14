@@ -6,6 +6,7 @@ import {
   hasPermission,
   Permissions,
 } from "@/lib/permissions";
+import { validateOptionalMessageMetadata } from "@/lib/message-metadata-contract";
 
 /**
  * GET /api/internal/messages/{messageId}
@@ -87,12 +88,19 @@ export async function PUT(
     );
   }
 
+  const metadataResult = validateOptionalMessageMetadata(metadata);
+  if (!metadataResult.ok) {
+    return NextResponse.json({ error: metadataResult.error }, { status: 400 });
+  }
+
   try {
     const updateData: Record<string, unknown> = {};
     if (content !== undefined) updateData.content = content;
     if (streamingStatus) updateData.streamingStatus = streamingStatus;
     if (thinkingTimeline) updateData.thinkingTimeline = thinkingTimeline; // TASK-0011
-    if (metadata) updateData.metadata = metadata; // TASK-0039: Agent execution metadata
+    if (metadataResult.metadata !== undefined) {
+      updateData.metadata = metadataResult.metadata; // TASK-0039: Agent execution metadata
+    }
     if (tokenHistory) updateData.tokenHistory = tokenHistory; // TASK-0021: Stream rewind data
     if (checkpoints) updateData.checkpoints = checkpoints; // TASK-0021: Checkpoint resume data
 

@@ -23,6 +23,7 @@ defmodule TavokGatewayWeb.RoomChannel do
   alias TavokGateway.MessageBuffer
   alias TavokGateway.ConfigCache
   alias TavokGateway.RateLimiter
+  alias TavokGateway.Sequence
   alias TavokGatewayWeb.Presence
   alias TavokGateway.WebClient
 
@@ -817,42 +818,46 @@ defmodule TavokGatewayWeb.RoomChannel do
     thinking_timeline = Map.get(payload, "thinkingTimeline", [])
     metadata = Map.get(payload, "metadata")
 
-    # Finalize the message via internal API (include metadata + thinkingTimeline for persistence)
-    update_body = %{
-      content: final_content,
-      streamingStatus: "COMPLETE"
-    }
+    if valid_optional_metadata?(metadata) do
+      # Finalize the message via internal API (include metadata + thinkingTimeline for persistence)
+      update_body = %{
+        content: final_content,
+        streamingStatus: "COMPLETE"
+      }
 
-    update_body = if metadata, do: Map.put(update_body, :metadata, metadata), else: update_body
+      update_body = if metadata, do: Map.put(update_body, :metadata, metadata), else: update_body
 
-    update_body =
-      if thinking_timeline != [],
-        do: Map.put(update_body, :thinkingTimeline, Jason.encode!(thinking_timeline)),
-        else: update_body
+      update_body =
+        if thinking_timeline != [],
+          do: Map.put(update_body, :thinkingTimeline, Jason.encode!(thinking_timeline)),
+          else: update_body
 
-    Task.Supervisor.async_nolink(TavokGateway.TaskSupervisor, fn ->
-      case WebClient.update_message(message_id, update_body) do
-        {:ok, _} ->
-          Logger.info("Agent stream finalized: channel=#{channel_id} message=#{message_id}")
+      Task.Supervisor.async_nolink(TavokGateway.TaskSupervisor, fn ->
+        case WebClient.update_message(message_id, update_body) do
+          {:ok, _} ->
+            Logger.info("Agent stream finalized: channel=#{channel_id} message=#{message_id}")
 
-        {:error, reason} ->
-          Logger.error("Failed to finalize agent stream: #{inspect(reason)}")
-      end
-    end)
+          {:error, reason} ->
+            Logger.error("Failed to finalize agent stream: #{inspect(reason)}")
+        end
+      end)
 
-    # Broadcast stream_complete to all clients
-    complete_payload = %{
-      messageId: message_id,
-      finalContent: final_content,
-      thinkingTimeline: thinking_timeline
-    }
+      # Broadcast stream_complete to all clients
+      complete_payload = %{
+        messageId: message_id,
+        finalContent: final_content,
+        thinkingTimeline: thinking_timeline
+      }
 
-    complete_payload =
-      if metadata, do: Map.put(complete_payload, :metadata, metadata), else: complete_payload
+      complete_payload =
+        if metadata, do: Map.put(complete_payload, :metadata, metadata), else: complete_payload
 
-    Broadcast.broadcast_pre_serialized!(socket, "stream_complete", complete_payload)
+      Broadcast.broadcast_pre_serialized!(socket, "stream_complete", complete_payload)
 
-    {:reply, {:ok, %{messageId: message_id}}, socket}
+      {:reply, {:ok, %{messageId: message_id}}, socket}
+    else
+      {:reply, {:error, %{reason: "invalid_payload", event: "stream_complete"}}, socket}
+    end
   end
 
   defp handle_agent_stream_complete(_payload, socket) do
@@ -1224,79 +1229,8 @@ defmodule TavokGatewayWeb.RoomChannel do
     end
   end
 
-  # Max retries and base delay for Redis commands during transient disconnections (F-01).
-  @redis_retry_attempts 3
-  @redis_retry_base_ms 100
-
   defp next_sequence(channel_id) do
-    # Redis INCR is atomic and creates the key with value 1 if it doesn't exist.
-    # No need for GET → SET NX → INCR dance which has a race condition on the
-    # first message in a channel. (ISSUE-026)
-    #
-    # For channels that already have messages in the DB but no Redis key (e.g.,
-    # after a Redis restart), we first try INCR. If the key was missing, Redis
-    # creates it at 1 — but the DB may already have higher sequences. We detect
-    # this case and seed properly.
-    #
-    # All Redis commands use redis_with_retry/1 to survive brief Redix
-    # reconnection windows after Redis restarts (F-01).
-    key = "hive:channel:#{channel_id}:seq"
-
-    case redis_with_retry(["INCR", key]) do
-      {:ok, 1} ->
-        # Key was just created — check if DB has higher sequences and seed if needed
-        case channel_seed_sequence(channel_id) do
-          {:ok, 0} ->
-            # Fresh channel, sequence 1 is correct
-            {:ok, 1}
-
-          {:ok, seed} when seed >= 1 ->
-            # DB has existing messages — set Redis to seed value and increment
-            case redis_with_retry(["SET", key, Integer.to_string(seed)]) do
-              {:ok, _} ->
-                case redis_with_retry(["INCR", key]) do
-                  {:ok, sequence} -> {:ok, sequence}
-                  error -> error
-                end
-
-              error ->
-                error
-            end
-
-          {:error, reason} ->
-            {:error, reason}
-        end
-
-      {:ok, sequence} ->
-        {:ok, sequence}
-
-      {:error, reason} ->
-        {:error, reason}
-    end
-  end
-
-  # Retry Redis commands with exponential backoff during transient disconnections.
-  # Covers the Redix reconnection window after Redis restarts (F-01).
-  # Max wait: 100 + 200 + 400 = 700ms — well under user-perceptible threshold.
-  defp redis_with_retry(command, attempt \\ 0) do
-    case Redix.command(:redix, command) do
-      {:ok, result} ->
-        {:ok, result}
-
-      {:error, reason} when attempt < @redis_retry_attempts ->
-        delay = @redis_retry_base_ms * Integer.pow(2, attempt)
-
-        Logger.warning(
-          "Redis command failed, retrying: command=#{inspect(command)} " <>
-            "attempt=#{attempt}/#{@redis_retry_attempts} delay=#{delay}ms error=#{inspect(reason)}"
-        )
-
-        Process.sleep(delay)
-        redis_with_retry(command, attempt + 1)
-
-      {:error, reason} ->
-        {:error, reason}
-    end
+    Sequence.next_channel_sequence(channel_id)
   end
 
   def parse_sequence(nil), do: {:ok, nil}
@@ -1335,35 +1269,7 @@ defmodule TavokGatewayWeb.RoomChannel do
 
   def parse_limit(_), do: {:error, :invalid_limit}
 
-  defp channel_seed_sequence(channel_id) do
-    case WebClient.get_channel_info(channel_id) do
-      {:ok, %{"lastSequence" => last_sequence}} ->
-        normalize_sequence(last_sequence)
-
-      {:ok, _} ->
-        {:ok, 0}
-
-      {:error, _reason} ->
-        {:error, :channel_seed_failed}
-    end
-  end
-
-  defp normalize_sequence(nil), do: {:ok, 0}
-
-  defp normalize_sequence(value) when is_integer(value) do
-    {:ok, max(value, 0)}
-  end
-
-  defp normalize_sequence(value) when is_binary(value) do
-    case Integer.parse(value) do
-      {num, ""} -> {:ok, max(num, 0)}
-      _ -> {:error, :invalid_sequence}
-    end
-  end
-
-  defp normalize_sequence(value) when is_float(value) do
-    {:ok, max(round(value), 0)}
-  end
-
-  defp normalize_sequence(_), do: {:error, :invalid_sequence}
+  defp valid_optional_metadata?(nil), do: true
+  defp valid_optional_metadata?(metadata) when is_map(metadata), do: true
+  defp valid_optional_metadata?(_), do: false
 end
