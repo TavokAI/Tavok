@@ -170,6 +170,8 @@ export async function broadcastTypedMessage(
  * Uses Date.now() as the sequence source — the Gateway does not
  * implement a sequence endpoint (the previous fetch was a no-op).
  */
-export async function fetchChannelSequence(_channelId: string): Promise<string> {
+export async function fetchChannelSequence(
+  _channelId: string,
+): Promise<string> {
   return String(Date.now());
 }

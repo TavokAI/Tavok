@@ -55,10 +55,7 @@ export async function PATCH(
     });
 
     if (!message || message.isDeleted) {
-      return NextResponse.json(
-        { error: "Message not found" },
-        { status: 404 },
-      );
+      return NextResponse.json({ error: "Message not found" }, { status: 404 });
     }
 
     const isParticipant = message.dm.participants.some(
@@ -146,10 +143,7 @@ export async function DELETE(
     });
 
     if (!message || message.isDeleted) {
-      return NextResponse.json(
-        { error: "Message not found" },
-        { status: 404 },
-      );
+      return NextResponse.json({ error: "Message not found" }, { status: 404 });
     }
 
     const isParticipant = message.dm.participants.some(

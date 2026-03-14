@@ -50,10 +50,7 @@ export async function POST(
   }
 
   if (!userId || typeof userId !== "string") {
-    return NextResponse.json(
-      { error: "userId is required" },
-      { status: 400 },
-    );
+    return NextResponse.json({ error: "userId is required" }, { status: 400 });
   }
 
   try {
