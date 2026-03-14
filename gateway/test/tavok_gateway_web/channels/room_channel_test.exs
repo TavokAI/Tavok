@@ -3,6 +3,18 @@ defmodule TavokGatewayWeb.RoomChannelTest do
 
   alias TavokGatewayWeb.RoomChannel
 
+  defmodule CharterWebClientStub do
+    def charter_control(channel_id, action, user_id) do
+      send(self(), {:charter_control_called, channel_id, action, user_id})
+
+      Application.get_env(
+        :tavok_gateway,
+        :charter_control_result,
+        {:ok, %{"channelId" => channel_id, "charterStatus" => "PAUSED"}}
+      )
+    end
+  end
+
   describe "parse_sequence/1" do
     test "accepts nil and numeric sequence values" do
       assert RoomChannel.parse_sequence(nil) == {:ok, nil}
@@ -403,6 +415,61 @@ defmodule TavokGatewayWeb.RoomChannelTest do
         RoomChannel.handle_in("charter_control", %{}, socket)
 
       assert reason == "invalid_payload"
+    end
+  end
+
+  describe "charter_control authorization" do
+    setup do
+      original_web_client = Application.get_env(:tavok_gateway, :web_client)
+      original_result = Application.get_env(:tavok_gateway, :charter_control_result)
+
+      Application.put_env(:tavok_gateway, :web_client, CharterWebClientStub)
+
+      on_exit(fn ->
+        if original_web_client do
+          Application.put_env(:tavok_gateway, :web_client, original_web_client)
+        else
+          Application.delete_env(:tavok_gateway, :web_client)
+        end
+
+        if original_result do
+          Application.put_env(:tavok_gateway, :charter_control_result, original_result)
+        else
+          Application.delete_env(:tavok_gateway, :charter_control_result)
+        end
+      end)
+
+      :ok
+    end
+
+    test "returns unauthorized when charter control is forbidden" do
+      Application.put_env(
+        :tavok_gateway,
+        :charter_control_result,
+        {:error, {:http_error, 403, %{"error" => "Missing permission: Manage Channels"}}}
+      )
+
+      socket = %Phoenix.Socket{assigns: %{channel_id: "channel-1", user_id: "user-1"}}
+
+      assert RoomChannel.handle_in("charter_control", %{"action" => "pause"}, socket) ==
+               {:reply, {:error, %{reason: "unauthorized"}}, socket}
+
+      assert_received {:charter_control_called, "channel-1", "pause", "user-1"}
+    end
+
+    test "returns ok when charter control succeeds" do
+      Application.put_env(
+        :tavok_gateway,
+        :charter_control_result,
+        {:ok, %{"channelId" => "channel-1", "charterStatus" => "PAUSED"}}
+      )
+
+      socket = %Phoenix.Socket{assigns: %{channel_id: "channel-1", user_id: "user-1"}}
+
+      assert {:reply, {:ok, %{action: "pause"}}, ^socket} =
+               RoomChannel.handle_in("charter_control", %{"action" => "pause"}, socket)
+
+      assert_received {:charter_control_called, "channel-1", "pause", "user-1"}
     end
   end
 end

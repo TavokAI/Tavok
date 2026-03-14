@@ -599,7 +599,7 @@ defmodule TavokGatewayWeb.RoomChannel do
 
   # ---------- Charter Control (TASK-0020) ----------
   # Allows channel members with MANAGE_CHANNELS to pause/end charter sessions.
-  # Delegates to the Web API: POST /api/servers/{serverId}/channels/{channelId}/charter
+  # Delegates to the internal Web API, which re-checks membership + permissions.
 
   @valid_charter_actions ~w(pause end)
 
@@ -608,31 +608,32 @@ defmodule TavokGatewayWeb.RoomChannel do
       when action in @valid_charter_actions do
     channel_id = socket.assigns.channel_id
 
-    # Fetch channel info to get serverId for the API call
-    case WebClient.get_channel_info(channel_id) do
-      {:ok, %{"serverId" => server_id}} ->
-        Task.Supervisor.async_nolink(TavokGateway.TaskSupervisor, fn ->
-          case WebClient.charter_control(server_id, channel_id, action, socket.assigns.user_id) do
-            {:ok, response} ->
-              # Broadcast charter_status to all clients in the room
-              Broadcast.endpoint_broadcast!("room:#{channel_id}", "charter_status", response)
+    case charter_web_client().charter_control(channel_id, action, socket.assigns.user_id) do
+      {:ok, response} ->
+        # Broadcast charter_status to all clients in the room
+        Broadcast.endpoint_broadcast!("room:#{channel_id}", "charter_status", response)
 
-              # Also broadcast charter_update so SDK agents get the updated charter in real-time
-              Broadcast.endpoint_broadcast!("room:#{channel_id}", "charter_update", response)
-              Logger.info("Charter #{action}: channel=#{channel_id}")
-
-            {:error, reason} ->
-              Logger.error(
-                "Charter control failed: channel=#{channel_id} action=#{action} reason=#{inspect(reason)}"
-              )
-          end
-        end)
+        # Also broadcast charter_update so SDK agents get the updated charter in real-time
+        Broadcast.endpoint_broadcast!("room:#{channel_id}", "charter_update", response)
+        Logger.info("Charter #{action}: channel=#{channel_id}")
 
         {:reply, {:ok, %{action: action}}, socket}
 
+      {:error, {:http_error, 403, _body}} ->
+        {:reply, {:error, %{reason: "unauthorized"}}, socket}
+
+      {:error, {:http_error, 404, _body}} ->
+        {:reply, {:error, %{reason: "not_found"}}, socket}
+
+      {:error, {:http_error, 409, _body}} ->
+        {:reply, {:error, %{reason: "invalid_state"}}, socket}
+
       {:error, reason} ->
-        Logger.error("Charter control channel lookup failed: #{inspect(reason)}")
-        {:reply, {:error, %{reason: "channel_lookup_failed"}}, socket}
+        Logger.error(
+          "Charter control failed: channel=#{channel_id} action=#{action} reason=#{inspect(reason)}"
+        )
+
+        {:reply, {:error, %{reason: "charter_control_failed"}}, socket}
     end
   end
 
@@ -741,6 +742,10 @@ defmodule TavokGatewayWeb.RoomChannel do
   @impl true
   def handle_in("typed_message", _payload, socket) do
     {:reply, {:error, %{reason: "invalid_payload", event: "typed_message"}}, socket}
+  end
+
+  defp charter_web_client do
+    Application.get_env(:tavok_gateway, :web_client, TavokGateway.WebClient)
   end
 
   defp handle_agent_stream_start(_payload, socket) do

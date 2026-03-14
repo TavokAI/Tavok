@@ -1,11 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { validateInternalSecret } from "@/lib/internal-auth";
-import {
-  computeMemberPermissions,
-  hasPermission,
-  Permissions,
-} from "@/lib/permissions";
+import { checkMemberPermission } from "@/lib/check-member-permission";
+import { Permissions } from "@/lib/permissions";
 
 const VALID_ACTIONS = ["start", "pause", "resume", "end"] as const;
 type CharterAction = (typeof VALID_ACTIONS)[number];
@@ -16,7 +13,7 @@ type CharterAction = (typeof VALID_ACTIONS)[number];
  * Internal API for charter session control, called by Gateway when
  * users send charter_control events via WebSocket. (TASK-0020)
  *
- * Body: { action: "start" | "pause" | "resume" | "end", serverId: string, userId: string }
+ * Body: { action: "start" | "pause" | "resume" | "end", userId: string }
  * Auth: x-internal-secret header + MANAGE_CHANNELS permission.
  */
 export async function POST(
@@ -63,33 +60,15 @@ export async function POST(
       return NextResponse.json({ error: "Channel not found" }, { status: 404 });
     }
 
-    // Permission check: require MANAGE_CHANNELS
-    const member = await prisma.member.findUnique({
-      where: {
-        userId_serverId: { userId, serverId: channel.serverId },
-      },
-      include: {
-        roles: { select: { permissions: true } },
-        server: { select: { ownerId: true } },
-      },
-    });
-
-    if (!member) {
-      return NextResponse.json(
-        { error: "Not a server member" },
-        { status: 403 },
-      );
-    }
-
-    const effectivePermissions = computeMemberPermissions(
+    const permissionCheck = await checkMemberPermission(
       userId,
-      member.server.ownerId,
-      member.roles,
+      channel.serverId,
+      Permissions.MANAGE_CHANNELS,
     );
 
-    if (!hasPermission(effectivePermissions, Permissions.MANAGE_CHANNELS)) {
+    if (!permissionCheck.allowed) {
       return NextResponse.json(
-        { error: "Missing MANAGE_CHANNELS permission" },
+        { error: "Missing permission: Manage Channels" },
         { status: 403 },
       );
     }

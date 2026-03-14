@@ -558,13 +558,17 @@ export function ChatPanel({ panel }: ChatPanelProps) {
             onCharterStart={
               canManageChannels ? () => handleCharterAction("start") : undefined
             }
-            onCharterPause={() => sendCharterControl("pause")}
+            onCharterPause={
+              canManageChannels ? () => sendCharterControl("pause") : undefined
+            }
             onCharterResume={
               canManageChannels
                 ? () => handleCharterAction("resume")
                 : undefined
             }
-            onCharterEnd={() => sendCharterControl("end")}
+            onCharterEnd={
+              canManageChannels ? () => sendCharterControl("end") : undefined
+            }
           />
         )}
         <MessageList

@@ -553,18 +553,17 @@ defmodule TavokGateway.WebClient do
   end
 
   @doc """
-  Control charter session via POST /api/servers/{serverId}/channels/{channelId}/charter.
+  Control charter session via POST /api/internal/channels/{channelId}/charter-control.
   Called by RoomChannel when a user sends a charter_control event. (TASK-0020)
 
-  Note: This uses the server API (not internal API) so it goes through the
-  session-based auth. We pass the user_id for the API to verify permission.
-  For simplicity, we use the internal secret and the charter API directly.
+  The internal route re-checks server membership and MANAGE_CHANNELS using
+  the provided user_id so websocket actions stay aligned with REST auth.
   """
-  def charter_control(server_id, channel_id, action, user_id) do
+  def charter_control(channel_id, action, user_id) do
     url = "#{web_url()}/api/internal/channels/#{channel_id}/charter-control"
 
     case Req.post(url,
-           json: %{action: action, serverId: server_id, userId: user_id},
+           json: %{action: action, userId: user_id},
            headers: [{"x-internal-secret", internal_secret()}],
            receive_timeout: 10_000
          ) do
