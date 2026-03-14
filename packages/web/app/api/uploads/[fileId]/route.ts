@@ -9,10 +9,17 @@ const UPLOADS_DIR = process.env.UPLOADS_DIR || "/app/uploads";
 
 export const runtime = "nodejs";
 
+function getDirectMessageFileToken(fileId: string) {
+  return `[file:${fileId}:`;
+}
+
 /**
  * GET /api/uploads/[fileId] — Serve an uploaded file
- * Auth: logged-in user who owns the unattached upload or is a member of the
- * server that contains the message the attachment belongs to.
+ * Auth:
+ * - server attachments: requester must still be able to see the parent message
+ * - DM attachments: requester must be a participant in a visible DM that
+ *   references the file
+ * - unattached uploads: only the owner can fetch them while pending send
  */
 export async function GET(
   _request: NextRequest,
@@ -37,6 +44,7 @@ export async function GET(
         messageId: true,
         message: {
           select: {
+            isDeleted: true,
             channel: {
               select: { serverId: true },
             },
@@ -49,14 +57,13 @@ export async function GET(
       return NextResponse.json({ error: "File not found" }, { status: 404 });
     }
 
-    // Authorization check
-    if (!attachment.messageId) {
-      // Unattached upload — only the owner can access it
-      if (attachment.userId !== userId) {
+    // Attached server message: membership alone is not enough if the message
+    // has been deleted or otherwise hidden.
+    if (attachment.messageId) {
+      if (!attachment.message || attachment.message.isDeleted) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
       }
-    } else if (attachment.message) {
-      // Attached to a message — user must be a member of the server
+
       const member = await prisma.member.findUnique({
         where: {
           userId_serverId: {
@@ -71,9 +78,32 @@ export async function GET(
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
       }
     } else {
-      // messageId set but message not found (deleted) — only owner
-      if (attachment.userId !== userId) {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      const dmFileToken = getDirectMessageFileToken(fileId);
+
+      const visibleDmReference = await prisma.directMessage.findFirst({
+        where: {
+          isDeleted: false,
+          content: { contains: dmFileToken },
+          dm: {
+            participants: {
+              some: { userId },
+            },
+          },
+        },
+        select: { id: true },
+      });
+
+      if (!visibleDmReference) {
+        const anyDmReference = await prisma.directMessage.findFirst({
+          where: {
+            content: { contains: dmFileToken },
+          },
+          select: { id: true },
+        });
+
+        if (anyDmReference || attachment.userId !== userId) {
+          return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+        }
       }
     }
 
