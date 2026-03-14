@@ -71,12 +71,18 @@ test.describe("Section 14: Reconnection & Resilience", () => {
     await openChannel(page, "general");
     await waitForWebSocket(page, "general");
 
+    // Send a seed message so we can verify the channel is fully rejoined after refresh
+    const seed = uniqueMsg("Seed");
+    await sendMessage(page, "general", seed);
+
     // Refresh — wait for full load + React hydration + WebSocket init
-    await page.reload({ waitUntil: "load" });
-    await page.waitForTimeout(500); // Let React hydrate + WS connect start
+    await page.reload({ waitUntil: "networkidle" });
     await selectServer(page, serverName);
     await openChannel(page, "general");
     await waitForWebSocket(page, "general");
+
+    // Wait for history to load (seed message proves channel join + history fetch completed)
+    await expect(page.getByText(seed)).toBeVisible({ timeout: 15_000 });
 
     // Send new message after reconnection
     const msg = uniqueMsg("Post-refresh");
