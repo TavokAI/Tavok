@@ -1,35 +1,31 @@
 // @ts-nocheck -- route tests use partial Prisma mocks
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const {
-  mockPrisma,
-  mockSessionRef,
-  mockGetServerSession,
-  mockReadFile,
-} = vi.hoisted(() => {
-  const prisma = {
-    attachment: {
-      findUnique: vi.fn(),
-    },
-    member: {
-      findUnique: vi.fn(),
-    },
-    directMessage: {
-      findFirst: vi.fn(),
-    },
-  };
+const { mockPrisma, mockSessionRef, mockGetServerSession, mockReadFile } =
+  vi.hoisted(() => {
+    const prisma = {
+      attachment: {
+        findUnique: vi.fn(),
+      },
+      member: {
+        findUnique: vi.fn(),
+      },
+      directMessage: {
+        findFirst: vi.fn(),
+      },
+    };
 
-  const sessionRef = { current: { user: { id: "user-1" } } as any };
-  const getServerSession = vi.fn(() => Promise.resolve(sessionRef.current));
-  const readFile = vi.fn(async () => Buffer.from("file-bytes"));
+    const sessionRef = { current: { user: { id: "user-1" } } as any };
+    const getServerSession = vi.fn(() => Promise.resolve(sessionRef.current));
+    const readFile = vi.fn(async () => Buffer.from("file-bytes"));
 
-  return {
-    mockPrisma: prisma,
-    mockSessionRef: sessionRef,
-    mockGetServerSession: getServerSession,
-    mockReadFile: readFile,
-  };
-});
+    return {
+      mockPrisma: prisma,
+      mockSessionRef: sessionRef,
+      mockGetServerSession: getServerSession,
+      mockReadFile: readFile,
+    };
+  });
 
 vi.mock("@/lib/db", () => ({ prisma: mockPrisma }));
 vi.mock("@/lib/auth", () => ({ authOptions: {} }));
