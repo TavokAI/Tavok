@@ -1,0 +1,149 @@
+{
+  "batch": "incomplete_migration",
+  "batch_index": 14,
+  "assessments": {
+    "incomplete_migration": 74.5
+  },
+  "dimension_notes": {
+    "incomplete_migration": {
+      "evidence": [
+        "packages/web/lib/ contains 3 plain .js files (api-safety.js, route-handlers.js, validation.js) alongside 19 .ts files — incomplete TypeScript migration",
+        "route-handlers.js uses plain === for INTERNAL_API_SECRET comparison (line 47), while internal-auth.ts provides a timing-safe equivalent; the .js file predates and does not use the .ts utility",
+        "4 identical copies of condition-based-waiting-example.ts across .agents/, .claude/, .openhands/, .pi/ reference types (ThreadManager, LaceEvent) from a ~/threads/ path that does not exist in this project — dead code from a different codebase ('Lace')",
+        "packages/web/lib/ has 8 .test.mjs files at root level and 11 .test.ts files in __tests__/ subdirectory — two coexisting test conventions",
+        "defaultAgentId (legacy single-agent) and ChannelAgent join table (multi-agent) both remain active paths in channel PATCH route and internal agents route, with explicit 'backward compat' fallback comment"
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    }
+  },
+  "dimension_judgment": {
+    "incomplete_migration": {
+      "strengths": [
+        "The codebase is overwhelmingly TypeScript — only 3 production .js files remain in packages/web/lib/, and the rest of the frontend is fully typed",
+        "The defaultAgentId-to-ChannelAgent migration is documented with clear TASK references (TASK-0012) and the backward-compat fallback is explicitly commented",
+        "No stale TODO/FIXME markers referencing 'migrate', 'legacy', 'old api', or 'remove after' were found outside the intentional backward-compat paths",
+        "No duplicate library usage (axios+fetch, moment+dayjs, etc.) was found — the codebase consistently uses native fetch and standard libraries"
+      ],
+      "issue_character": "The issues cluster around two incomplete transitions: a JS-to-TS migration that left 3 production files and 8 test files untyped, and orphaned skill files from an entirely different project that were never cleaned up.",
+      "score_rationale": "The codebase is mostly migrated to TypeScript and uses consistent patterns, which pushes the score above the 70 'mixed' threshold. However, the remaining .js production files create real developer confusion about which pattern to follow (especially route-handlers.js at 776 lines being the largest lib file), the orphaned Lace skill files are pure dead code, and the dual test convention (.mjs vs .ts) means a developer cannot predict the test format. These are not pervasive migration failures but they are concrete coexistence problems that a developer would encounter, placing this solidly in the 70-80 range."
+    }
+  },
+  "issues": [
+    {
+      "dimension": "incomplete_migration",
+      "identifier": "js_ts_coexistence_lib",
+      "summary": "Three production .js files coexist with 19 .ts files in packages/web/lib/",
+      "related_files": [
+        "packages/web/lib/api-safety.js",
+        "packages/web/lib/route-handlers.js",
+        "packages/web/lib/validation.js"
+      ],
+      "evidence": [
+        "api-safety.js (62 lines), route-handlers.js (776 lines), and validation.js (25 lines) are untyped JavaScript in an otherwise fully-typed TypeScript directory",
+        "These files export functions consumed by .ts callers via @/lib/api-safety etc., forcing TypeScript consumers to rely on inferred types rather than explicit annotations",
+        "route-handlers.js is the largest file in lib/ and has the most complex logic — it would benefit most from type annotations"
+      ],
+      "suggestion": "Convert the three .js files to .ts with proper type annotations. Start with api-safety.js and validation.js (small, pure functions) then tackle route-handlers.js which has complex Prisma interactions that would benefit from typed parameters.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "incomplete_ts_migration"
+    },
+    {
+      "dimension": "incomplete_migration",
+      "identifier": "orphaned_lace_skill_files",
+      "summary": "Four identical skill files reference types from a different project ('Lace') that do not exist in Tavok",
+      "related_files": [
+        ".agents/skills/systematic-debugging/condition-based-waiting-example.ts",
+        ".claude/skills/systematic-debugging/condition-based-waiting-example.ts",
+        ".openhands/skills/systematic-debugging/condition-based-waiting-example.ts",
+        ".pi/skills/systematic-debugging/condition-based-waiting-example.ts"
+      ],
+      "evidence": [
+        "All four files import from '~/threads/thread-manager' and '~/threads/types' (ThreadManager, LaceEvent, LaceEventType) — these modules do not exist anywhere in the Tavok repository",
+        "The file header says 'From: Lace test infrastructure improvements (2025-10-03)' confirming these are from a different project",
+        "The files are duplicated identically across four agent config directories"
+      ],
+      "suggestion": "Delete all four copies. If the skill example is useful as a reference pattern, create a single copy in a shared location (e.g., docs/examples/) adapted to Tavok's actual types.",
+      "confidence": "high",
+      "impact_scope": "codebase",
+      "fix_scope": "single_edit",
+      "root_cause_cluster": "orphaned_foreign_code"
+    },
+    {
+      "dimension": "incomplete_migration",
+      "identifier": "mixed_test_conventions_mjs_ts",
+      "summary": "Test files in packages/web/lib/ use two formats: .test.mjs at root and .test.ts in __tests__/",
+      "related_files": [
+        "packages/web/lib/enforces_request_and_sequence_safety.test.mjs",
+        "packages/web/lib/validation.test.mjs",
+        "packages/web/lib/route_invocation_safety.test.mjs",
+        "packages/web/lib/__tests__/api-safety.test.ts",
+        "packages/web/lib/__tests__/route-handlers.test.ts"
+      ],
+      "evidence": [
+        "8 .test.mjs files sit at packages/web/lib/ root level importing from './api-safety.js' with .js extensions",
+        "11 .test.ts files sit in packages/web/lib/__tests__/ importing from '../api-safety.js' — same modules, different test format and location",
+        "Some modules have tests in both formats: api-safety has both enforces_request_and_sequence_safety.test.mjs and __tests__/api-safety.test.ts"
+      ],
+      "suggestion": "Consolidate all tests into the __tests__/ directory using .test.ts format. The .mjs tests appear to be the older convention — migrate them to TypeScript and remove the originals.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "incomplete_ts_migration"
+    },
+    {
+      "dimension": "incomplete_migration",
+      "identifier": "route_handlers_bypasses_timing_safe_auth",
+      "summary": "route-handlers.js uses plain === for secret comparison while internal-auth.ts provides timing-safe equivalent",
+      "related_files": [
+        "packages/web/lib/route-handlers.js",
+        "packages/web/lib/internal-auth.ts"
+      ],
+      "evidence": [
+        "route-handlers.js line 47: secret !== process.env.INTERNAL_API_SECRET uses plain string comparison",
+        "internal-auth.ts exports validateInternalSecret() using crypto.timingSafeEqual, explicitly citing ISSUE-010",
+        "The .js file predates the .ts utility and was never updated to use it — a direct consequence of the incomplete migration"
+      ],
+      "suggestion": "Import and use validateInternalSecret from internal-auth.ts in route-handlers.js (or better, convert route-handlers.js to .ts first). This eliminates the timing side-channel and removes the duplicate auth pattern.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "single_edit",
+      "root_cause_cluster": "incomplete_ts_migration"
+    },
+    {
+      "dimension": "incomplete_migration",
+      "identifier": "default_agent_legacy_fallback",
+      "summary": "defaultAgentId legacy path coexists with ChannelAgent multi-agent path without migration timeline",
+      "related_files": [
+        "packages/web/app/api/internal/channels/[channelId]/agents/route.ts",
+        "packages/web/app/api/servers/[serverId]/channels/[channelId]/route.ts"
+      ],
+      "evidence": [
+        "agents/route.ts line 83: '// 2. Fallback: check defaultAgent (backward compat for channels not yet migrated)' — indicates channels exist that haven't migrated",
+        "channel PATCH route line 222-228 sets defaultAgentId = agentIds[0] for 'backward compat' when agentIds is provided, maintaining dual state",
+        "No TODO, migration script, or documentation indicates when the defaultAgentId fallback should be removed"
+      ],
+      "suggestion": "Add a migration script or startup check that ensures all channels with a defaultAgentId also have corresponding ChannelAgent entries. Once verified, remove the fallback path and the dual-write in the PATCH handler. Document the migration completion criteria in KNOWN-ISSUES.md.",
+      "confidence": "medium",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "defaultagent_migration"
+    }
+  ],
+  "retrospective": {
+    "root_causes": [
+      "The three .js production files and eight .test.mjs test files appear to be the original implementation that was never converted when the rest of the codebase moved to TypeScript — route-handlers.js being 776 lines may have made conversion seem risky",
+      "The Lace skill files were likely copied from another project during agent framework setup and never cleaned up",
+      "The defaultAgentId fallback is an intentional compatibility shim from TASK-0012 but lacks a documented migration completion plan"
+    ],
+    "likely_symptoms": [
+      "route_handlers_bypasses_timing_safe_auth is a symptom of js_ts_coexistence_lib — if route-handlers.js had been migrated to .ts, the inconsistency would likely have been caught"
+    ],
+    "possible_false_positives": [
+      "default_agent_legacy_fallback could be intentionally maintained for backward compatibility if there are external consumers or the migration is actively tracked outside the codebase"
+    ]
+  }
+}

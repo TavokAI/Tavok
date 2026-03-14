@@ -1,0 +1,1516 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1440">
+<title>Tavok UI Style Guide — Before / After</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --bg-0: #050505;
+  --bg-1: #0c0c0c;
+  --bg-2: #141414;
+  --bg-3: #1c1c1c;
+  --border: #222;
+  --border-bright: #333;
+  --gold: #e8a830;
+  --gold-dim: #b8862a;
+  --gold-glow: rgba(232, 168, 48, 0.08);
+  --cyan: #22d3ee;
+  --cyan-dim: #0e7490;
+  --cyan-glow: rgba(34, 211, 238, 0.04);
+  --green: #22c55e;
+  --green-dim: #166534;
+  --red: #ef4444;
+  --orange: #f97316;
+  --purple: #a78bfa;
+  --text-0: #f5f5f5;
+  --text-1: #a3a3a3;
+  --text-2: #666;
+  --text-3: #444;
+  --mono: 'JetBrains Mono', monospace;
+  --sans: 'Space Grotesk', sans-serif;
+}
+
+html { background: #000; }
+body {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--text-0);
+  background: #000;
+  padding: 40px 60px;
+  max-width: 1440px;
+  margin: 0 auto;
+}
+
+/* Section layout */
+.section {
+  margin-bottom: 80px;
+}
+.section-header {
+  margin-bottom: 32px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 16px;
+}
+.section-number {
+  font-family: var(--sans);
+  font-size: 11px;
+  color: var(--gold);
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+.section-title {
+  font-family: var(--sans);
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text-0);
+  margin-bottom: 8px;
+}
+.section-desc {
+  font-size: 13px;
+  color: var(--text-1);
+  line-height: 1.7;
+  max-width: 700px;
+}
+
+.comparison {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 32px;
+}
+.side-label {
+  font-family: var(--sans);
+  font-size: 11px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  margin-bottom: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.side-label.bad { color: var(--red); }
+.side-label.good { color: var(--green); }
+.side-label::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: currentColor;
+  opacity: 0.2;
+}
+
+/* ═══════════════════════════════════════
+   SECTION 1: DEPTH HIERARCHY
+   ═══════════════════════════════════════ */
+
+.depth-demo {
+  height: 380px;
+  border-radius: 8px;
+  position: relative;
+  overflow: hidden;
+}
+
+/* BAD: flat, everything same level */
+.depth-bad {
+  background: #0e0e0e;
+  border: 1px solid var(--border);
+  display: grid;
+  grid-template-columns: 160px 1fr;
+  grid-template-rows: 34px 1fr;
+}
+.depth-bad .db-topbar {
+  grid-column: 1 / -1;
+  background: #111;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  font-size: 11px;
+  color: var(--text-2);
+}
+.depth-bad .db-sidebar {
+  background: #0f0f0f;
+  border-right: 1px solid var(--border);
+  padding: 10px 8px;
+}
+.depth-bad .db-workspace {
+  background: #0e0e0e;
+  padding: 20px;
+  position: relative;
+}
+.depth-bad .db-panel {
+  position: absolute;
+  background: #111;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.depth-bad .db-panel-header {
+  background: #131313;
+  padding: 8px 12px;
+  font-size: 11px;
+  color: var(--text-1);
+  border-bottom: 1px solid var(--border);
+  border-radius: 6px 6px 0 0;
+}
+.depth-bad .db-panel-body {
+  padding: 12px;
+}
+.depth-bad .db-panel.p1 { top: 10px; left: 16px; width: 260px; height: 200px; }
+.depth-bad .db-panel.p2 { top: 30px; left: 200px; width: 260px; height: 220px; }
+
+/* GOOD: clear altitude staircase */
+.depth-good {
+  background: var(--bg-0);
+  display: grid;
+  grid-template-columns: 160px 1fr;
+  grid-template-rows: 34px 1fr;
+}
+.depth-good .dg-topbar {
+  grid-column: 1 / -1;
+  background: var(--bg-1);
+  border-bottom: 1px solid rgba(255,255,255,0.03);
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  font-size: 11px;
+  color: var(--text-2);
+}
+.depth-good .dg-sidebar {
+  background: var(--bg-1);
+  padding: 10px 8px;
+  /* no border — the darkness IS the separator */
+}
+.depth-good .dg-workspace {
+  background: var(--bg-0);
+  padding: 20px;
+  position: relative;
+  /* subtle dot grid on workspace floor */
+  background-image: radial-gradient(rgba(255,255,255,0.02) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+.depth-good .dg-panel {
+  position: absolute;
+  background: var(--bg-2);
+  border: 1px solid rgba(255,255,255,0.04);
+  border-radius: 8px;
+  box-shadow:
+    0 0 0 1px rgba(255,255,255,0.02),
+    0 4px 12px rgba(0,0,0,0.4),
+    0 12px 32px rgba(0,0,0,0.3);
+}
+.depth-good .dg-panel-header {
+  background: var(--bg-3);
+  padding: 8px 12px;
+  font-size: 11px;
+  color: var(--text-1);
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  border-radius: 8px 8px 0 0;
+}
+.depth-good .dg-panel-body {
+  padding: 12px;
+}
+.depth-good .dg-panel.p1 { top: 10px; left: 16px; width: 260px; height: 200px; z-index: 1; }
+.depth-good .dg-panel.p2 {
+  top: 30px; left: 200px; width: 260px; height: 220px; z-index: 2;
+  box-shadow:
+    0 0 0 1px rgba(255,255,255,0.03),
+    0 8px 24px rgba(0,0,0,0.5),
+    0 20px 48px rgba(0,0,0,0.35);
+}
+
+/* Sidebar items shared */
+.sb-item {
+  padding: 5px 10px;
+  border-radius: 4px;
+  font-size: 11px;
+  color: var(--text-2);
+  margin-bottom: 2px;
+  cursor: default;
+}
+.sb-item.active-bad { background: #1a1a1a; color: var(--text-1); }
+.sb-item.active-good { background: rgba(232, 168, 48, 0.06); color: var(--gold); }
+
+/* ═══════════════════════════════════════
+   SECTION 2: ACCENT RESTRAINT
+   ═══════════════════════════════════════ */
+
+.accent-demo {
+  background: var(--bg-1);
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  overflow: hidden;
+  height: 340px;
+}
+
+/* Bad: accents everywhere */
+.accent-bad .ab-sidebar {
+  width: 180px;
+  float: left;
+  height: 100%;
+  background: var(--bg-1);
+  border-right: 1px solid var(--border);
+  padding: 12px 8px;
+}
+.accent-bad .ab-item {
+  padding: 6px 10px;
+  font-size: 11px;
+  margin-bottom: 3px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.accent-bad .ab-item .dot { width: 6px; height: 6px; border-radius: 50%; }
+.accent-bad .ab-item:nth-child(1) { color: var(--gold); background: var(--gold-glow); }
+.accent-bad .ab-item:nth-child(1) .dot { background: var(--gold); }
+.accent-bad .ab-item:nth-child(2) { color: var(--cyan); }
+.accent-bad .ab-item:nth-child(2) .dot { background: var(--cyan); }
+.accent-bad .ab-item:nth-child(3) { color: var(--gold); }
+.accent-bad .ab-item:nth-child(3) .dot { background: var(--gold); }
+.accent-bad .ab-item:nth-child(4) { color: var(--cyan); }
+.accent-bad .ab-item:nth-child(4) .dot { background: var(--cyan); }
+.accent-bad .ab-item:nth-child(5) { color: var(--purple); }
+.accent-bad .ab-item:nth-child(5) .dot { background: var(--purple); }
+.accent-bad .ab-main {
+  margin-left: 180px;
+  padding: 16px;
+}
+.accent-bad .ab-header {
+  font-family: var(--sans);
+  font-size: 14px;
+  color: var(--cyan);
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.accent-bad .ab-header .hash { color: var(--gold); }
+.accent-bad .ab-msg {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.accent-bad .ab-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.accent-bad .ab-avatar.human { background: var(--gold); }
+.accent-bad .ab-avatar.bot { background: var(--cyan); border: 2px solid var(--cyan); }
+.accent-bad .ab-name { font-size: 12px; font-weight: 600; margin-bottom: 3px; }
+.accent-bad .ab-name.human-n { color: var(--gold); }
+.accent-bad .ab-name.bot-n { color: var(--cyan); }
+.accent-bad .ab-text { font-size: 12px; color: var(--text-1); line-height: 1.6; }
+.accent-bad .ab-tag {
+  font-size: 9px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  margin-left: 6px;
+  background: var(--cyan);
+  color: var(--bg-0);
+  font-weight: 600;
+}
+.accent-bad .ab-input {
+  margin-top: 16px;
+  background: var(--bg-2);
+  border: 1px solid var(--gold);
+  border-radius: 6px;
+  padding: 10px 14px;
+  font-size: 12px;
+  color: var(--text-2);
+  box-shadow: 0 0 8px rgba(232, 168, 48, 0.15);
+}
+
+/* Good: restrained accents */
+.accent-good .ag-sidebar {
+  width: 180px;
+  float: left;
+  height: 100%;
+  background: var(--bg-1);
+  padding: 12px 8px;
+}
+.accent-good .ag-item {
+  padding: 6px 10px;
+  font-size: 11px;
+  margin-bottom: 3px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-2);
+  transition: all 0.15s;
+}
+.accent-good .ag-item .hash { color: var(--text-3); font-size: 13px; }
+.accent-good .ag-item.active {
+  color: var(--text-0);
+  background: rgba(232, 168, 48, 0.06);
+}
+.accent-good .ag-item.active .hash { color: var(--gold); }
+.accent-good .ag-main {
+  margin-left: 180px;
+  padding: 16px;
+}
+.accent-good .ag-header {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--text-0);
+  margin-bottom: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.accent-good .ag-header .hash { color: var(--text-3); }
+.accent-good .ag-msg {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.accent-good .ag-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 600;
+}
+.accent-good .ag-avatar.human { background: var(--bg-3); color: var(--text-1); }
+.accent-good .ag-avatar.bot { background: var(--bg-3); color: var(--text-1); }
+.accent-good .ag-name { font-size: 12px; font-weight: 500; margin-bottom: 3px; color: var(--text-0); }
+.accent-good .ag-tag {
+  font-size: 9px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  margin-left: 6px;
+  background: rgba(34, 211, 238, 0.1);
+  color: var(--cyan-dim);
+  font-weight: 500;
+  letter-spacing: 0.5px;
+}
+.accent-good .ag-text { font-size: 12px; color: var(--text-1); line-height: 1.7; }
+.accent-good .ag-input {
+  margin-top: 16px;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 14px;
+  font-size: 12px;
+  color: var(--text-2);
+  transition: border-color 0.15s;
+}
+
+/* ═══════════════════════════════════════
+   SECTION 3: SCANLINES
+   ═══════════════════════════════════════ */
+
+.scanline-demo {
+  height: 200px;
+  background: var(--bg-1);
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+}
+.scanline-demo .scan-text {
+  font-family: var(--sans);
+  font-size: 16px;
+  color: var(--text-0);
+  text-align: center;
+  line-height: 1.8;
+  z-index: 1;
+  position: relative;
+}
+.scanline-demo .scan-text small {
+  display: block;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text-1);
+  margin-top: 4px;
+}
+
+/* Bad scanlines: heavy, visible, distracting */
+.scanline-bad::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(rgba(18,16,16,0) 50%, rgba(0,0,0,0.25) 50%),
+    linear-gradient(90deg, rgba(255,0,0,0.06), rgba(0,255,0,0.02), rgba(0,0,255,0.06));
+  background-size: 100% 2px, 3px 100%;
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* Good scanlines: barely there, felt not seen */
+.scanline-good::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(rgba(18,16,16,0) 50%, rgba(0,0,0,0.04) 50%);
+  background-size: 100% 2px;
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* ═══════════════════════════════════════
+   SECTION 4: TYPOGRAPHY / SPACING
+   ═══════════════════════════════════════ */
+
+.type-demo {
+  background: var(--bg-2);
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+.type-header {
+  padding: 8px 14px;
+  background: var(--bg-3);
+  font-size: 11px;
+  color: var(--text-1);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.type-header .hash { color: var(--text-3); }
+
+.type-messages { padding: 8px; }
+
+.type-msg {
+  display: flex;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: 4px;
+}
+.type-msg + .type-msg { margin-top: 2px; }
+.type-msg:hover { background: rgba(255,255,255,0.01); }
+.type-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--bg-3);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  color: var(--text-2);
+}
+.type-body { flex: 1; min-width: 0; }
+.type-name {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-0);
+  margin-bottom: 2px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.type-time {
+  font-size: 10px;
+  color: var(--text-3);
+  font-weight: 400;
+}
+
+/* Bad: cramped */
+.type-bad .type-messages { padding: 6px; }
+.type-bad .type-msg { padding: 3px 6px; }
+.type-bad .type-msg + .type-msg { margin-top: 1px; }
+.type-bad .type-content {
+  font-size: 12px;
+  color: var(--text-1);
+  line-height: 1.35;
+}
+
+/* Good: breathing room */
+.type-good .type-messages { padding: 10px 14px; }
+.type-good .type-msg { padding: 6px 8px; }
+.type-good .type-msg + .type-msg { margin-top: 6px; }
+.type-good .type-content {
+  font-size: 12.5px;
+  color: var(--text-1);
+  line-height: 1.65;
+}
+
+/* ═══════════════════════════════════════
+   SECTION 5: BORDERS VS GAPS
+   ═══════════════════════════════════════ */
+
+.border-demo {
+  background: var(--bg-0);
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  height: 280px;
+}
+
+/* Bad: cage bars */
+.border-bad .bb-sidebar {
+  background: var(--bg-1);
+  border-right: 1px solid var(--border);
+  padding: 8px 6px;
+}
+.border-bad .bb-item {
+  padding: 6px 8px;
+  font-size: 11px;
+  color: var(--text-2);
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 2px;
+}
+.border-bad .bb-main {
+  background: var(--bg-1);
+}
+.border-bad .bb-section {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--text-2);
+}
+.border-bad .bb-section-title {
+  font-size: 10px;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 6px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* Good: darkness as separator */
+.border-good .bg-sidebar {
+  background: var(--bg-1);
+  padding: 8px 6px;
+  /* no border-right — gap to workspace IS the separation */
+}
+.border-good .bg-item {
+  padding: 6px 8px;
+  font-size: 11px;
+  color: var(--text-2);
+  margin-bottom: 2px;
+  border-radius: 4px;
+}
+.border-good .bg-item:hover { background: rgba(255,255,255,0.02); }
+.border-good .bg-main {
+  background: var(--bg-1);
+  margin-left: 2px; /* 2px gap exposes bg-0 underneath = visual separator */
+}
+.border-good .bg-section {
+  padding: 12px 14px;
+  font-size: 11px;
+  color: var(--text-2);
+}
+.border-good .bg-section + .bg-section {
+  margin-top: 2px;
+  background: var(--bg-1);
+}
+.border-good .bg-section-title {
+  font-size: 10px;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 8px;
+}
+
+/* ═══════════════════════════════════════
+   SECTION 6: STREAMING STATE
+   ═══════════════════════════════════════ */
+
+.stream-demo {
+  background: var(--bg-0);
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.04);
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+.stream-header {
+  background: var(--bg-3);
+  padding: 8px 14px;
+  font-size: 11px;
+  color: var(--text-1);
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.stream-header .channel-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.stream-header .hash { color: var(--text-3); }
+.stream-header .status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+.stream-header .status-dot.idle { background: var(--text-3); }
+.stream-header .status-dot.live {
+  background: var(--cyan);
+  box-shadow: 0 0 6px var(--cyan);
+  animation: pulse 2s infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.stream-body { padding: 14px; }
+
+/* Idle panel */
+.stream-idle .stream-body {
+  background: var(--bg-2);
+}
+.stream-idle .st-msg {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.stream-idle .st-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--bg-3);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  color: var(--text-2);
+}
+.stream-idle .st-name { font-size: 12px; font-weight: 500; color: var(--text-0); margin-bottom: 3px; }
+.stream-idle .st-text { font-size: 12px; color: var(--text-1); line-height: 1.65; }
+
+/* Active streaming panel */
+.stream-live .stream-body {
+  background: var(--bg-2);
+}
+.stream-live .st-msg {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.stream-live .st-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--bg-3);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  color: var(--text-2);
+}
+.stream-live .st-name {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-0);
+  margin-bottom: 3px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.stream-live .st-text { font-size: 12px; color: var(--text-1); line-height: 1.65; }
+
+.stream-live .st-streaming-msg {
+  display: flex;
+  gap: 10px;
+}
+.stream-live .st-streaming-body {
+  flex: 1;
+  border-left: 2px solid var(--cyan);
+  padding-left: 12px;
+  background: var(--cyan-glow);
+  border-radius: 0 6px 6px 0;
+  padding: 10px 12px 10px 14px;
+}
+.stream-live .st-streaming-label {
+  font-size: 10px;
+  color: var(--cyan);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.stream-live .st-streaming-text {
+  font-size: 12px;
+  color: var(--text-0);
+  line-height: 1.65;
+}
+.stream-live .st-cursor {
+  display: inline-block;
+  width: 2px;
+  height: 14px;
+  background: var(--cyan);
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  animation: blink-cursor 0.8s infinite;
+}
+@keyframes blink-cursor {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+.thinking-dots {
+  display: inline-flex;
+  gap: 3px;
+  vertical-align: middle;
+}
+.thinking-dots span {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--cyan);
+  animation: dot-blink 1.4s infinite;
+}
+.thinking-dots span:nth-child(2) { animation-delay: 0.2s; }
+.thinking-dots span:nth-child(3) { animation-delay: 0.4s; }
+@keyframes dot-blink {
+  0%, 80%, 100% { opacity: 0.2; }
+  40% { opacity: 1; }
+}
+
+/* ═══════════════════════════════════════
+   SECTION 7: FULL PANEL COMPOSITE
+   ═══════════════════════════════════════ */
+
+.composite-demo {
+  background: var(--bg-0);
+  background-image: radial-gradient(rgba(255,255,255,0.015) 1px, transparent 1px);
+  background-size: 20px 20px;
+  border-radius: 8px;
+  padding: 32px;
+  min-height: 460px;
+  position: relative;
+}
+
+.composite-panel {
+  width: 480px;
+  margin: 0 auto;
+  background: var(--bg-2);
+  border: 1px solid rgba(255,255,255,0.04);
+  border-radius: 10px;
+  box-shadow:
+    0 0 0 1px rgba(255,255,255,0.02),
+    0 8px 24px rgba(0,0,0,0.4),
+    0 20px 48px rgba(0,0,0,0.3);
+  overflow: hidden;
+  position: relative;
+}
+
+.composite-panel::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(rgba(18,16,16,0) 50%, rgba(0,0,0,0.03) 50%);
+  background-size: 100% 2px;
+  pointer-events: none;
+  border-radius: 10px;
+}
+
+.cp-header {
+  background: var(--bg-3);
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+.cp-header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.cp-hash { color: var(--text-3); font-size: 14px; }
+.cp-channel-name {
+  font-family: var(--sans);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-0);
+}
+.cp-topic {
+  font-size: 11px;
+  color: var(--text-2);
+  margin-left: 4px;
+}
+.cp-controls {
+  display: flex;
+  gap: 8px;
+}
+.cp-ctrl-btn {
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-3);
+  font-size: 12px;
+  cursor: default;
+}
+.cp-ctrl-btn:hover { color: var(--text-1); background: rgba(255,255,255,0.04); }
+.cp-ctrl-btn.close:hover { color: var(--red); background: rgba(239, 68, 68, 0.1); }
+
+.cp-messages {
+  padding: 14px 16px;
+  min-height: 260px;
+}
+.cp-msg {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.cp-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--bg-3);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  color: var(--text-2);
+  font-weight: 500;
+}
+.cp-msg-body { flex: 1; }
+.cp-msg-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+.cp-msg-name {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-0);
+}
+.cp-bot-tag {
+  font-size: 9px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: rgba(34, 211, 238, 0.1);
+  color: var(--cyan-dim);
+  font-weight: 500;
+  letter-spacing: 0.5px;
+}
+.cp-msg-time {
+  font-size: 10px;
+  color: var(--text-3);
+}
+.cp-msg-text {
+  font-size: 12.5px;
+  color: var(--text-1);
+  line-height: 1.65;
+}
+.cp-msg-text code {
+  background: var(--bg-0);
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 11.5px;
+  color: var(--orange);
+}
+
+.cp-streaming-block {
+  border-left: 2px solid var(--cyan);
+  background: var(--cyan-glow);
+  border-radius: 0 6px 6px 0;
+  padding: 10px 14px;
+  margin-top: 4px;
+}
+.cp-streaming-header {
+  font-size: 10px;
+  color: var(--cyan);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.cp-streaming-content {
+  font-size: 12.5px;
+  color: var(--text-0);
+  line-height: 1.65;
+}
+
+.cp-input-area {
+  padding: 10px 16px 14px;
+  border-top: 1px solid rgba(255,255,255,0.03);
+}
+.cp-input {
+  background: var(--bg-0);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 12px;
+  font-family: var(--mono);
+  color: var(--text-2);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.cp-input-hint { color: var(--text-3); }
+.cp-send-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: var(--gold);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--bg-0);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+/* Callout boxes */
+.callout {
+  margin-top: 20px;
+  padding: 14px 18px;
+  background: var(--bg-1);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--text-1);
+  line-height: 1.7;
+}
+.callout-title {
+  font-family: var(--sans);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--gold);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+.callout code {
+  background: var(--bg-2);
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 11px;
+  color: var(--orange);
+}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════ -->
+<!-- SECTION 1: DEPTH HIERARCHY            -->
+<!-- ═══════════════════════════════════════ -->
+<div class="section">
+  <div class="section-header">
+    <div class="section-number">01 — Principle</div>
+    <div class="section-title">Depth Hierarchy</div>
+    <div class="section-desc">
+      Every element needs a clear altitude. The workspace floor is darkest. Sidebars sit one step up. 
+      Panels float above with real shadows. Headers crown the panels. Without this staircase, 
+      everything collapses into one flat dark rectangle.
+    </div>
+  </div>
+  <div class="comparison">
+    <div>
+      <div class="side-label bad">Before — flat, no altitude</div>
+      <div class="depth-demo depth-bad">
+        <div class="db-topbar">HIVE CHAT &nbsp;·&nbsp; Workspace</div>
+        <div class="db-sidebar">
+          <div class="sb-item active-bad"># general</div>
+          <div class="sb-item"># agents</div>
+          <div class="sb-item"># design</div>
+        </div>
+        <div class="db-workspace">
+          <div class="db-panel p1">
+            <div class="db-panel-header"># general</div>
+            <div class="db-panel-body" style="font-size:11px; color:var(--text-2);">
+              Messages here...<br>Everything looks the same level
+            </div>
+          </div>
+          <div class="db-panel p2">
+            <div class="db-panel-header"># agents</div>
+            <div class="db-panel-body" style="font-size:11px; color:var(--text-2);">
+              Can't tell what's on top<br>No visual depth cues
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div>
+      <div class="side-label good">After — clear altitude staircase</div>
+      <div class="depth-demo depth-good">
+        <div class="dg-topbar">
+          <span style="color:var(--gold); font-family:var(--sans); font-weight:700; letter-spacing:1px;">TAVOK</span>
+          &nbsp;·&nbsp; Workspace
+        </div>
+        <div class="dg-sidebar">
+          <div class="sb-item active-good"># general</div>
+          <div class="sb-item"># agents</div>
+          <div class="sb-item"># design</div>
+        </div>
+        <div class="dg-workspace">
+          <div class="dg-panel p1">
+            <div class="dg-panel-header"># general</div>
+            <div class="dg-panel-body" style="font-size:11px; color:var(--text-2);">
+              Panels float with real shadows<br>Clear visual stacking
+            </div>
+          </div>
+          <div class="dg-panel p2">
+            <div class="dg-panel-header"># agents</div>
+            <div class="dg-panel-body" style="font-size:11px; color:var(--text-2);">
+              Focused panel has deeper shadow<br>You instantly know what's on top
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="callout">
+    <div class="callout-title">CSS to implement</div>
+    Panel shadow: <code>box-shadow: 0 0 0 1px rgba(255,255,255,0.04), 0 8px 24px rgba(0,0,0,0.4), 0 20px 48px rgba(0,0,0,0.3)</code><br>
+    Focused/top panel gets stronger: <code>0 12px 32px rgba(0,0,0,0.5)</code><br>
+    Workspace floor gets a dot grid: <code>background-image: radial-gradient(rgba(255,255,255,0.015) 1px, transparent 1px)</code>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════ -->
+<!-- SECTION 2: ACCENT RESTRAINT           -->
+<!-- ═══════════════════════════════════════ -->
+<div class="section">
+  <div class="section-header">
+    <div class="section-number">02 — Principle</div>
+    <div class="section-title">Accent Restraint</div>
+    <div class="section-desc">
+      Gold and cyan are strong colors. If they're on every icon, border, label, and avatar —
+      nothing feels special. Gold = selected/primary action only. Cyan = streaming/live only.
+      Everything else stays grayscale. When streaming kicks in, the cyan should feel like 
+      something just woke up.
+    </div>
+  </div>
+  <div class="comparison">
+    <div>
+      <div class="side-label bad">Before — color everywhere</div>
+      <div class="accent-demo accent-bad">
+        <div class="ab-sidebar">
+          <div class="ab-item"><span class="dot"></span> general</div>
+          <div class="ab-item"><span class="dot"></span> agents</div>
+          <div class="ab-item"><span class="dot"></span> design</div>
+          <div class="ab-item"><span class="dot"></span> deploy</div>
+          <div class="ab-item"><span class="dot"></span> testing</div>
+        </div>
+        <div class="ab-main">
+          <div class="ab-header"><span class="hash">#</span> general</div>
+          <div class="ab-msg">
+            <div class="ab-avatar human"></div>
+            <div>
+              <div class="ab-name human-n">Nick</div>
+              <div class="ab-text">Can you review the streaming logic?</div>
+            </div>
+          </div>
+          <div class="ab-msg">
+            <div class="ab-avatar bot"></div>
+            <div>
+              <div class="ab-name bot-n">CodeBot <span class="ab-tag">BOT</span></div>
+              <div class="ab-text">Looking at the Go proxy now. The SSE handler needs a flush interval...</div>
+            </div>
+          </div>
+          <div class="ab-input">Message #general — @CodeBot for AI</div>
+        </div>
+      </div>
+    </div>
+    <div>
+      <div class="side-label good">After — color is earned</div>
+      <div class="accent-demo accent-good">
+        <div class="ag-sidebar">
+          <div class="ag-item active"><span class="hash">#</span> general</div>
+          <div class="ag-item"><span class="hash">#</span> agents</div>
+          <div class="ag-item"><span class="hash">#</span> design</div>
+          <div class="ag-item"><span class="hash">#</span> deploy</div>
+          <div class="ag-item"><span class="hash">#</span> testing</div>
+        </div>
+        <div class="ag-main">
+          <div class="ag-header"><span class="hash">#</span> general</div>
+          <div class="ag-msg">
+            <div class="ag-avatar human">N</div>
+            <div>
+              <div class="ag-name">Nick</div>
+              <div class="ag-text">Can you review the streaming logic?</div>
+            </div>
+          </div>
+          <div class="ag-msg">
+            <div class="ag-avatar bot">C</div>
+            <div>
+              <div class="ag-name">CodeBot <span class="ag-tag">AGENT</span></div>
+              <div class="ag-text">Looking at the Go proxy now. The SSE handler needs a flush interval...</div>
+            </div>
+          </div>
+          <div class="ag-input">Message #general</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="callout">
+    <div class="callout-title">The rule</div>
+    Gold appears on: logo, active nav item, primary CTA button. That's it.<br>
+    Cyan appears on: streaming indicator, live status dot, links. That's it.<br>
+    Bot tag uses <code>rgba(34, 211, 238, 0.1)</code> background with <code>#0e7490</code> text — subtle, not shouting.<br>
+    Input border stays <code>#222</code> at rest. Gold border only on focus.
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════ -->
+<!-- SECTION 3: SCANLINES                  -->
+<!-- ═══════════════════════════════════════ -->
+<div class="section">
+  <div class="section-header">
+    <div class="section-number">03 — Principle</div>
+    <div class="section-title">Scanlines: Felt, Not Seen</div>
+    <div class="section-desc">
+      The CRT effect should be subliminal. If someone can see the lines when reading text,
+      they're too strong. Kill the RGB color fringe entirely — it just muddies the type.
+    </div>
+  </div>
+  <div class="comparison">
+    <div>
+      <div class="side-label bad">Before — heavy scanlines + RGB fringe</div>
+      <div class="scanline-demo scanline-bad">
+        <div class="scan-text">
+          The SSE handler needs a flush interval<br>
+          to prevent token buffering delays.
+          <small>rgba(0,0,0,0.25) + RGB sub-pixel fringe</small>
+        </div>
+      </div>
+    </div>
+    <div>
+      <div class="side-label good">After — barely there, no color fringe</div>
+      <div class="scanline-demo scanline-good">
+        <div class="scan-text">
+          The SSE handler needs a flush interval<br>
+          to prevent token buffering delays.
+          <small>rgba(0,0,0,0.04) — no RGB gradient</small>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="callout">
+    <div class="callout-title">The fix</div>
+    Replace: <code>rgba(0,0,0,0.25)</code> → <code>rgba(0,0,0,0.04)</code><br>
+    Remove entirely: <code>linear-gradient(90deg, rgba(255,0,0,0.06), rgba(0,255,0,0.02), rgba(0,0,255,0.06))</code><br>
+    Keep: <code>background-size: 100% 2px</code> (the line spacing is fine)
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════ -->
+<!-- SECTION 4: TYPOGRAPHY SPACING         -->
+<!-- ═══════════════════════════════════════ -->
+<div class="section">
+  <div class="section-header">
+    <div class="section-number">04 — Principle</div>
+    <div class="section-title">Typography Breathing Room</div>
+    <div class="section-desc">
+      JetBrains Mono is dense. Without generous line-height and padding, the terminal vibe 
+      tips from "command center" into "wall of text in a cramped terminal."
+    </div>
+  </div>
+  <div class="comparison">
+    <div>
+      <div class="side-label bad">Before — cramped</div>
+      <div class="type-demo type-bad">
+        <div class="type-header"><span class="hash">#</span> agents</div>
+        <div class="type-messages">
+          <div class="type-msg">
+            <div class="type-avatar">N</div>
+            <div class="type-body">
+              <div class="type-name">Nick <span class="type-time">2:34 PM</span></div>
+              <div class="type-content">The agent registration flow is broken. When I create a new bot through the API, it registers fine but the WebSocket connection drops after the first heartbeat. Checking the gateway logs shows a timeout on the presence channel.</div>
+            </div>
+          </div>
+          <div class="type-msg">
+            <div class="type-avatar">C</div>
+            <div class="type-body">
+              <div class="type-name">CodeBot <span class="type-time">2:34 PM</span></div>
+              <div class="type-content">Looking at the Phoenix channel config, the timeout is set to 5000ms which is probably too aggressive for the initial handshake. The bot needs to complete JWT validation, join the presence topic, and send its first heartbeat all within that window. Try bumping it to 15000ms.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div>
+      <div class="side-label good">After — breathing</div>
+      <div class="type-demo type-good">
+        <div class="type-header"><span class="hash">#</span> agents</div>
+        <div class="type-messages">
+          <div class="type-msg">
+            <div class="type-avatar">N</div>
+            <div class="type-body">
+              <div class="type-name">Nick <span class="type-time">2:34 PM</span></div>
+              <div class="type-content">The agent registration flow is broken. When I create a new bot through the API, it registers fine but the WebSocket connection drops after the first heartbeat. Checking the gateway logs shows a timeout on the presence channel.</div>
+            </div>
+          </div>
+          <div class="type-msg">
+            <div class="type-avatar">C</div>
+            <div class="type-body">
+              <div class="type-name">CodeBot <span class="type-time">2:34 PM</span></div>
+              <div class="type-content">Looking at the Phoenix channel config, the timeout is set to 5000ms which is probably too aggressive for the initial handshake. The bot needs to complete JWT validation, join the presence topic, and send its first heartbeat all within that window. Try bumping it to 15000ms.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="callout">
+    <div class="callout-title">The numbers</div>
+    Message body: <code>line-height: 1.65</code> (up from ~1.35)<br>
+    Message padding: <code>6px 8px</code> with <code>14px</code> container padding<br>
+    Message gap: <code>margin-bottom: 14px</code> between messages (up from ~8px)<br>
+    Font size: <code>12.5px</code> for body text — half a pixel makes a difference at this scale
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════ -->
+<!-- SECTION 5: BORDERS VS GAPS            -->
+<!-- ═══════════════════════════════════════ -->
+<div class="section">
+  <div class="section-header">
+    <div class="section-number">05 — Principle</div>
+    <div class="section-title">Borders vs. Gaps</div>
+    <div class="section-desc">
+      Too many #222 borders create a cage-bar effect. Replace most with 1–2px gaps that 
+      expose the darker background underneath. The darkness IS the separator.
+    </div>
+  </div>
+  <div class="comparison">
+    <div>
+      <div class="side-label bad">Before — borders on everything</div>
+      <div class="border-demo border-bad">
+        <div class="bb-sidebar">
+          <div class="bb-item"># general</div>
+          <div class="bb-item"># agents</div>
+          <div class="bb-item"># design</div>
+          <div class="bb-item"># deploy</div>
+        </div>
+        <div class="bb-main">
+          <div class="bb-section">
+            <div class="bb-section-title">Active Agents</div>
+            CodeBot — idle<br>ReviewBot — idle
+          </div>
+          <div class="bb-section">
+            <div class="bb-section-title">Members</div>
+            Nick — online<br>Sarah — away
+          </div>
+          <div class="bb-section">
+            <div class="bb-section-title">Settings</div>
+            Notifications · Permissions
+          </div>
+        </div>
+      </div>
+    </div>
+    <div>
+      <div class="side-label good">After — darkness as divider</div>
+      <div class="border-demo border-good">
+        <div class="bg-sidebar">
+          <div class="bg-item"># general</div>
+          <div class="bg-item"># agents</div>
+          <div class="bg-item"># design</div>
+          <div class="bg-item"># deploy</div>
+        </div>
+        <div class="bg-main">
+          <div class="bg-section">
+            <div class="bg-section-title">Active Agents</div>
+            CodeBot — idle<br>ReviewBot — idle
+          </div>
+          <div class="bg-section">
+            <div class="bg-section-title">Members</div>
+            Nick — online<br>Sarah — away
+          </div>
+          <div class="bg-section">
+            <div class="bg-section-title">Settings</div>
+            Notifications · Permissions
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="callout">
+    <div class="callout-title">Where borders survive</div>
+    Keep borders on: panel edges, major structural dividers (topbar/bottombar), input fields.<br>
+    Kill borders on: sidebar items, section dividers within panels, nav items.<br>
+    Replace with: <code>margin-left: 2px</code> or <code>margin-top: 2px</code> to expose the <code>#050505</code> floor.
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════ -->
+<!-- SECTION 6: STREAMING STATE            -->
+<!-- ═══════════════════════════════════════ -->
+<div class="section">
+  <div class="section-header">
+    <div class="section-number">06 — The Money Shot</div>
+    <div class="section-title">Streaming State</div>
+    <div class="section-desc">
+      This is the whole product pitch in one visual. An idle panel vs. a panel with a live agent
+      streaming. The difference should be instantly visible from across the room.
+    </div>
+  </div>
+  <div class="comparison">
+    <div>
+      <div class="side-label" style="color: var(--text-2);">Idle panel — quiet</div>
+      <div class="stream-demo stream-idle">
+        <div class="stream-header">
+          <div class="channel-name"><span class="hash">#</span> general</div>
+          <span class="status-dot idle"></span>
+        </div>
+        <div class="stream-body">
+          <div class="st-msg">
+            <div class="st-avatar">N</div>
+            <div>
+              <div class="st-name">Nick</div>
+              <div class="st-text">The deploy looks good. Ship it when ready.</div>
+            </div>
+          </div>
+          <div class="st-msg">
+            <div class="st-avatar">C</div>
+            <div>
+              <div class="st-name">CodeBot</div>
+              <div class="st-text">Acknowledged. Docker build queued.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div>
+      <div class="side-label" style="color: var(--cyan);">Streaming panel — alive</div>
+      <div class="stream-demo stream-live">
+        <div class="stream-header">
+          <div class="channel-name"><span class="hash">#</span> agents</div>
+          <span class="status-dot live"></span>
+        </div>
+        <div class="stream-body">
+          <div class="st-msg">
+            <div class="st-avatar">N</div>
+            <div>
+              <div class="st-name">Nick</div>
+              <div class="st-text">Review the WebSocket reconnection logic in the gateway.</div>
+            </div>
+          </div>
+          <div class="st-streaming-msg">
+            <div class="st-avatar" style="border: 1px solid rgba(34, 211, 238, 0.2);">C</div>
+            <div class="st-streaming-body">
+              <div class="st-streaming-label">
+                <span class="thinking-dots"><span></span><span></span><span></span></span>
+                Streaming
+              </div>
+              <div class="st-streaming-text">
+                The reconnection logic in <code style="background:var(--bg-0); padding:1px 5px; border-radius:3px; font-size:11px; color:var(--orange);">socket_handler.ex</code> 
+                has a race condition. When the client reconnects, it re-joins all channels but doesn't wait for the previous 
+                connection's cleanup. The stale presence entries persist for<span class="st-cursor"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="callout">
+    <div class="callout-title">What makes the streaming panel pop</div>
+    Header status dot: <code>background: var(--cyan); box-shadow: 0 0 6px var(--cyan)</code> with pulse animation<br>
+    Streaming block: <code>border-left: 2px solid var(--cyan)</code> + <code>background: rgba(34, 211, 238, 0.04)</code><br>
+    Bot avatar gets: <code>border: 1px solid rgba(34, 211, 238, 0.2)</code> only while streaming<br>
+    Cursor blink: <code>2px wide, var(--cyan), 0.8s blink</code> — the "it's typing" signal
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════ -->
+<!-- SECTION 7: FULL COMPOSITE             -->
+<!-- ═══════════════════════════════════════ -->
+<div class="section">
+  <div class="section-header">
+    <div class="section-number">07 — Composite</div>
+    <div class="section-title">All Principles Combined</div>
+    <div class="section-desc">
+      One panel with everything applied: depth shadows, accent restraint, subtle scanlines,
+      generous typography, minimal borders, live streaming state. This is the screenshot.
+    </div>
+  </div>
+  
+  <div class="composite-demo">
+    <div class="composite-panel">
+      <div class="cp-header">
+        <div class="cp-header-left">
+          <span class="cp-hash">#</span>
+          <span class="cp-channel-name">agent-workspace</span>
+          <span class="cp-topic">· code review pipeline</span>
+        </div>
+        <div class="cp-controls">
+          <div class="cp-ctrl-btn">—</div>
+          <div class="cp-ctrl-btn">□</div>
+          <div class="cp-ctrl-btn close">×</div>
+        </div>
+      </div>
+      <div class="cp-messages">
+        <div class="cp-msg">
+          <div class="cp-avatar">N</div>
+          <div class="cp-msg-body">
+            <div class="cp-msg-meta">
+              <span class="cp-msg-name">Nick</span>
+              <span class="cp-msg-time">3:42 PM</span>
+            </div>
+            <div class="cp-msg-text">
+              The gateway keeps dropping connections after 30 seconds of inactivity. 
+              Check the heartbeat interval in <code>socket_handler.ex</code>
+            </div>
+          </div>
+        </div>
+        <div class="cp-msg">
+          <div class="cp-avatar" style="border: 1px solid rgba(34, 211, 238, 0.2);">R</div>
+          <div class="cp-msg-body">
+            <div class="cp-msg-meta">
+              <span class="cp-msg-name">ReviewBot</span>
+              <span class="cp-bot-tag">AGENT</span>
+              <span class="cp-msg-time">3:42 PM</span>
+            </div>
+            <div class="cp-msg-text">
+              Found it. The Phoenix socket timeout is set to <code>30_000</code> but the client
+              heartbeat sends every <code>45_000</code>ms. The server gives up before the client
+              checks in.
+            </div>
+            <div class="cp-streaming-block">
+              <div class="cp-streaming-header">
+                <span class="thinking-dots"><span></span><span></span><span></span></span>
+                Streaming · claude-sonnet-4
+              </div>
+              <div class="cp-streaming-content">
+                Recommended fix: align the intervals by setting <code style="background:var(--bg-0); padding:1px 5px; border-radius:3px; font-size:11px; color:var(--orange);">transport: :websocket, timeout: 60_000</code> in the endpoint config, then configure the client heartbeat to <code style="background:var(--bg-0); padding:1px 5px; border-radius:3px; font-size:11px; color:var(--orange);">heartbeatIntervalMs: 30000</code>. This gives 2× headroom between<span class="st-cursor"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="cp-input-area">
+        <div class="cp-input">
+          <span>Message #agent-workspace</span>
+          <div class="cp-send-btn">↑</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

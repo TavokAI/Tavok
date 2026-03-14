@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { serializeSequence } from "@/lib/api-safety";
+import { serializeDmMessage } from "@/lib/dm-message-payload";
 
 /**
  * GET /api/dms/{dmId}/messages — Fetch DM message history.
@@ -73,38 +73,7 @@ export async function GET(
     // Reverse to chronological order
     messages.reverse();
 
-    const payload = messages.map((m) => {
-      // Aggregate reactions: [{emoji, count, userIds}] (TASK-0030)
-      const reactionMap = new Map<string, string[]>();
-      for (const r of m.reactions) {
-        const existing = reactionMap.get(r.emoji) || [];
-        existing.push(r.userId);
-        reactionMap.set(r.emoji, existing);
-      }
-      const reactions = Array.from(reactionMap.entries()).map(
-        ([emoji, userIds]) => ({
-          emoji,
-          count: userIds.length,
-          userIds,
-        }),
-      );
-
-      return {
-        id: m.id,
-        dmId: m.dmId,
-        authorId: m.authorId,
-        authorType: "USER",
-        authorName: m.author.displayName,
-        authorAvatarUrl: m.author.avatarUrl,
-        content: m.content,
-        type: "STANDARD",
-        streamingStatus: null,
-        sequence: serializeSequence(m.sequence),
-        createdAt: m.createdAt.toISOString(),
-        editedAt: m.editedAt?.toISOString() || null,
-        reactions,
-      };
-    });
+    const payload = messages.map((message) => serializeDmMessage(message));
 
     return NextResponse.json({ messages: payload, hasMore });
   } catch (error) {

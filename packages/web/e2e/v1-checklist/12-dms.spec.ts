@@ -54,12 +54,14 @@ test.describe("Section 12: Direct Messages", () => {
         }
       } else {
         // Alternative: Create DM via API
+        const bobMe = await pageB.request.get("/api/users/me");
+        const bobUser = await bobMe.json();
         const res = await pageA.request.post("/api/dms", {
-          data: { username: BOB.username },
+          data: { userId: bobUser.id },
         });
         if (res.ok()) {
-          const dm = await res.json();
-          await pageA.goto(`/dms/${dm.id}`);
+          const data = await res.json();
+          await pageA.goto(`/dms/${data.dm.id}`);
         }
       }
 

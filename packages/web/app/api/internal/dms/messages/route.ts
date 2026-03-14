@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+import { serializeSequence } from "@/lib/api-safety";
 import { prisma } from "@/lib/db";
 import { validateInternalSecret } from "@/lib/internal-auth";
-import { serializeSequence } from "@/lib/api-safety";
+import { serializeDmMessage } from "@/lib/dm-message-payload";
 
 /**
  * POST /api/internal/dms/messages — Persist a DM message.
@@ -117,6 +118,9 @@ export async function GET(request: NextRequest) {
             username: true,
           },
         },
+        reactions: {
+          select: { emoji: true, userId: true },
+        },
       },
       orderBy: afterSequence ? { sequence: "asc" } : { id: "desc" },
       take: limit + 1,
@@ -131,21 +135,9 @@ export async function GET(request: NextRequest) {
       messages.reverse();
     }
 
-    const payload = messages.map((m: (typeof messages)[number]) => ({
-      id: m.id,
-      dmId: m.dmId,
-      authorId: m.authorId,
-      authorType: "USER",
-      authorName: m.author.displayName,
-      authorAvatarUrl: m.author.avatarUrl,
-      content: m.content,
-      type: "STANDARD",
-      streamingStatus: null,
-      sequence: serializeSequence(m.sequence),
-      createdAt: m.createdAt.toISOString(),
-      editedAt: m.editedAt?.toISOString() || null,
-      reactions: [], // DMs don't have reactions in V1
-    }));
+    const payload = messages.map((message: (typeof messages)[number]) =>
+      serializeDmMessage(message),
+    );
 
     return NextResponse.json({ messages: payload, hasMore });
   } catch (error) {

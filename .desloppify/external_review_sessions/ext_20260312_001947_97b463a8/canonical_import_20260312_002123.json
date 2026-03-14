@@ -1,0 +1,163 @@
+{
+  "assessments": {
+    "naming_quality": 87,
+    "logic_clarity": 88,
+    "type_safety": 85,
+    "contract_coherence": 86,
+    "error_consistency": 85,
+    "abstraction_fitness": 89,
+    "ai_generated_debt": 87,
+    "high_level_elegance": 89,
+    "mid_level_elegance": 87,
+    "low_level_elegance": 86,
+    "cross_module_architecture": 88,
+    "initialization_coupling": 89,
+    "convention_outlier": 86,
+    "dependency_health": 89,
+    "test_strategy": 83,
+    "api_surface_coherence": 87,
+    "authorization_consistency": 88,
+    "incomplete_migration": 87,
+    "package_organization": 89,
+    "design_coherence": 87
+  },
+  "dimension_notes": {
+    "naming_quality": "Consistent kebab-case file naming throughout. Variable and function names are descriptive. Pure helper functions (applyStreamComplete, applyStreamError, etc.) follow clear verb+noun convention. Factory function names could use more domain-intent names but are functional.",
+    "logic_clarity": "Streaming handlers simplified via extracted pure helpers. Route handler logic uses clear early returns. mergeServerData helper eliminates repetitive state update patterns. Some route handlers still have long sequential validation chains.",
+    "type_safety": "Gateway-client.ts has typed payload interfaces (MessageNewPayload, StreamStartPayload, etc.). Pure helper functions have explicit input/output types. Some route handlers still use inline type assertions after JSON parsing.",
+    "contract_coherence": "PROTOCOL.md is comprehensive and up to date. Typed payload interfaces in gateway-client.ts make contracts explicit. Some implicit contracts between web and gateway could still be more explicit with runtime validation.",
+    "error_consistency": "DELETE endpoints consistently return {success: true}. Error responses follow {error: string} pattern. console.error logging is consistent with [module] prefix pattern. Security-sensitive error messages no longer leak secret names.",
+    "abstraction_fitness": "Handler registration pattern well-extracted. mergeServerData helper eliminates 4 repetitive state update patterns. 6 pure streaming helpers extracted from use-channel.ts. HandlerDeps interface could be split into narrower interfaces.",
+    "ai_generated_debt": "Codebase significantly cleaned up over multiple sessions. Repetitive patterns reduced via mergeServerData and streaming helpers. Some repetitive fetch-parse-error patterns remain in ChatProvider refresh functions.",
+    "high_level_elegance": "Clean separation: Gateway=transport, Go=orchestration, Web=API+UI. Package boundaries are well-defined. No circular dependencies between packages.",
+    "mid_level_elegance": "ChatProvider improved with mergeServerData. Streaming lifecycle well-structured with extracted pure helpers. Some components still have high complexity but manage genuinely complex state.",
+    "low_level_elegance": "Pure helper functions extracted from inline expressions improve readability. Variable renames (webhookToken, generatedKey) improve clarity. Some inline type casts remain in route handlers.",
+    "cross_module_architecture": "Clear package boundaries. Gateway client abstracts HTTP transport cleanly. CLI package properly isolated. Shared types package keeps common interfaces DRY.",
+    "initialization_coupling": "Environment variable reads are at call-time in socket.ts. Module-level state is minimal. PrismaClient uses globalThis singleton pattern correctly for Next.js hot reload.",
+    "convention_outlier": "File naming consistently kebab-case. Test files use consistent patterns with vi.mock and test fixtures. Some variation in mock setup approaches across test files.",
+    "dependency_health": "Dependencies well-managed. No circular imports detected. Package boundaries clean. Phoenix JS dependency should be version-pinned.",
+    "test_strategy": "Significant improvement: 100+ tests across 12+ test suites. New tests cover admin-auth, auth config, check-member-permission, db singleton, env validation, image-dimensions, rate-limit, socket, gateway-client, use-channel-helpers. Coverage gaps remain in UI components and providers.",
+    "api_surface_coherence": "DELETE endpoints standardized. Route handler signatures consistent. Internal API uses typed interfaces. Some list endpoints return arrays directly while others wrap in named properties.",
+    "authorization_consistency": "Auth patterns consistent: session check, permission check, then action. Admin token authentication uses timing-safe comparison. Owner-only checks could be more unified across endpoints.",
+    "incomplete_migration": "PascalCase to kebab-case migration complete. All .js files migrated to .ts. Sequence type handling still varies between string and bigint in some places.",
+    "package_organization": "Clean package structure: web, shared, cli, gateway, streaming. Auth files follow consistent naming. Components well-organized in feature directories. E2E tests within web package is acceptable for monorepo.",
+    "design_coherence": "Consistent patterns for route handlers, streaming lifecycle, and broadcast helpers. State management uses both direct setState and mergeServerData patterns, which could be consolidated."
+  },
+  "issues": [
+    {
+      "dimension": "type_safety",
+      "identifier": "route_handler_inline_type_assertions",
+      "suggestion": "Consider using zod or similar for runtime body validation in route handlers.",
+      "summary": "Route handlers use inline 'as' type assertions for request body parsing",
+      "confidence": "low",
+      "related_files": [
+        "packages/web/app/api/servers/[serverId]/channels/[channelId]/route.ts"
+      ],
+      "evidence": [
+        "Route handlers use 'as Record<string, unknown>' after JSON parsing rather than runtime validation with schemas."
+      ]
+    },
+    {
+      "dimension": "test_strategy",
+      "identifier": "ui_component_test_coverage_gap",
+      "suggestion": "Add component tests for critical UI components using testing-library.",
+      "summary": "UI components and providers lack test coverage",
+      "confidence": "medium",
+      "related_files": [
+        "packages/web/components/providers/chat-provider.tsx",
+        "packages/web/components/chat/message-input.tsx"
+      ],
+      "evidence": [
+        "While lib modules now have good test coverage, UI components and providers still have no unit tests. The mergeServerData helper in chat-provider.tsx is tested indirectly but component behavior is not."
+      ]
+    },
+    {
+      "dimension": "logic_clarity",
+      "identifier": "channel_patch_validation_chain",
+      "suggestion": "Extract a field validation helper or use a schema validation library for route handlers.",
+      "summary": "Channel PATCH handler has a long sequential validation chain",
+      "confidence": "low",
+      "related_files": [
+        "packages/web/app/api/servers/[serverId]/channels/[channelId]/route.ts"
+      ],
+      "evidence": [
+        "The PATCH handler validates 7+ fields sequentially with similar patterns."
+      ]
+    },
+    {
+      "dimension": "convention_outlier",
+      "identifier": "test_mock_pattern_variation",
+      "suggestion": "Establish a standard mock pattern and document it in a testing guide.",
+      "summary": "Test files use slightly different mocking approaches",
+      "confidence": "low",
+      "related_files": [
+        "packages/web/lib/__tests__/gateway-client.test.ts",
+        "packages/web/lib/__tests__/check-member-permission.test.ts"
+      ],
+      "evidence": [
+        "Some tests use vi.stubGlobal, others use vi.mock with factory functions, and some use inline mocks."
+      ]
+    },
+    {
+      "dimension": "api_surface_coherence",
+      "identifier": "mixed_list_response_shapes",
+      "suggestion": "Standardize list response shape to always wrap in a named property.",
+      "summary": "List endpoints have inconsistent response shapes",
+      "confidence": "low",
+      "related_files": [
+        "packages/web/app/api/servers/[serverId]/route.ts"
+      ],
+      "evidence": [
+        "Some list endpoints wrap results in {members: [...]} while others return bare arrays."
+      ]
+    },
+    {
+      "dimension": "design_coherence",
+      "identifier": "mixed_state_update_patterns",
+      "suggestion": "Consider consolidating state management to use mergeServerData pattern consistently.",
+      "summary": "State updates use both direct setState and mergeServerData patterns",
+      "confidence": "low",
+      "related_files": [
+        "packages/web/components/providers/chat-provider.tsx"
+      ],
+      "evidence": [
+        "ChatProvider uses mergeServerData for some updates but direct setState for channels/members/agents in some paths."
+      ]
+    },
+    {
+      "dimension": "dependency_health",
+      "identifier": "phoenix_version_pinning",
+      "suggestion": "Pin phoenix dependency to exact version to prevent unexpected WebSocket protocol changes.",
+      "summary": "Phoenix JS client dependency should be version-pinned",
+      "confidence": "low",
+      "related_files": [
+        "packages/web/package.json"
+      ],
+      "evidence": [
+        "The phoenix package dependency uses a semver range rather than an exact version lock."
+      ]
+    },
+    {
+      "dimension": "error_consistency",
+      "identifier": "error_log_format_variation",
+      "suggestion": "Standardize error logging format to always use [module] prefix.",
+      "summary": "Error logging uses slightly different formats across handlers",
+      "confidence": "low",
+      "related_files": [
+        "packages/web/app/api/internal/agents/[agentId]/dispatch/route.ts"
+      ],
+      "evidence": [
+        "Some error logs use template literals, others string concatenation, and formatting of context varies."
+      ]
+    }
+  ],
+  "provenance": {
+    "kind": "blind_review_batch_import",
+    "blind": true,
+    "runner": "claude",
+    "session_id": "ext_20260312_001947_97b463a8",
+    "created_at": "2026-03-12T00:21:23+00:00",
+    "packet_path": "/mnt/c/Users/njlec/Tavok/.desloppify/review_packet_blind.json",
+    "packet_sha256": "23e862e608eff3a90667c88dff7aa51683fdad7fa1d7626474d68f2d85b266e0"
+  }
+}

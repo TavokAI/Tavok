@@ -1,0 +1,115 @@
+{
+  "batch": "error_consistency",
+  "batch_index": 4,
+  "assessments": {
+    "error_consistency": 74.5
+  },
+  "dimension_notes": {
+    "error_consistency": {
+      "evidence": [
+        "API route handlers consistently use try-catch with console.error + NextResponse.json({ error }, { status }) — e.g., transfer/route.ts, dispatch/route.ts, route-handlers.js all follow the same shape",
+        "UI components in server-settings/ consistently use try-catch with setError(message) for user-facing feedback — overview-section.tsx, channels-section.tsx, danger-zone-section.tsx all follow this pattern",
+        "useDmList.refresh (use-dm-list.ts:43-72) silently drops non-ok HTTP responses — if res.ok is false, no error is set, no log emitted, caller cannot distinguish failure from empty result",
+        "DangerZoneSection.fetchMembers (danger-zone-section.tsx:45-47) has an empty catch block with a '// Silently fail' comment — members list fails without any user or developer feedback",
+        "ChannelsSection.fetchChannels (channels-section.tsx:44-51) silently drops non-ok responses — only catches thrown exceptions, ignoring HTTP-level errors",
+        "persistMessage and updateMessage in dispatch/route.ts (lines 312-338) log errors but never throw — callers proceed as if persistence succeeded, meaning a stream can report success while the message was never saved",
+        "socket.ts fetchToken (lines 11-20) returns null for both network errors and auth failures — useSocket callers cannot distinguish 'not authenticated' from 'network down' from 'server-side rendering'",
+        "ChannelsSection.handleReorder (channels-section.tsx:141-149) catches errors and silently refetches — no user feedback that reorder failed"
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    }
+  },
+  "dimension_judgment": {
+    "error_consistency": {
+      "strengths": [
+        "API route handlers follow a uniform pattern: try-catch wrapping DB operations with console.error + structured JSON error response with appropriate HTTP status codes",
+        "UI components in server-settings/ consistently use setError() state to surface errors to users, with a shared pattern of err instanceof Error ? err.message : fallback",
+        "JSON body parsing across all API routes consistently catches parse failures and returns 400 with { error: 'Invalid JSON body' }",
+        "The dispatch route handler carefully distinguishes AbortError (504) from general errors (502) in webhook calls"
+      ],
+      "issue_character": "The codebase has two well-established error handling conventions (API routes and UI components), but client-side data fetching hooks and some UI fetch operations silently drop non-ok HTTP responses, creating a blind spot where failures produce no user feedback and no developer diagnostics.",
+      "score_rationale": "The API layer and the settings UI components demonstrate consistent, predictable error handling — a developer working there would know what to expect. However, the client-side hooks (useDmList, useSocket) and several fetch callbacks in UI components silently swallow non-ok responses, creating a distinct subsystem where error behavior is unpredictable. This is not just a local issue — it affects the entire data-fetching layer of the frontend. The mix of 'sometimes errors surface, sometimes they vanish' pulls the score below 80 into the mid-70s, where a developer would encounter enough inconsistency that they cannot fully trust error handling conventions learned from one area."
+    }
+  },
+  "issues": [
+    {
+      "dimension": "error_consistency",
+      "identifier": "silent_non_ok_response_dm_list",
+      "summary": "useDmList.refresh silently drops non-ok HTTP responses without logging or surfacing error",
+      "related_files": ["packages/web/lib/hooks/use-dm-list.ts"],
+      "evidence": ["Lines 43-72: when res.ok is false, execution falls through the if block with no else — no error state is set, no console.error logged, and isLoading transitions to false as if the fetch succeeded with zero results"],
+      "suggestion": "Add an else branch after the res.ok check: log the status/error and either set an error state on the hook's return value or re-throw so the catch block handles it consistently with the thrown-exception path",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "single_edit"
+    },
+    {
+      "dimension": "error_consistency",
+      "identifier": "silent_catch_fetch_members",
+      "summary": "DangerZoneSection.fetchMembers has an empty catch block that silently swallows all errors",
+      "related_files": ["packages/web/components/server-settings/danger-zone-section.tsx"],
+      "evidence": ["Lines 45-47: catch block is empty with only a '// Silently fail' comment — a network error, JSON parse error, or server 500 all vanish without any user or developer feedback, while sibling functions in the same component (handleTransfer, handleDelete) properly surface errors via setError()"],
+      "suggestion": "At minimum add console.error for developer diagnostics; ideally set error state so the user knows members could not be loaded (e.g., 'Could not load members for transfer')",
+      "confidence": "high",
+      "impact_scope": "local",
+      "fix_scope": "single_edit"
+    },
+    {
+      "dimension": "error_consistency",
+      "identifier": "silent_non_ok_channels_fetch",
+      "summary": "ChannelsSection.fetchChannels silently ignores non-ok HTTP responses",
+      "related_files": ["packages/web/components/server-settings/channels-section.tsx"],
+      "evidence": ["Lines 44-51: only processes data when res.ok is true; when res.ok is false, no error message is set — loading spinner disappears and user sees empty channel list with no explanation"],
+      "suggestion": "Add an else branch to set error state when res.ok is false, consistent with the component's other fetch handlers (handleCreate, handleDelete, handleSaveEdit) which all surface errors via setError()",
+      "confidence": "high",
+      "impact_scope": "local",
+      "fix_scope": "single_edit"
+    },
+    {
+      "dimension": "error_consistency",
+      "identifier": "persist_message_errors_swallowed",
+      "summary": "persistMessage and updateMessage in dispatch route log errors but never propagate them to callers",
+      "related_files": ["packages/web/app/api/internal/agents/[agentId]/dispatch/route.ts"],
+      "evidence": ["Lines 301-338: both helper functions log errors via console.error but return void — the main handler at line 240 returns { ok: true } even if the message was never persisted, meaning a successful-looking webhook dispatch can silently lose messages"],
+      "suggestion": "Have persistMessage and updateMessage throw on failure (or return a success boolean) so the main handler can reflect persistence failures in its response — at minimum for the initial persistMessage call which is critical to message durability",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "single_edit"
+    },
+    {
+      "dimension": "error_consistency",
+      "identifier": "socket_null_conflates_errors",
+      "summary": "getSocket and fetchToken return null for three distinct failure modes with no way for callers to distinguish them",
+      "related_files": ["packages/web/lib/socket.ts"],
+      "evidence": ["fetchToken (lines 11-20) returns null for network errors, non-ok responses, and missing token field; getSocket (lines 26-61) returns null for SSR context, auth failure, and network failure — useSocket (use-socket.ts) receives null and cannot provide meaningful diagnostics to the user"],
+      "suggestion": "Return a discriminated result from getSocket indicating the failure reason (e.g., { socket: null, reason: 'auth_failed' | 'network_error' | 'ssr' }) so callers can provide appropriate feedback — or at minimum add console.warn with the failure context",
+      "confidence": "medium",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor"
+    },
+    {
+      "dimension": "error_consistency",
+      "identifier": "reorder_silent_fallback",
+      "summary": "ChannelsSection.handleReorder catches errors and silently refetches without notifying the user",
+      "related_files": ["packages/web/components/server-settings/channels-section.tsx"],
+      "evidence": ["Lines 141-149: on reorder failure, the catch block calls fetchChannels() to revert optimistic update but never calls setError() — user sees channels snap back to original order with no explanation, while sibling handlers (handleCreate, handleDelete, handleSaveEdit) all surface errors"],
+      "suggestion": "Add setError('Failed to reorder channels') before the fetchChannels() call in the catch block, matching the error reporting pattern used by sibling handlers in the same component",
+      "confidence": "high",
+      "impact_scope": "local",
+      "fix_scope": "single_edit"
+    }
+  ],
+  "retrospective": {
+    "root_causes": [
+      "Client-side fetch patterns lack a shared convention for handling non-ok HTTP responses — each component/hook independently decides whether to check res.ok and what to do when it fails",
+      "No shared fetch wrapper or error-handling utility for frontend API calls, leading to inconsistent error surfacing across hooks and components"
+    ],
+    "likely_symptoms": [
+      "silent_non_ok_response_dm_list and silent_non_ok_channels_fetch are symptoms of the missing fetch error convention",
+      "silent_catch_fetch_members and reorder_silent_fallback are symptoms of inconsistent error surfacing within the same component family"
+    ],
+    "possible_false_positives": []
+  }
+}

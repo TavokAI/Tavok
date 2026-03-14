@@ -1,0 +1,125 @@
+{
+  "batch": "api_surface_coherence",
+  "batch_index": 11,
+  "assessments": {
+    "api_surface_coherence": 62.5
+  },
+  "dimension_notes": {
+    "api_surface_coherence": {
+      "evidence": [
+        "route-handlers.js exports 7 handler factories whose returned functions have 4 distinct parameter shapes: (request), (agentId), (request, agentId), (request, { params }) — callers must memorize which shape each handler uses",
+        "ConnectionMethodType in components/modals/agent/types.ts and ConnectionMethodValue in lib/agent-factory.ts define identical string literal unions with different names, no shared source",
+        "buildConnectionInfo returns Record<string, string | undefined> — callers receive an untyped bag instead of a discriminated union per connection method",
+        "socket.ts public API mixes async (getSocket) and sync (disconnectSocket) without a compelling reason — disconnectSocket could be async for consistency",
+        "route-handlers.js is the primary API surface for internal and public agent routes but is untyped JavaScript, making error contracts invisible to consumers"
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    }
+  },
+  "dimension_judgment": {
+    "api_surface_coherence": {
+      "strengths": [
+        "agent-factory.ts provides a clean, well-documented shared factory (createAgent + buildConnectionInfo) reused by both UI and CLI routes, with typed options/result interfaces",
+        "E2E helpers in v1-checklist/helpers.ts have consistent signatures: all UI helpers take (page, ...args) and all API helpers take (page, ...args) with uniform error handling",
+        "mock-mcp-server.ts has a clean start/stop pair with consistent async signatures and idempotency guards",
+        "CLI runner.ts functions have consistent parameter ordering (version, target, env) across related functions"
+      ],
+      "issue_character": "The main API surface issues are handler signature inconsistency in the route-handlers module and a duplicated connection-method type definition that drifts across frontend and backend boundaries.",
+      "score_rationale": "The codebase shows good practices in newer modules (agent-factory, helpers, CLI runner) where API shapes are consistent and well-typed. However, route-handlers.js — a central module serving both internal and public agent APIs — has inconsistent handler signatures across its 7 exported factories, is written in untyped JavaScript, and returns untyped records from buildConnectionInfo. The duplicate ConnectionMethodType/ConnectionMethodValue definition creates a subsystem-wide coherence gap. These issues pull the score below 70 but the overall direction is sound, landing around 62."
+    }
+  },
+  "issues": [
+    {
+      "dimension": "api_surface_coherence",
+      "identifier": "inconsistent_handler_signatures",
+      "summary": "route-handlers.js handler factories return functions with 4 distinct parameter shapes, making the API surface unpredictable",
+      "related_files": ["packages/web/lib/route-handlers.js"],
+      "evidence": [
+        "agentGetHandler(agentId) takes bare ID",
+        "agentPatchHandler(request, agentId) takes request + bare ID",
+        "serverAgentPatchHandler(request, { params }) takes request + destructured params",
+        "internalMessagesPostHandler(request) takes only request",
+        "No shared signature pattern — callers must memorize each variant"
+      ],
+      "suggestion": "Normalize all handler signatures to (request, context) where context always contains the relevant IDs, matching Next.js route handler conventions consistently",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor"
+    },
+    {
+      "dimension": "api_surface_coherence",
+      "identifier": "duplicate_connection_method_type",
+      "summary": "ConnectionMethodType and ConnectionMethodValue define identical string literal unions in two separate files with no shared source of truth",
+      "related_files": [
+        "packages/web/components/modals/agent/types.ts",
+        "packages/web/lib/agent-factory.ts"
+      ],
+      "evidence": [
+        "ConnectionMethodType in types.ts: 'WEBSOCKET' | 'WEBHOOK' | 'INBOUND_WEBHOOK' | 'REST_POLL' | 'SSE' | 'OPENAI_COMPAT'",
+        "ConnectionMethodValue in agent-factory.ts: derived from VALID_CONNECTION_METHODS with identical values",
+        "Adding a new connection method requires updating both files independently"
+      ],
+      "suggestion": "Define the connection method type once (e.g. in agent-factory.ts or a shared types file) and import it in both locations",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor"
+    },
+    {
+      "dimension": "api_surface_coherence",
+      "identifier": "untyped_connection_info_return",
+      "summary": "buildConnectionInfo returns Record<string, string | undefined> instead of a typed shape, losing compile-time safety for callers",
+      "related_files": ["packages/web/lib/agent-factory.ts"],
+      "evidence": [
+        "Line 138: return type is Record<string, string | undefined>",
+        "Each connection method populates different keys (websocketUrl, pollUrl, eventsUrl, etc.) but callers get no type narrowing",
+        "Callers spread the result directly into response JSON (agents/route.ts line 254) with no type verification"
+      ],
+      "suggestion": "Return a discriminated union type keyed by connection method, or at minimum a typed interface with all optional fields explicitly named",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "single_edit"
+    },
+    {
+      "dimension": "api_surface_coherence",
+      "identifier": "route_handlers_untyped_js",
+      "summary": "route-handlers.js is a core API surface with 3 importers but written in untyped JavaScript, making error contracts and parameter types invisible",
+      "related_files": ["packages/web/lib/route-handlers.js"],
+      "evidence": [
+        "File has 775 lines of untyped JavaScript in a TypeScript codebase",
+        "Handler factory parameters use destructured objects with no type annotations: { prismaClient }, { getServerSession, authOptions, prismaClient, encrypt }",
+        "authenticateAgentKey(authHeader, agentId, prismaClient) has no parameter or return types — callers must infer the { authorized, error, status } shape"
+      ],
+      "suggestion": "Convert route-handlers.js to TypeScript to align with the rest of the codebase and make error contracts explicit",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor"
+    },
+    {
+      "dimension": "api_surface_coherence",
+      "identifier": "mixed_sync_async_socket_api",
+      "summary": "socket.ts public API exports async getSocket() alongside sync disconnectSocket() without a compelling asymmetry reason",
+      "related_files": ["packages/web/lib/socket.ts"],
+      "evidence": [
+        "getSocket() is async (returns Promise<Socket | null>)",
+        "disconnectSocket() is synchronous (returns void)",
+        "Both operate on the same module-level singleton socket — the asymmetry forces callers to handle two different invocation patterns for paired lifecycle operations"
+      ],
+      "suggestion": "Make disconnectSocket async or document why the asymmetry is intentional (e.g., sync disconnect is required for beforeunload handlers)",
+      "confidence": "medium",
+      "impact_scope": "local",
+      "fix_scope": "single_edit"
+    }
+  ],
+  "retrospective": {
+    "root_causes": [
+      "route-handlers.js grew organically as different handler types were added (internal, server-scoped, public agent API) without a unifying signature convention",
+      "Connection method types were defined independently in frontend (modal types) and backend (factory) without extracting a shared definition"
+    ],
+    "likely_symptoms": [
+      "mixed_sync_async_socket_api"
+    ],
+    "possible_false_positives": []
+  }
+}

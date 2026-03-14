@@ -1,0 +1,2243 @@
+{
+  "assessments": {
+    "abstraction_fitness": {
+      "score": 84.1,
+      "components": [
+        "Abstraction Leverage",
+        "Indirection Cost",
+        "Interface Honesty",
+        "Delegation Density",
+        "Definition Directness",
+        "Type Discipline"
+      ],
+      "component_scores": {
+        "Abstraction Leverage": 91.0,
+        "Indirection Cost": 95.0,
+        "Interface Honesty": 96.0,
+        "Delegation Density": 98.0,
+        "Definition Directness": 94.0,
+        "Type Discipline": 92.0
+      }
+    },
+    "ai_generated_debt": 54.8,
+    "api_surface_coherence": 41.2,
+    "authorization_consistency": 81.6,
+    "contract_coherence": 67.8,
+    "convention_outlier": 63.6,
+    "cross_module_architecture": 51.8,
+    "dependency_health": 82.5,
+    "design_coherence": 43.4,
+    "error_consistency": 54.9,
+    "high_level_elegance": 69.5,
+    "incomplete_migration": 52.7,
+    "initialization_coupling": 60.2,
+    "logic_clarity": 80.0,
+    "low_level_elegance": 57.9,
+    "mid_level_elegance": 54.4,
+    "naming_quality": 79.0,
+    "package_organization": 64.3,
+    "test_strategy": 43.2,
+    "type_safety": 48.5
+  },
+  "dimension_notes": {
+    "cross_module_architecture": {
+      "evidence": [
+        "ConnectionMethod type defined three times independently: packages/shared/types/agent.ts (ConnectionMethod), packages/web/components/modals/agent/types.ts (ConnectionMethodType), packages/web/lib/agent-factory.ts (ConnectionMethodValue) \u2014 all enumerate the same 6 values with no cross-reference",
+        "Self-HTTP-call pattern in dispatch/route.ts: an internal API route (dispatch) constructs NEXTAUTH_URL and calls back to /api/internal/messages on the same Next.js server via HTTP, creating unnecessary network round-trips and duplicating the base URL construction across 8+ files",
+        "Inline base URL construction 'process.env.NEXTAUTH_URL || \"http://localhost:5555\"' duplicated in at least 8 route files across packages/web/app/api/v1/ and packages/web/app/api/internal/",
+        "Message payload shape (authorId, authorType, authorName, authorAvatarUrl, content, type, streamingStatus, sequence, createdAt, editedAt, reactions) manually constructed in at least 3 separate route files (internal/messages, dms/[dmId]/messages, internal/dms/messages) with no shared mapper function",
+        "Reaction aggregation logic (Map<emoji, userIds[]> -> [{emoji, count, userIds}]) duplicated in 3 route files with identical implementation",
+        "Internal API auth pattern (validateInternalSecret + early return 401) is consistent and well-factored via @/lib/internal-auth \u2014 a positive structural choice",
+        "gateway-client.ts provides a clean facade over Gateway HTTP calls with typed convenience wrappers",
+        "lib/api-safety.js and lib/route-handlers.js are JavaScript (.js) files in an otherwise TypeScript codebase, suggesting they predate the TS migration or were generated differently"
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high",
+      "issues_preventing_higher_score": ""
+    },
+    "high_level_elegance": {
+      "evidence": [
+        "Top-level packages (web, shared, cli) map to clear domain capabilities: web = Next.js frontend + API, shared = cross-package types, cli = developer tooling",
+        "Auth is split across four files (auth.ts, admin-auth.ts, agent-auth.ts, internal-auth.ts) each with clear, documented responsibility boundaries and distinct auth flows",
+        "ConnectionMethod type is defined three times independently: packages/shared/types/agent.ts (ConnectionMethod), packages/web/lib/agent-factory.ts (VALID_CONNECTION_METHODS + ConnectionMethodValue), and packages/web/components/modals/agent/types.ts (ConnectionMethodType) \u2014 all with identical values but no shared source of truth",
+        "API route structure cleanly separates public (api/v1/), user-facing (api/servers/, api/dms/), and internal (api/internal/) surfaces with predictable URL patterns",
+        "components/ directory is organized by domain: chat/, dm/, layout/, workspace/, modals/, providers/, server-settings/, user/ \u2014 each directory maps to a clear UI capability",
+        "DM chat area (dm/dm-chat-area.tsx, 428 lines) is a standalone monolith that re-imports shared chat components (MessageInput, MarkdownContent, ReactionBar, EditMessageInput) piecemeal rather than sharing a common message rendering abstraction with chat/chat-area.tsx",
+        "shared/types/ barrel export (index.ts) re-exports all domain types cleanly: user, server, channel, message, agent, protocol, typed-messages \u2014 each file maps to one Prisma model or protocol surface"
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high",
+      "issues_preventing_higher_score": "Triple definition of ConnectionMethod type across shared types, agent-factory, and modal types creates a maintenance hazard where the three definitions can drift independently. DM chat area duplicates rendering logic that should be shared with channel chat area through a common abstraction."
+    },
+    "convention_outlier": {
+      "evidence": [
+        "typed-messages/ subdirectory uses PascalCase filenames (ToolCallCard.tsx, ArtifactRenderer.tsx, etc.) while all other component directories use kebab-case (message-input.tsx, channel-header.tsx, etc.)",
+        "MessageMetadata.tsx in chat/ is PascalCase while its 17 sibling files are kebab-case",
+        "packages/web/lib/ has 3 plain .js files (route-handlers.js, api-safety.js, validation.js) alongside 19 .ts files",
+        "overview-section.tsx and server-settings-overlay.tsx do not use useCallback while 6/8 sibling server-settings files do, using inline function declarations instead",
+        "use-channel.ts and use-dm-channel.ts both define an identical compareSequences utility function locally rather than sharing it",
+        "use-panel-state.ts exports both a hook (usePanelState) and multiple standalone utility functions (hydrateSavedPanel, reopenExistingPanel, etc.) while sibling hooks export only a single hook each"
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high",
+      "issues_preventing_higher_score": ""
+    },
+    "error_consistency": {
+      "evidence": [
+        "API route handlers consistently use try-catch with console.error + NextResponse.json({ error }, { status }) \u2014 e.g., transfer/route.ts, dispatch/route.ts, route-handlers.js all follow the same shape",
+        "UI components in server-settings/ consistently use try-catch with setError(message) for user-facing feedback \u2014 overview-section.tsx, channels-section.tsx, danger-zone-section.tsx all follow this pattern",
+        "useDmList.refresh (use-dm-list.ts:43-72) silently drops non-ok HTTP responses \u2014 if res.ok is false, no error is set, no log emitted, caller cannot distinguish failure from empty result",
+        "DangerZoneSection.fetchMembers (danger-zone-section.tsx:45-47) has an empty catch block with a '// Silently fail' comment \u2014 members list fails without any user or developer feedback",
+        "ChannelsSection.fetchChannels (channels-section.tsx:44-51) silently drops non-ok responses \u2014 only catches thrown exceptions, ignoring HTTP-level errors",
+        "persistMessage and updateMessage in dispatch/route.ts (lines 312-338) log errors but never throw \u2014 callers proceed as if persistence succeeded, meaning a stream can report success while the message was never saved",
+        "socket.ts fetchToken (lines 11-20) returns null for both network errors and auth failures \u2014 useSocket callers cannot distinguish 'not authenticated' from 'network down' from 'server-side rendering'",
+        "ChannelsSection.handleReorder (channels-section.tsx:141-149) catches errors and silently refetches \u2014 no user feedback that reorder failed"
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high",
+      "issues_preventing_higher_score": ""
+    },
+    "naming_quality": {
+      "evidence": [
+        "getSocket() in packages/web/lib/socket.ts creates a socket connection, mutates global singleton state, and makes network calls \u2014 name implies pure retrieval",
+        "handle* prefix used consistently across all React components for event handlers (handleSave, handleSubmit, handleKeyDown) \u2014 standard React convention applied uniformly",
+        "Domain types use precise, descriptive names: ConnectionMethodType, AgentListItem, CreatedAgentCredentials, PanelState, DmConversation",
+        "Hook names follow use* convention consistently: useSocket, useDmList, usePanelState, useChannel, useWorkspaceContext",
+        "Panel operations use clear verb-noun pairs: openPanel, closePanel, minimizePanel, restorePanel, focusPanel, toggleMaximizePanel",
+        "Helper functions like coerceFiniteNumber, normalizePanelGeometry, restoreWindowedGeometry, hydrateSavedPanel clearly communicate intent",
+        "route-handlers.js uses factory pattern with clear naming: createInternalMessagesPostHandler, createServerAgentPatchHandler \u2014 HTTP method and resource in name"
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high",
+      "issues_preventing_higher_score": "getSocket() name/behavior mismatch is a meaningful contract-level naming issue in a shared singleton used across the app. The generic 'data' variable name is pervasive across fetch handlers but is a minor local readability issue given short scope."
+    },
+    "abstraction_fitness": {
+      "evidence": [
+        "Mechanical scan shows wrapper_rate of 0.007 (1 wrapper out of 138 function signatures) \u2014 nearly zero unnecessary indirection",
+        "The single flagged wrapper (useTheme->useContext in theme-provider.tsx) is the standard React Context consumption pattern, not gratuitous indirection",
+        "agent-factory.ts provides a shared createAgent abstraction used by both UI and CLI bootstrap routes, with clear value: deduplication of transaction logic, key generation, and channel auto-assignment",
+        "SimpleAgentForm + RestPollingForm/SSEForm/OpenAICompatForm use data-driven composition \u2014 thin configuration wrappers that reduce duplication without adding indirection",
+        "ChatContextValue interface has ~25 fields but consumers destructure only what they need; no evidence of large option bags being threaded through multiple layers",
+        "No single-implementation interfaces, no delegation-heavy classes, no facade modules detected",
+        "Reaction routes for server messages and DM messages duplicate getAggregatedReactions, getReactionsResponse, broadcastReactionUpdate, and ALLOWED_EMOJIS \u2014 identical logic with only model name differences (Reaction vs DmReaction, Message vs DirectMessage)"
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high",
+      "issues_preventing_higher_score": "Duplicated reaction logic across server and DM reaction routes represents a missing shared abstraction that would reduce ~80 lines of near-identical code. The ChatProvider context surface (25 fields) is wide, though this is partially inherent to the application's state needs.",
+      "sub_axes": {
+        "abstraction_leverage": 91.0,
+        "indirection_cost": 95.0,
+        "interface_honesty": 96.0,
+        "delegation_density": 98.0,
+        "definition_directness": 94.0,
+        "type_discipline": 92.0
+      }
+    },
+    "dependency_health": {
+      "evidence": [
+        "The web package has only 14 production dependencies, all purposeful: framework (next, react, react-dom), auth (next-auth, bcryptjs), database (prisma), real-time (phoenix), markdown rendering (react-markdown, rehype-highlight, remark-gfm, highlight.js), icons (lucide-react), ID generation (ulid), validation (zod), and one unused dep (jose)",
+        "No duplicate libraries for the same purpose: single HTTP strategy (fetch via Next.js), single icon library (lucide-react), single validation library (zod), single markdown pipeline",
+        "jose is listed as a direct dependency in packages/web/package.json but is never imported by application code - it is only used transitively by next-auth for JWT handling",
+        "Root package.json pins @prisma/client at 6.19.2 and prisma at 6.19.2, while packages/web/package.json uses ^6.4.0 ranges for both - the root pinning controls actual resolution but the version specs are divergent",
+        "No heavy dependencies pulled in for light use - ulid is lightweight, lucide-react tree-shakes, highlight.js is used for both its CSS and via rehype-highlight"
+      ],
+      "impact_scope": "module",
+      "fix_scope": "single_edit",
+      "confidence": "high",
+      "issues_preventing_higher_score": "jose is an unnecessary direct dependency that adds confusion about what the application actually uses. The Prisma version spec divergence between root and web package.json is a maintenance hazard that could lead to subtle version mismatch bugs during upgrades."
+    },
+    "low_level_elegance": {
+      "evidence": [
+        "use-channel.ts is a 919-line single-effect hook with 15+ channel.on handlers registered inside one massive useEffect body \u2014 the event handlers for streaming, typing, reactions, editing, checkpoints, charter, and tool calls are all inlined rather than extracted",
+        "chat-provider.tsx contains four nearly identical refresh functions (refreshChannels, refreshMembers, refreshAgents, refreshPermissions) each following the same fetch-check-setState pattern with copy-pasted serverDataById merge logic",
+        "chat-panel.tsx mixes drag-and-drop window management (refs, mousemove/mouseup listeners, coordinate clamping) with chat channel logic in one 516-line component",
+        "Inline SVG icons are scattered throughout channel-sidebar.tsx, left-panel.tsx, and message-input.tsx rather than being extracted into reusable icon components \u2014 identical SVG paths for the bot icon appear in at least 2 places",
+        "API route handlers (servers/route.ts, dms/route.ts, reactions route) are clean and well-proportioned with clear guard-clause patterns and extracted helpers",
+        "Simple agent forms (simple-agent-forms.tsx) demonstrate good extraction balance \u2014 a generic SimpleAgentForm with pre-configured wrappers"
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high",
+      "issues_preventing_higher_score": ""
+    },
+    "mid_level_elegance": {
+      "evidence": [
+        "ConnectionMethod is defined three times as identical string unions: packages/shared/types/agent.ts (ConnectionMethod), packages/web/lib/agent-factory.ts (ConnectionMethodValue), and packages/web/components/modals/agent/types.ts (ConnectionMethodType) \u2014 no single source of truth at the boundary",
+        "Agent API key verification logic (hash + Prisma lookup + isActive check + result mapping) is implemented in three independent locations: agent-auth.ts, route-handlers.js::authenticateAgentKey/createAgentVerifyHandler, and api/internal/agents/verify/route.ts \u2014 each with slightly different return shapes and error semantics",
+        "agent-auth.ts contains two functions (authenticateAgentRequest and authenticateAgentKey) that are near-identical: same Prisma query, same select shape, same result mapping \u2014 differing only in how the API key is extracted (from header vs direct string)",
+        "MessageMetadata receives metadata as Record<string, unknown> and immediately casts six fields with 'as' assertions \u2014 the boundary contract is untyped despite the metadata shape being well-known from the streaming protocol",
+        "ChatArea cleanly composes ChannelHeader, MessageList, MessageInput, and TypingIndicator with explicit props \u2014 handoff is minimal and predictable",
+        "admin-auth.ts and internal-auth.ts each have focused, single-purpose contracts with clear security properties \u2014 good boundary design",
+        "agent-factory.ts properly centralizes agent creation logic used by two different route handlers (UI and CLI bootstrap) with explicit options/result interfaces"
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high",
+      "issues_preventing_higher_score": ""
+    },
+    "test_strategy": {
+      "evidence": [
+        "packages/web/lib/agent-factory.ts handles agent creation with crypto key generation, Prisma transactions, and auto-assignment to channels \u2014 zero unit tests exist for this critical path",
+        "packages/web/lib/socket.ts manages singleton Phoenix Socket with JWT refresh and reconnection logic \u2014 zero unit tests",
+        "packages/cli/src/runner.ts handles binary download, caching, chmod, and execution \u2014 entire CLI package has zero test files",
+        "70 occurrences of waitForTimeout across 20 e2e files create timing-dependent fragility (e.g., helpers.ts lines 41, 132, 157; 05-messaging.spec.ts line 237; 15-bot-streaming.spec.ts lines 68, 97, 201)",
+        "11 unit test files in packages/web/lib/__tests__/ cover auth, encryption, permissions, route-handlers \u2014 these are well-structured with dependency injection",
+        "21 e2e spec files provide broad feature coverage across auth, messaging, streaming, roles, DMs, reconnection, and edge cases",
+        "Go streaming proxy has 11 test files; Elixir gateway has 7 test files \u2014 both backend services have reasonable coverage",
+        "No snapshot test overuse \u2014 zero snapshot assertions found across the entire codebase"
+      ],
+      "impact_scope": "codebase",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high",
+      "issues_preventing_higher_score": ""
+    },
+    "api_surface_coherence": {
+      "evidence": [
+        "route-handlers.js exports 7 handler factories whose returned functions have 4 distinct parameter shapes: (request), (agentId), (request, agentId), (request, { params }) \u2014 callers must memorize which shape each handler uses",
+        "ConnectionMethodType in components/modals/agent/types.ts and ConnectionMethodValue in lib/agent-factory.ts define identical string literal unions with different names, no shared source",
+        "buildConnectionInfo returns Record<string, string | undefined> \u2014 callers receive an untyped bag instead of a discriminated union per connection method",
+        "socket.ts public API mixes async (getSocket) and sync (disconnectSocket) without a compelling reason \u2014 disconnectSocket could be async for consistency",
+        "route-handlers.js is the primary API surface for internal and public agent routes but is untyped JavaScript, making error contracts invisible to consumers"
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high",
+      "issues_preventing_higher_score": ""
+    },
+    "authorization_consistency": {
+      "evidence": [
+        "All 15+ internal API routes consistently use validateInternalSecret() from lib/internal-auth.ts with timing-safe comparison (crypto.timingSafeEqual)",
+        "All v1 agent-facing routes consistently use authenticateAgentRequest() from lib/agent-auth.ts",
+        "All user-facing routes under /api/servers/** consistently use getServerSession(authOptions) \u2014 20 files verified",
+        "Bootstrap routes use authenticateAdminToken() with CSRF protection and timing-safe comparison",
+        "route-handlers.js lines 47 and 710 use simple === comparison for INTERNAL_API_SECRET instead of timing-safe validateInternalSecret(), contradicting ISSUE-010 fix",
+        "GET /api/v1/agents/[id] is intentionally unauthenticated (documented as public agent info in route-handlers.js line 529)",
+        "Webhook routes correctly use token-in-URL as auth (documented pattern matching Discord), with rate limiting",
+        "Permission checks use shared constants from lib/permissions.ts (Permissions.MANAGE_MESSAGES etc.), not magic strings"
+      ],
+      "impact_scope": "module",
+      "fix_scope": "single_edit",
+      "confidence": "high",
+      "issues_preventing_higher_score": "route-handlers.js uses plain === for internal secret validation in two handler factories, undermining the timing-safe comparison established by ISSUE-010 across the rest of the internal API surface"
+    },
+    "ai_generated_debt": {
+      "evidence": [
+        "gateway-client.ts contains 6 pass-through wrapper functions (broadcastMessageNew, broadcastStreamStart, broadcastStreamToken, broadcastStreamComplete, broadcastStreamError, broadcastTypedMessage) that each do nothing but call broadcastToChannel with a hardcoded event string and topic template \u2014 no validation, transformation, or error handling added",
+        "Each of the 6 gateway-client.ts wrappers has a JSDoc comment that restates the function name verbatim (e.g., '/** Broadcast a stream_token event to a channel. */' for broadcastStreamToken)",
+        "condition-based-waiting-example.ts is duplicated identically across 4 directories (.agents/, .claude/, .openhands/, .pi/) with no shared import \u2014 pure copy-paste boilerplate",
+        "condition-based-waiting-example.ts has verbose JSDoc on all 3 functions with full @param tags and multi-line Example blocks for straightforward poll-and-resolve helpers, plus a 20-line commented usage example at the bottom",
+        "ulid.ts exports generateId() which is a single-line pass-through to ulid() with no added logic \u2014 though it is widely used (14 files), the wrapper adds no behavior, validation, or abstraction",
+        "auth.ts has console.log statements at each auth step (missing email, no user found, invalid password, success) \u2014 entry/exit logging pattern on a security-critical path"
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high",
+      "issues_preventing_higher_score": ""
+    },
+    "incomplete_migration": {
+      "evidence": [
+        "packages/web/lib/ contains 3 plain .js files (api-safety.js, route-handlers.js, validation.js) alongside 19 .ts files \u2014 incomplete TypeScript migration",
+        "route-handlers.js uses plain === for INTERNAL_API_SECRET comparison (line 47), while internal-auth.ts provides a timing-safe equivalent; the .js file predates and does not use the .ts utility",
+        "4 identical copies of condition-based-waiting-example.ts across .agents/, .claude/, .openhands/, .pi/ reference types (ThreadManager, LaceEvent) from a ~/threads/ path that does not exist in this project \u2014 dead code from a different codebase ('Lace')",
+        "packages/web/lib/ has 8 .test.mjs files at root level and 11 .test.ts files in __tests__/ subdirectory \u2014 two coexisting test conventions",
+        "defaultAgentId (legacy single-agent) and ChannelAgent join table (multi-agent) both remain active paths in channel PATCH route and internal agents route, with explicit 'backward compat' fallback comment"
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high",
+      "issues_preventing_higher_score": ""
+    },
+    "package_organization": {
+      "evidence": [
+        "packages/web/lib/ contains 19 production TS files spanning auth (admin-auth, agent-auth, internal-auth, auth), crypto (encryption), permissions (permissions, check-member-permission), agent domain logic (agent-factory), utilities (ulid, format-time, invite-code, mention-parser), networking (socket, gateway-client), and infrastructure (rate-limit, env, image-dimensions, image-loader) \u2014 mixed concerns in a flat directory",
+        "packages/web/lib/ also contains JS files (route-handlers.js, api-safety.js, validation.js) alongside TS files, plus scattered .test.mjs files at the same level as production code (e.g., enforces_request_and_sequence_safety.test.mjs) while __tests__/ already exists as the test directory",
+        "packages/web/components/dm/ contains a single file (dm-chat-area.tsx) that imports 6 modules from components/chat/ \u2014 import affinity is >85% toward chat/",
+        "packages/web/components/chat/MessageMetadata.tsx uses PascalCase while all 17 sibling files use kebab-case, breaking navigability by name pattern",
+        "packages/web/components/providers.tsx sits alongside packages/web/components/providers/ directory \u2014 ambiguous whether provider-related code belongs in the file or the directory"
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high",
+      "issues_preventing_higher_score": ""
+    },
+    "initialization_coupling": {
+      "evidence": [
+        "gateway-client.ts captures GATEWAY_INTERNAL_URL (line 11-14) and INTERNAL_API_SECRET (line 15) at module scope as frozen constants, while internal-auth.ts reads process.env.INTERNAL_API_SECRET at call time (line 20). Same env var, two strategies \u2014 tests that mutate process.env after import cannot affect gateway-client.",
+        "env.ts line 50 performs eager Zod validation at import time (serverEnvSchema.parse(process.env)), which would throw during import if env vars are missing. However, this module is currently dead code \u2014 no file imports serverEnv.",
+        "db.ts uses the standard globalThis singleton pattern for PrismaClient (lines 4-19). This is a well-known Next.js pattern but creates a true global singleton with implicit creation ordering \u2014 any module importing prisma triggers DB client instantiation.",
+        "socket.ts uses module-scoped mutable variables (let socket, let currentToken at lines 5-6) as a client-side singleton. Access is gated behind getSocket() which is lazy and guarded by typeof window check. This is a reasonable pattern for client-side singletons.",
+        "rate-limit.ts exports pre-instantiated RateLimiter singletons at module scope (authLimiter, webhookLimiter at lines 98-101), each of which starts a setInterval timer at construction time. Importing the module triggers timer creation as a side effect.",
+        "middleware.ts instantiates its own loginLimiter at module scope (line 7), separate from the shared instances in rate-limit.ts \u2014 three distinct RateLimiter singletons exist across the codebase.",
+        "Test files (agent-handlers.test.ts line 37, route-handlers.test.ts line 49, typed-messages.test.ts line 66) capture process.env.INTERNAL_API_SECRET at module scope as ORIGINAL_SECRET. Since gateway-client.ts also captures at module scope, restoring env in afterEach does not restore gateway-client's stale copy.",
+        "auth.ts reads process.env.NEXTAUTH_URL and NEXTAUTH_SECRET at module scope within the authOptions object literal (lines 108, 128), but this is standard NextAuth bootstrap."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high",
+      "issues_preventing_higher_score": ""
+    },
+    "design_coherence": {
+      "evidence": [
+        "RoleManagementModal and RolesSection contain fully duplicated RoleData interface, togglePermission function, and PermissionToggles component \u2014 identical logic in both files with minor styling differences",
+        "ChatProvider.refreshChannels, refreshMembers, refreshAgents follow an identical fetch-parse-setState-updateServerDataById pattern repeated 3 times with the same structural shape, differing only in URL path and field name",
+        "ChatPanel component (~516 lines) mixes panel windowing logic (drag, resize, maximize, z-index management) with chat domain logic (messages, typing, streaming status, mentions) \u2014 two distinct responsibilities in one body",
+        "useChannel hook (~920 lines) registers 14+ channel event handlers inline within a single useEffect, each with the same mounted-guard and type-assertion pattern, creating a monolithic effect body",
+        "Three identical copies of condition-based-waiting-example.ts exist under .claude/, .openhands/, and .pi/ skill directories \u2014 158 LOC duplicated verbatim across all three",
+        "ProfileSettingsModal manages 13 separate useState calls for avatar, profile, theme, and password sections \u2014 four logically distinct feature areas colocated in one component"
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high",
+      "issues_preventing_higher_score": ""
+    },
+    "contract_coherence": {
+      "evidence": [
+        "POST /api/servers validates name as 1-100 chars (route.ts line 86) but PATCH /api/servers/[serverId] validates as max 50 chars (route.ts line 125) \u2014 contradictory length contracts for the same field",
+        "buildConnectionInfo in agent-factory.ts declares INBOUND_WEBHOOK in VALID_CONNECTION_METHODS but the switch statement has no case for it, silently returning an empty Record \u2014 the function's stated purpose is to build method-specific URLs but it produces nothing for a valid method",
+        "PUT /api/internal/messages/{messageId} calls request.json() without try/catch (line 66) while sibling PATCH and DELETE in the same file wrap it in try/catch \u2014 inconsistent error contract within one module",
+        "ensureMessageAccess returns { ok: true, channelId } but ensureDmMessageAccess returns { ok: true } without channelId \u2014 parallel access-check contracts differ without a shared type or discriminated union",
+        "API route handlers consistently use NextResponse.json with error/status pattern and docstrings match actual behavior",
+        "useChannel hook's UseChannelReturn interface accurately documents all 16 return fields including their types",
+        "createAgent in agent-factory.ts declares @throws Error and the function does propagate prisma transaction failures \u2014 honest error contract"
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high",
+      "issues_preventing_higher_score": "Server name length validation divergence between create and update endpoints; buildConnectionInfo silently ignores INBOUND_WEBHOOK; inconsistent JSON parse error handling within the same route file"
+    },
+    "logic_clarity": {
+      "evidence": [
+        "Control flow across API routes is direct and linear \u2014 auth check, validation, business logic, response \u2014 with early returns on each failure path",
+        "The useChannel hook manages complex streaming state (buffered tokens, timeout detection, reconnection sync) with clear, non-overlapping event handlers",
+        "Conditional branches in UI components (e.g., ChatPanel osVariant mac/windows, LeftPanel activeTab) are distinct and necessary",
+        "The buildConnectionInfo switch statement in agent-factory.ts handles each connection method with unique behavior per case \u2014 no duplicated branches",
+        "The mock LLM server uses clear trigger-based branching (ERROR_TEST, TOOL_TEST, MARKDOWN_TEST, SLOW_TEST) with early returns"
+      ],
+      "impact_scope": "local",
+      "fix_scope": "single_edit",
+      "confidence": "high",
+      "issues_preventing_higher_score": "Minor redundancies in validation conditions (PUT route truthy check conflating empty string and undefined), and the servers POST route has a name length check that is partially redundant after trimming"
+    },
+    "type_safety": {
+      "evidence": [
+        "use-channel.ts pervasively casts Phoenix channel payloads via `as` without runtime validation (e.g., `raw as MessagePayload`, `raw as { messageId: string; ... }`) \u2014 15+ occurrences across stream_start, stream_token, stream_complete, message_new, etc.",
+        "agent-factory.ts line 81: unsafe `as` cast for triggerMode \u2014 `(opts.triggerMode || 'MENTION') as 'ALWAYS' | 'MENTION' | 'KEYWORD'` bypasses type checking when opts.triggerMode is typed as `string`",
+        "chat-provider.tsx ChannelData interface types `type` as `string` despite shared/types/channel.ts defining `ChannelType = 'TEXT' | 'ANNOUNCEMENT'` \u2014 parallel definition that loses type narrowing",
+        "API route handlers consistently use untyped `await request.json()` returning `any`, with manual runtime checks rather than validated types \u2014 every route handler in the seed files follows this pattern",
+        "AgentListItem in modals/agent/types.ts types `triggerMode` as `string` and `capabilities` as `unknown` rather than using specific union types",
+        "API route response shapes are entirely untyped \u2014 `NextResponse.json({...})` calls return ad-hoc object literals with no shared response type definitions"
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high",
+      "issues_preventing_higher_score": ""
+    }
+  },
+  "dimension_judgment": {
+    "cross_module_architecture": {
+      "strengths": [
+        "Internal API boundary between Gateway/Go and Next.js is well-defined: all internal routes consistently use validateInternalSecret from @/lib/internal-auth with timing-safe comparison",
+        "gateway-client.ts provides a single, clean boundary module for all Gateway broadcast operations \u2014 no route file imports Gateway URLs directly",
+        "packages/shared/types/ barrel export provides a clear shared type boundary between packages with focused per-domain modules (user, server, channel, message, agent, protocol)",
+        "Permission checking is consistently delegated to @/lib/check-member-permission with a Permissions enum \u2014 no routes implement ad-hoc permission logic",
+        "agent-factory.ts extracts shared agent creation logic used by both UI and CLI routes, preventing duplication of complex transaction logic"
+      ],
+      "issue_character": "The issues cluster around missing shared abstractions for repeated cross-route patterns \u2014 particularly inline URL construction, message payload mapping, and parallel type definitions \u2014 rather than fundamental boundary violations or dependency direction problems.",
+      "score_rationale": "The codebase has well-defined inter-service boundaries (internal auth, gateway-client, shared types) and consistent dependency direction. However, a developer working across routes would encounter recurring duplication of message payload mapping, reaction aggregation, and internal URL construction that indicates missing shared modules. The triple-definition of ConnectionMethod types is a boundary integrity problem where the shared package exists but is bypassed. These are mid-severity issues that create maintenance drag without causing structural fragility, placing the score in the low-70s range \u2014 mixed quality where boundaries exist but aren't fully leveraged."
+    },
+    "high_level_elegance": {
+      "strengths": [
+        "Auth responsibility is decomposed into four focused files (auth.ts, admin-auth.ts, agent-auth.ts, internal-auth.ts) each handling a single auth flow with documented security properties",
+        "API route tree cleanly separates three audiences (public v1, user-facing, internal service-to-service) with consistent URL patterns",
+        "shared/types/ provides a single canonical source for domain models that mirrors the Prisma schema, with each file owning one bounded context",
+        "components/ directory structure maps predictably to UI capabilities \u2014 a new developer can locate code by feature name",
+        "Protocol types in shared/types/protocol.ts exactly mirror docs/PROTOCOL.md, making the documentation trustworthy as a source of truth"
+      ],
+      "issue_character": "Issues are concentrated in type ownership fragmentation \u2014 the same domain concept (ConnectionMethod) is defined independently in three locations without a canonical source, and the DM chat surface duplicates rendering patterns rather than sharing them with the primary chat surface.",
+      "score_rationale": "The codebase has clear, domain-aligned package decomposition and predictable ownership boundaries. A developer can explain why each top-level directory exists and where to find or place new code. The auth file split is exemplary \u2014 each file has a single, documented responsibility. However, the triple ConnectionMethod definition is a genuine decomposition failure that creates maintenance risk and signals incomplete type consolidation. The DM/channel chat duplication further suggests the decomposition doesn't fully localize change for cross-cutting message rendering concerns. These issues prevent the score from reaching 'strong' (90) territory but the overall structure is solid."
+    },
+    "convention_outlier": {
+      "strengths": [
+        "Named exports used consistently across all component files \u2014 zero default exports found in the components directory",
+        "kebab-case file naming is followed consistently across layout/, modals/, server-settings/, workspace/, and dm/ directories",
+        "Hooks directory follows a consistent use-*.ts naming pattern for all 6 hook files",
+        "All component files consistently use 'use client' directive and follow the same import ordering pattern (React, then Next.js, then local)"
+      ],
+      "issue_character": "Convention drift is localized to a few specific areas rather than being systemic: a PascalCase filename island in typed-messages/, a .js/.ts split in lib/, and a duplicated utility function between two closely related hooks.",
+      "score_rationale": "The codebase has strong baseline conventions \u2014 named exports, kebab-case filenames, consistent hook naming \u2014 that a developer can learn once and largely trust. However, the typed-messages/ PascalCase island, the MessageMetadata.tsx outlier, and the .js files in a TypeScript lib/ directory create noticeable friction points where a developer would encounter 'why is this different?' moments. The duplicated compareSequences function between use-channel.ts and use-dm-channel.ts indicates that sibling modules are evolving independently without extracting shared utilities. These are real but bounded issues, placing the score solidly in the 'uneven' range below 80."
+    },
+    "error_consistency": {
+      "strengths": [
+        "API route handlers follow a uniform pattern: try-catch wrapping DB operations with console.error + structured JSON error response with appropriate HTTP status codes",
+        "UI components in server-settings/ consistently use setError() state to surface errors to users, with a shared pattern of err instanceof Error ? err.message : fallback",
+        "JSON body parsing across all API routes consistently catches parse failures and returns 400 with { error: 'Invalid JSON body' }",
+        "The dispatch route handler carefully distinguishes AbortError (504) from general errors (502) in webhook calls"
+      ],
+      "issue_character": "The codebase has two well-established error handling conventions (API routes and UI components), but client-side data fetching hooks and some UI fetch operations silently drop non-ok HTTP responses, creating a blind spot where failures produce no user feedback and no developer diagnostics.",
+      "score_rationale": "The API layer and the settings UI components demonstrate consistent, predictable error handling \u2014 a developer working there would know what to expect. However, the client-side hooks (useDmList, useSocket) and several fetch callbacks in UI components silently swallow non-ok responses, creating a distinct subsystem where error behavior is unpredictable. This is not just a local issue \u2014 it affects the entire data-fetching layer of the frontend. The mix of 'sometimes errors surface, sometimes they vanish' pulls the score below 80 into the mid-70s, where a developer would encounter enough inconsistency that they cannot fully trust error handling conventions learned from one area."
+    },
+    "naming_quality": {
+      "strengths": [
+        "Domain types are precisely named throughout \u2014 ConnectionMethodType, PanelState, DmConversation, MessagePayload, ToolCallData communicate their purpose without ambiguity",
+        "Panel operations use consistent verb-noun pairs (openPanel, closePanel, minimizePanel, restorePanel) that accurately describe behavior",
+        "Factory functions in route-handlers.js embed HTTP method + resource in the name (createInternalMessagesPostHandler, createAgentPatchHandler), making the routing intent readable",
+        "Helper functions like coerceFiniteNumber, normalizePanelGeometry, and hydrateSavedPanel use specific verbs that communicate transformation semantics",
+        "Boolean state variables use clear naming: isConnected, isLoaded, isMinimized, isClosed, isMaximized, uploading, saving"
+      ],
+      "issue_character": "Issues are isolated rather than systemic \u2014 one significant name/behavior mismatch in a shared module (getSocket), and a minor pattern of generic variable names in short-lived fetch scopes.",
+      "score_rationale": "The codebase demonstrates strong naming discipline overall. A developer reading function names, type definitions, and hook names can reliably predict behavior without reading implementations. The getSocket() mismatch is a genuine contract-level naming defect in a shared singleton, which pulls the score below 90. The pervasive use of 'data' for parsed JSON responses is a minor friction but within acceptable norms for short-scoped fetch patterns. Against the dimension anchors, this lands solidly between 'mostly precise with a few generic names' (90) and 'regularly encounters names that don't communicate intent' (80), closer to 90 given the isolated nature of the issues."
+    },
+    "abstraction_fitness": {
+      "strengths": [
+        "Near-zero wrapper rate (0.7%) \u2014 abstractions in the codebase almost always add behavior, validation, or translation rather than just forwarding",
+        "agent-factory.ts exemplifies earned abstraction: shared by two distinct callers (UI route and CLI bootstrap), encapsulating transaction logic, key hashing, and channel auto-assignment",
+        "SimpleAgentForm pattern uses data-driven composition \u2014 three thin form variants configure a single reusable form component with method-specific content, eliminating duplication without adding indirection layers",
+        "No single-implementation interfaces or delegation-heavy classes exist \u2014 types serve concrete purposes rather than speculative extensibility",
+        "Route handlers interact directly with Prisma without unnecessary service/repository layers, keeping the call path short and transparent"
+      ],
+      "issue_character": "The single substantive issue is localized code duplication in reaction handling across two parallel route files, representing a missing shared utility rather than a systemic abstraction problem.",
+      "score_rationale": "The codebase demonstrates strong abstraction fitness: nearly every layer of indirection pays for itself through deduplication, behavior addition, or clear compositional value. The wrapper rate is exceptionally low, types are used for concrete purposes, and route handlers are direct without unnecessary service layers. The score is pulled down slightly by the duplicated reaction logic (~80 lines of near-identical code across server and DM reaction routes) and the wide ChatProvider context surface, but these are isolated rather than systemic. This places the codebase solidly in the 'strong with minor rough edges' range."
+    },
+    "dependency_health": {
+      "strengths": [
+        "Remarkably lean dependency set with only 14 production deps for a full-featured chat platform with markdown, real-time, auth, and database support",
+        "No duplicate libraries for the same purpose - single choices for HTTP, icons, validation, markdown, and real-time transport",
+        "No heavy deps for light use - each dependency earns its place with meaningful usage across the codebase",
+        "Clean separation between production and dev dependencies - test tools (playwright, vitest, MCP SDK) correctly placed in devDependencies"
+      ],
+      "issue_character": "Issues are minor hygiene items (one unused dep, one version spec divergence) rather than structural dependency problems.",
+      "score_rationale": "The dependency set is cohesive and purposeful with no redundancy or bloat, which would merit a score in the low 90s. The unused jose dependency and the Prisma version divergence between root and workspace are concrete but low-severity issues that pull the score down slightly. A developer working here would find dependencies trustworthy and predictable, with only minor cleanup needed."
+    },
+    "low_level_elegance": {
+      "strengths": [
+        "API route handlers consistently use guard-clause early returns for auth and validation, keeping happy paths clean and left-aligned (servers/route.ts, dms/route.ts, reactions route)",
+        "The reactions route extracts focused helpers (ensureMessageAccess, getAggregatedReactions, broadcastReactionUpdate) that keep each HTTP handler body concise",
+        "agent-factory.ts cleanly separates creation logic from connection-info building with a well-defined switch on connection method",
+        "simple-agent-forms.tsx demonstrates balanced extraction \u2014 one generic form component with thin pre-configured wrappers, avoiding both duplication and over-abstraction",
+        "Stream buffer flushing in use-channel.ts uses requestAnimationFrame batching with a clean snapshot-and-clear pattern for 60fps rendering"
+      ],
+      "issue_character": "The issues concentrate in the client-side hooks and layout components where multiple distinct responsibilities are collapsed into single functions or components, creating long bodies that interleave unrelated concerns rather than extracting coherent sub-units.",
+      "score_rationale": "The API layer and utility modules show clean, proportionate internals \u2014 guard clauses, focused helpers, and balanced extraction. However, the core client-side code (use-channel.ts, chat-provider.tsx, chat-panel.tsx) contains significant monolithic functions where streaming, typing, presence, drag-and-drop, and data fetching are all woven together in single bodies. This creates recurring developer friction: understanding one concern requires reading past several others. The codebase is not at 60 (pervasively impeding) because the server-side code is well-crafted, but the client-side hotspots are substantial enough to pull below 80."
+    },
+    "mid_level_elegance": {
+      "strengths": [
+        "ChatArea composes child components (ChannelHeader, MessageList, MessageInput, TypingIndicator) with explicit, minimal prop interfaces \u2014 a developer can understand the composition at a glance",
+        "agent-factory.ts serves as a proper shared creation boundary used by both UI and CLI bootstrap routes, with explicit CreateAgentOptions/CreateAgentResult interfaces",
+        "admin-auth.ts and internal-auth.ts are well-scoped boundary modules with single-purpose contracts, consistent return types, and documented security properties",
+        "useChannel hook encapsulates all Phoenix Channel complexity behind a clean UseChannelReturn interface \u2014 callers never touch socket state directly"
+      ],
+      "issue_character": "The primary deficiency is duplication at integration seams: the same domain concept (connection method type, agent key verification) is defined and implemented independently in 2-3 places with subtly different interfaces, creating glue-code entropy and drift risk at the agent auth and type boundaries.",
+      "score_rationale": "The frontend composition layer shows solid mid-level design \u2014 ChatArea, ChannelHeader, and the useChannel hook hand off data through clean, explicit interfaces. However, the agent authentication and type boundaries are significantly duplicated: agent key verification is implemented three times with different return shapes, and connection method types are defined three times as independent string unions. This duplication means a developer making cross-module changes to agent auth or connection methods must discover and update multiple divergent implementations. The mix of clean frontend seams and duplicated backend seams places this in the 70-75 range \u2014 enough inconsistency that a developer cannot fully trust patterns seen in one area when working in another."
+    },
+    "test_strategy": {
+      "strengths": [
+        "Route handler unit tests use dependency injection pattern (createInternalMessagesPostHandler takes prismaClient), making them isolated and fast \u2014 40+ test cases for route-handlers.test.ts alone",
+        "E2E suite covers 21 feature areas with well-factored helpers (createServerViaAPI, createTwoUserContexts) that reduce duplication and improve maintainability",
+        "Backend services (Go streaming: 11 test files, Elixir gateway: 7 test files) have dedicated unit test coverage for core modules like SSE parsing, provider logic, and channel handling",
+        "Zero snapshot tests \u2014 the codebase avoids the snapshot overuse antipattern entirely",
+        "Security-critical paths have focused tests: internal-auth (fails-closed behavior), encryption (round-trip, key rotation), permissions (bitwise operations, role hierarchy)"
+      ],
+      "issue_character": "Critical business logic modules (agent creation, WebSocket management, CLI binary runner) have zero unit test coverage, while E2E tests rely pervasively on fixed-time waits rather than event-driven synchronization, creating both coverage gaps and fragility.",
+      "score_rationale": "The codebase has genuine testing strengths \u2014 well-structured unit tests for auth and route handlers, comprehensive E2E feature coverage, and backend service tests. However, several high-value modules central to the product (agent-factory.ts, socket.ts, entire CLI package) have zero test coverage, meaning a developer modifying these paths has no safety net. The 70 waitForTimeout calls across E2E tests create systematic fragility that has already required mitigation (commit messages reference 'flaky tests' fixes). This combination of meaningful coverage gaps on critical paths and pervasive timing fragility places the score around 60-65 \u2014 a developer would worry about making changes in untested areas and would face recurring CI flakiness."
+    },
+    "api_surface_coherence": {
+      "strengths": [
+        "agent-factory.ts provides a clean, well-documented shared factory (createAgent + buildConnectionInfo) reused by both UI and CLI routes, with typed options/result interfaces",
+        "E2E helpers in v1-checklist/helpers.ts have consistent signatures: all UI helpers take (page, ...args) and all API helpers take (page, ...args) with uniform error handling",
+        "mock-mcp-server.ts has a clean start/stop pair with consistent async signatures and idempotency guards",
+        "CLI runner.ts functions have consistent parameter ordering (version, target, env) across related functions"
+      ],
+      "issue_character": "The main API surface issues are handler signature inconsistency in the route-handlers module and a duplicated connection-method type definition that drifts across frontend and backend boundaries.",
+      "score_rationale": "The codebase shows good practices in newer modules (agent-factory, helpers, CLI runner) where API shapes are consistent and well-typed. However, route-handlers.js \u2014 a central module serving both internal and public agent APIs \u2014 has inconsistent handler signatures across its 7 exported factories, is written in untyped JavaScript, and returns untyped records from buildConnectionInfo. The duplicate ConnectionMethodType/ConnectionMethodValue definition creates a subsystem-wide coherence gap. These issues pull the score below 70 but the overall direction is sound, landing around 62."
+    },
+    "authorization_consistency": {
+      "strengths": [
+        "Three distinct auth strategies (internal-secret, agent-key, session) are cleanly separated into dedicated modules (internal-auth.ts, agent-auth.ts, admin-auth.ts) and used consistently across their respective route families",
+        "Permission checks use a well-designed bitfield system with shared constants \u2014 no magic permission strings anywhere in the codebase",
+        "Internal API routes uniformly apply validateInternalSecret() as the first operation in every handler (15+ routes verified), making the pattern easy to audit",
+        "Admin endpoints (bootstrap) include defense-in-depth: admin token + first-run guard + rate limiting + CSRF protection via Origin header rejection"
+      ],
+      "issue_character": "A single file (route-handlers.js) retains a pre-ISSUE-010 pattern for internal secret validation, creating a localized inconsistency in an otherwise uniformly applied auth boundary.",
+      "score_rationale": "The codebase demonstrates strong auth consistency across three distinct auth domains \u2014 internal, agent, and user session \u2014 with clean module separation and no magic strings. The one defect (timing-unsafe comparison in route-handlers.js) is localized to a single file with two instances, but it affects a critical path (message persistence) and directly contradicts the project's own ISSUE-010 fix. This pulls the score below 90 but the overall posture remains solid, placing it around 84-85."
+    },
+    "ai_generated_debt": {
+      "strengths": [
+        "Most lib/ files are lean and focused \u2014 encryption.ts, invite-code.ts, mention-parser.ts, internal-auth.ts, and rate-limit.ts contain no superfluous comments or unnecessary wrappers",
+        "Comments in the codebase generally explain WHY (business constraints, ISSUE/TASK/DEC references, security rationale) rather than restating code",
+        "No evidence of defensive overengineering \u2014 null checks and try-catch blocks appear at genuine I/O and API boundaries, not around pure expressions",
+        "Domain-specific naming is used throughout (broadcastToChannel, parseMentionedUserIds, validateInternalSecret) rather than generic names like handleData or processItem"
+      ],
+      "issue_character": "The primary AI-debt pattern is pass-through wrapper proliferation in gateway-client.ts and ulid.ts, combined with 4-way file duplication in agent skill directories and verbose docstrings that restate what is already obvious from function signatures.",
+      "score_rationale": "The codebase is largely clean of AI-generated debt hallmarks \u2014 comments are purposeful, error handling is non-boilerplate, and naming is domain-specific. However, gateway-client.ts's 6 trivially-different one-line wrappers with restating docstrings, the 4x identical skill file duplication, and ulid.ts's zero-value wrapper represent meaningful but localized debt. These patterns are concentrated rather than systemic, keeping the score above average but below the top tier."
+    },
+    "incomplete_migration": {
+      "strengths": [
+        "The codebase is overwhelmingly TypeScript \u2014 only 3 production .js files remain in packages/web/lib/, and the rest of the frontend is fully typed",
+        "The defaultAgentId-to-ChannelAgent migration is documented with clear TASK references (TASK-0012) and the backward-compat fallback is explicitly commented",
+        "No stale TODO/FIXME markers referencing 'migrate', 'legacy', 'old api', or 'remove after' were found outside the intentional backward-compat paths",
+        "No duplicate library usage (axios+fetch, moment+dayjs, etc.) was found \u2014 the codebase consistently uses native fetch and standard libraries"
+      ],
+      "issue_character": "The issues cluster around two incomplete transitions: a JS-to-TS migration that left 3 production files and 8 test files untyped, and orphaned skill files from an entirely different project that were never cleaned up.",
+      "score_rationale": "The codebase is mostly migrated to TypeScript and uses consistent patterns, which pushes the score above the 70 'mixed' threshold. However, the remaining .js production files create real developer confusion about which pattern to follow (especially route-handlers.js at 776 lines being the largest lib file), the orphaned Lace skill files are pure dead code, and the dual test convention (.mjs vs .ts) means a developer cannot predict the test format. These are not pervasive migration failures but they are concrete coexistence problems that a developer would encounter, placing this solidly in the 70-80 range."
+    },
+    "package_organization": {
+      "strengths": [
+        "Component directories (chat/, modals/, server-settings/, layout/, workspace/) align well with domain boundaries and have clear ownership",
+        "packages/shared/types/ is well-structured with 8 domain-aligned type files and a clean barrel export via index.ts",
+        "The modals/agent/ subdirectory correctly groups 8 related agent-modal files with a shared types.ts, and coupling_matrix confirms modals/ imports from modals/agent/ (8 edges) in one direction only",
+        "hooks/ subdirectory within lib/ correctly separates React hooks from server-side utilities"
+      ],
+      "issue_character": "Issues concentrate in the flat packages/web/lib/ directory which mixes 4+ distinct concern domains, and in minor structural inconsistencies (singleton dm/ directory, mixed test file placement, file naming drift) that collectively reduce navigability.",
+      "score_rationale": "The component tree is well-organized with clear domain folders and predictable one-directional coupling. However, packages/web/lib/ at 19 files with auth, crypto, agent domain logic, networking, and utilities mixed flat is a meaningful navigability drag \u2014 a developer cannot predict where to find or place server-side logic without scanning the whole directory. The singleton dm/ directory and scattered test files add minor friction. This places the codebase solidly in the 'encounters structural mismatches' range around 78-80, pulled slightly below 80 by the lib/ directory overload."
+    },
+    "initialization_coupling": {
+      "strengths": [
+        "encryption.ts correctly uses a getKey() function to read ENCRYPTION_KEY at call time rather than module scope, providing a good pattern to follow",
+        "internal-auth.ts reads process.env.INTERNAL_API_SECRET at call time inside validateInternalSecret(), making it test-friendly and resilient to env changes",
+        "agent-factory.ts buildConnectionInfo() reads NEXT_PUBLIC_GATEWAY_URL and NEXTAUTH_URL at call time, not import time",
+        "socket.ts client singleton uses lazy initialization gated behind getSocket() with a typeof window guard, avoiding SSR import-time side effects"
+      ],
+      "issue_character": "The codebase has an inconsistent strategy for environment variable access \u2014 some modules correctly defer reads to call time while others snapshot at import time, creating test fragility and a split personality around the same secrets.",
+      "score_rationale": "The codebase demonstrates awareness of initialization concerns (lazy getKey(), call-time env reads in auth modules, standard Prisma singleton pattern) but gateway-client.ts captures two critical env vars at module scope, contradicting the pattern used by its sibling internal-auth.ts for the same INTERNAL_API_SECRET. Module-scope RateLimiter instantiation with setInterval timers is a minor side-effect concern. The inconsistency is real but contained to a few files, and the overall architecture avoids circular init dependencies or complex boot-order requirements. Score of 72.5 reflects a generally sound approach with a notable inconsistency in a critical infrastructure module."
+    },
+    "design_coherence": {
+      "strengths": [
+        "Component prop interfaces are well-defined and focused \u2014 MessageInputProps, ChatPanelProps, and BYOKFormProps each have clear, minimal surface areas",
+        "agent-factory.ts demonstrates good extraction: shared agent creation logic used by both UI and CLI bootstrap routes, with clean CreateAgentOptions/CreateAgentResult interfaces",
+        "Channel event handling in useChannel, while large, follows a consistent pattern for each event type, making it predictable to extend",
+        "Modal components follow a consistent isOpen/onClose pattern across the codebase, establishing a recognizable convention"
+      ],
+      "issue_character": "The primary pattern is responsibility accumulation in key components (ChatPanel, useChannel, ChatProvider) and verbatim duplication of role management UI across two separate file locations.",
+      "score_rationale": "The codebase has clear conventions and some well-extracted shared logic (agent-factory), but suffers from significant structural duplication (roles UI duplicated across RoleManagementModal and RolesSection with identical helper functions) and responsibility overloading in central components. ChatPanel conflates windowing mechanics with chat domain logic, and useChannel's single 600-line useEffect registers all event handlers monolithically. These are not cosmetic issues \u2014 they increase change friction and divergence risk. The score reflects a codebase that works and has some good patterns, but has accumulated structural debt in its most central files."
+    },
+    "contract_coherence": {
+      "strengths": [
+        "API route docstrings consistently and accurately describe HTTP method, path, body shape, and return values across all examined routes",
+        "useChannel hook declares a precise UseChannelReturn interface with 16 fields that exactly match the return statement",
+        "createAgent in agent-factory.ts declares CreateAgentOptions and CreateAgentResult types that accurately represent inputs and outputs, with @throws documented",
+        "ChatProvider's ChatContextValue interface is comprehensive and matches all provided context values exactly"
+      ],
+      "issue_character": "Issues are isolated contract drift rather than systemic dishonesty \u2014 a few specific API boundaries where validation rules or switch coverage diverge from the stated contract, but the overall pattern is reliable.",
+      "score_rationale": "The codebase generally honors its contracts well: docstrings match behavior, return types are accurate, and interfaces describe reality. The score is pulled down from the 85+ range by concrete contract inconsistencies \u2014 most notably the server name length validation divergence between create (100) and update (50) endpoints, the silently incomplete buildConnectionInfo switch, and the unguarded JSON parse in PUT while siblings guard it. These are real friction points a developer would hit, but they are localized rather than pervasive."
+    },
+    "logic_clarity": {
+      "strengths": [
+        "API route handlers follow a consistent early-return pattern \u2014 auth, validation, and access checks are linear with no nested else blocks",
+        "The useChannel hook correctly manages parallel streaming state for multiple messages via Maps keyed by messageId, with proper cleanup in the effect return",
+        "The stream_error handler in use-channel.ts has a well-structured race fallback: it checks for an existing message first, then upserts a fallback if stream_start hasn't arrived yet \u2014 clear comment explains why",
+        "Guard clauses are used consistently across route handlers (if !session, if !body, if !valid) rather than deep nesting"
+      ],
+      "issue_character": "Issues are isolated and minor \u2014 a few spots where conditions are slightly redundant or could be simplified, but none that obscure intent or produce incorrect behavior.",
+      "score_rationale": "The codebase demonstrates strong logic clarity overall. A developer can trace control flow through any route handler or React hook without surprises. The streaming state machine in use-channel.ts is the most complex logic in the seed files, and it handles edge cases (race conditions, timeouts, reconnection) with clear, commented branches. The few issues found are minor redundancies that don't meaningfully impede understanding. This places the codebase solidly above 85 \u2014 mostly clear with isolated simplification opportunities \u2014 but not at 90+ due to a few spots where conditions could be tightened."
+    },
+    "type_safety": {
+      "strengths": [
+        "Well-defined interface types for component props throughout the frontend \u2014 MessageInputProps, ChatPanelProps, SimpleAgentFormProps, etc. are explicit and well-structured",
+        "Discriminated union types for ConnectionMethodType and ModalView provide exhaustive type safety in the agent modal subsystem",
+        "The shared/types package defines proper domain types (ChannelType, Channel) showing intent to centralize type definitions",
+        "React hooks like useChannel export well-typed interfaces (UseChannelReturn, MessagePayload, ReactionData) that consumers can rely on",
+        "Prisma integration provides strong type safety for database queries via generated types"
+      ],
+      "issue_character": "The codebase has a systematic gap at its two main trust boundaries: (1) WebSocket channel payloads are force-cast via `as` without runtime validation, and (2) HTTP request bodies are parsed as untyped `any` with ad-hoc runtime checks instead of schema validation. These are not isolated incidents but a consistent pattern across all route handlers and channel event listeners.",
+      "score_rationale": "The frontend component layer has solid type discipline with well-defined interfaces. However, a developer cannot trust type annotations at the two most critical boundaries \u2014 incoming WebSocket events and API request bodies. The pervasive `as` casting in use-channel.ts means that if the Gateway sends a malformed payload, TypeScript provides zero protection. Similarly, every API route handler operates on untyped `any` from request.json(). Additionally, several interfaces use `string` where narrower union types exist in the codebase (ChannelData.type, AgentListItem.triggerMode). This places the codebase firmly in the 'mixed' range \u2014 reliable within components but unreliable at boundaries."
+    }
+  },
+  "issues": [
+    {
+      "dimension": "cross_module_architecture",
+      "identifier": "triple_connection_method_type",
+      "summary": "ConnectionMethod type defined independently in 3 locations with identical values, bypassing shared package",
+      "confidence": "high",
+      "suggestion": "Use the canonical ConnectionMethod from packages/shared/types/agent.ts everywhere. In agent-factory.ts, import ConnectionMethod and derive VALID_CONNECTION_METHODS from it. In components/modals/agent/types.ts, replace ConnectionMethodType with a re-export of ConnectionMethod from @tavok/shared.",
+      "related_files": [
+        "packages/shared/types/agent.ts",
+        "packages/web/components/modals/agent/types.ts",
+        "packages/web/lib/agent-factory.ts"
+      ],
+      "evidence": [
+        "packages/shared/types/agent.ts defines 'ConnectionMethod' with 6 values (WEBSOCKET, WEBHOOK, INBOUND_WEBHOOK, REST_POLL, SSE, OPENAI_COMPAT)",
+        "packages/web/components/modals/agent/types.ts defines 'ConnectionMethodType' with the same 6 values",
+        "packages/web/lib/agent-factory.ts defines VALID_CONNECTION_METHODS const array and derives 'ConnectionMethodValue' type \u2014 same 6 values",
+        "None of these three definitions reference each other or the shared package canonical type"
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor"
+    },
+    {
+      "dimension": "cross_module_architecture",
+      "identifier": "duplicated_internal_base_url",
+      "summary": "Internal self-call base URL 'process.env.NEXTAUTH_URL || http://localhost:5555' duplicated across 8+ route files",
+      "confidence": "high",
+      "suggestion": "Extract an internal HTTP client module (e.g. lib/internal-client.ts) similar to how gateway-client.ts wraps Gateway calls. Expose typed methods like persistMessage(), updateMessage() that handle URL resolution and auth header injection in one place.",
+      "related_files": [
+        "packages/web/app/api/internal/agents/[agentId]/dispatch/route.ts",
+        "packages/web/app/api/v1/webhooks/[token]/stream/route.ts",
+        "packages/web/app/api/v1/webhooks/[token]/route.ts",
+        "packages/web/app/api/v1/chat/completions/route.ts",
+        "packages/web/app/api/v1/agents/[id]/messages/route.ts",
+        "packages/web/app/api/v1/agents/[id]/messages/[messageId]/stream/route.ts"
+      ],
+      "evidence": [
+        "dispatch/route.ts lines 301 and 321: 'const internalUrl = process.env.NEXTAUTH_URL || \"http://localhost:5555\"'",
+        "Same pattern appears in v1/webhooks/[token]/stream/route.ts:236, v1/chat/completions/route.ts:150, v1/agents/[id]/messages/route.ts:197 and :252, v1/bootstrap/route.ts:147",
+        "Each file independently constructs the base URL and makes fetch() calls with x-internal-secret headers \u2014 duplicating both the URL resolution and the auth header construction"
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor"
+    },
+    {
+      "dimension": "cross_module_architecture",
+      "identifier": "self_http_call_in_dispatch",
+      "summary": "dispatch/route.ts makes HTTP self-calls to /api/internal/messages instead of calling persistence logic directly",
+      "confidence": "high",
+      "suggestion": "Extract the message persistence logic from /api/internal/messages/route.ts into a shared lib module (e.g. lib/message-persistence.ts). Have both the route handler and dispatch/route.ts call that function directly, eliminating the self-HTTP-call.",
+      "related_files": [
+        "packages/web/app/api/internal/agents/[agentId]/dispatch/route.ts"
+      ],
+      "evidence": [
+        "dispatch/route.ts defines local persistMessage() and updateMessage() helper functions (lines 291-339) that construct NEXTAUTH_URL and make fetch() calls to /api/internal/messages on the same Next.js server",
+        "This creates an unnecessary HTTP round-trip within the same process, adding latency and failure modes for what could be a direct function call to prisma or a shared persistence module",
+        "The dispatch route already imports prisma directly (line 2) for the agentRegistration lookup, so the DB client is available"
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor"
+    },
+    {
+      "dimension": "cross_module_architecture",
+      "identifier": "duplicated_reaction_aggregation",
+      "summary": "Reaction aggregation logic (Map<emoji, userIds> -> array) duplicated identically in 3 route files",
+      "confidence": "high",
+      "suggestion": "Extract a shared helper function like aggregateReactions(reactions: {emoji: string, userId: string}[]): {emoji: string, count: number, userIds: string[]}[] into lib/message-utils.ts and import it in all three route files.",
+      "related_files": [
+        "packages/web/app/api/internal/messages/route.ts",
+        "packages/web/app/api/dms/[dmId]/messages/route.ts",
+        "packages/web/app/api/v1/agents/[id]/channels/[channelId]/messages/route.ts"
+      ],
+      "evidence": [
+        "internal/messages/route.ts lines 183-195: creates Map<string, string[]>, iterates reactions, converts to [{emoji, count, userIds}]",
+        "dms/[dmId]/messages/route.ts lines 78-89: identical implementation",
+        "All three use the exact same pattern: new Map -> for..of -> Array.from(entries).map"
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor"
+    },
+    {
+      "dimension": "cross_module_architecture",
+      "identifier": "js_files_in_ts_codebase",
+      "summary": "lib/api-safety.js and lib/route-handlers.js are plain JavaScript in an otherwise TypeScript codebase, blurring the type boundary",
+      "confidence": "medium",
+      "suggestion": "Convert both files to TypeScript (.ts) with proper type annotations. Since they are imported by typed route handlers, this would close the type gap at a key internal boundary. If they were intentionally JS for test isolation, add .d.ts declaration files alongside them.",
+      "related_files": [
+        "packages/web/lib/api-safety.js",
+        "packages/web/lib/route-handlers.js"
+      ],
+      "evidence": [
+        "api-safety.js exports serializeSequence, parseNonNegativeSequence, buildMonotonicLastSequenceUpdate \u2014 all without type annotations",
+        "route-handlers.js is imported by internal/messages/route.ts (createInternalMessagesPostHandler) \u2014 a TypeScript file importing an untyped JS module",
+        "All other lib/ modules in the web package are .ts files, making these two outliers that bypass the project's type boundary"
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor"
+    },
+    {
+      "dimension": "high_level_elegance",
+      "identifier": "triple_connection_method_definition",
+      "summary": "ConnectionMethod type defined independently in three locations with no shared canonical source",
+      "confidence": "high",
+      "suggestion": "Consolidate to a single definition in packages/shared/types/agent.ts. Export both the type (ConnectionMethod) and a runtime validation array (VALID_CONNECTION_METHODS) from there. Have agent-factory.ts and modal types.ts import from shared instead of redeclaring.",
+      "related_files": [
+        "packages/shared/types/agent.ts",
+        "packages/web/lib/agent-factory.ts",
+        "packages/web/components/modals/agent/types.ts"
+      ],
+      "evidence": [
+        "packages/shared/types/agent.ts line 6 defines ConnectionMethod as a union type",
+        "packages/web/lib/agent-factory.ts lines 14-23 defines VALID_CONNECTION_METHODS array and ConnectionMethodValue type with the same values",
+        "packages/web/components/modals/agent/types.ts line 6 defines ConnectionMethodType as a third identical union type"
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor"
+    },
+    {
+      "dimension": "high_level_elegance",
+      "identifier": "dm_chat_area_parallel_hierarchy",
+      "summary": "DM chat area duplicates message rendering logic instead of sharing with channel chat area",
+      "confidence": "medium",
+      "suggestion": "Extract a shared MessageList-like component that both ChatArea and DmChatArea use, or make ChatArea accept a mode prop that disables streaming/agent features for DM contexts. This localizes message rendering changes to one place.",
+      "related_files": [
+        "packages/web/components/dm/dm-chat-area.tsx",
+        "packages/web/components/chat/chat-area.tsx"
+      ],
+      "evidence": [
+        "dm-chat-area.tsx (428 lines) imports MessageInput, MarkdownContent, EditMessageInput, ReactionBar, DeleteMessageModal individually from chat/ \u2014 the same components used by chat-area.tsx",
+        "dm-chat-area.tsx reimplements message list rendering, scroll management, and edit/delete state management that chat-area.tsx delegates to MessageList",
+        "The dm/ directory contains only dm-chat-area.tsx, suggesting it is a parallel implementation rather than a distinct domain module"
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor"
+    },
+    {
+      "dimension": "high_level_elegance",
+      "identifier": "agent_auth_duplicated_lookup",
+      "summary": "agent-auth.ts contains two near-identical functions with duplicated Prisma query and result mapping",
+      "confidence": "high",
+      "suggestion": "Extract the shared lookup into a private helper like lookupAgentByKeyHash(apiKeyHash: string): Promise<AgentAuthResult | null>, then have both public functions call it after their respective input parsing.",
+      "related_files": [
+        "packages/web/lib/agent-auth.ts"
+      ],
+      "evidence": [
+        "authenticateAgentRequest (lines 27-68) and authenticateAgentKey (lines 74-113) both perform identical Prisma queries (findFirst with same select clause) and identical result mapping to AgentAuthResult",
+        "The only difference is input source: one reads from request headers, the other takes a raw string. The core lookup logic is duplicated verbatim across ~35 lines"
+      ],
+      "impact_scope": "local",
+      "fix_scope": "single_edit"
+    },
+    {
+      "dimension": "convention_outlier",
+      "identifier": "pascalcase_filename_island",
+      "summary": "typed-messages/ uses PascalCase filenames while all other component directories use kebab-case",
+      "confidence": "high",
+      "suggestion": "Rename the 6 PascalCase files in typed-messages/ to kebab-case (tool-call-card.tsx, artifact-renderer.tsx, etc.) and update the barrel index.ts imports to match. This aligns with the codebase-wide kebab-case convention.",
+      "related_files": [
+        "packages/web/components/chat/typed-messages/ToolCallCard.tsx",
+        "packages/web/components/chat/typed-messages/ArtifactRenderer.tsx",
+        "packages/web/components/chat/typed-messages/CodeBlockMessage.tsx",
+        "packages/web/components/chat/typed-messages/StatusIndicator.tsx",
+        "packages/web/components/chat/typed-messages/ToolResultCard.tsx",
+        "packages/web/components/chat/typed-messages/TypedMessageRenderer.tsx"
+      ],
+      "evidence": [
+        "All 6 component files in typed-messages/ use PascalCase (ToolCallCard.tsx, ArtifactRenderer.tsx, etc.)",
+        "Every other component directory (layout/, modals/, server-settings/, workspace/, dm/, chat/ parent) uses kebab-case consistently",
+        "The barrel file typed-messages/index.ts re-exports from these PascalCase files, making the inconsistency visible in imports"
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor"
+    },
+    {
+      "dimension": "convention_outlier",
+      "identifier": "message_metadata_filename_outlier",
+      "summary": "MessageMetadata.tsx uses PascalCase while all 17 sibling files in chat/ use kebab-case",
+      "confidence": "high",
+      "suggestion": "Rename MessageMetadata.tsx to message-metadata.tsx and update its importers.",
+      "related_files": [
+        "packages/web/components/chat/MessageMetadata.tsx"
+      ],
+      "evidence": [
+        "MessageMetadata.tsx is PascalCase; all 17 siblings (message-input.tsx, channel-header.tsx, typing-indicator.tsx, etc.) are kebab-case"
+      ],
+      "impact_scope": "local",
+      "fix_scope": "single_edit"
+    },
+    {
+      "dimension": "convention_outlier",
+      "identifier": "js_files_in_ts_lib",
+      "summary": "Three .js files in packages/web/lib/ alongside 19 .ts files creates a mixed-language island",
+      "confidence": "high",
+      "suggestion": "Convert the 3 .js files to .ts with proper type annotations to match the rest of the lib/ directory. This eliminates the style island and brings these server-side utilities under TypeScript's type checking.",
+      "related_files": [
+        "packages/web/lib/route-handlers.js",
+        "packages/web/lib/api-safety.js",
+        "packages/web/lib/validation.js"
+      ],
+      "evidence": [
+        "route-handlers.js, api-safety.js, and validation.js are plain JavaScript with no type annotations",
+        "Their 19 sibling files in lib/ are all TypeScript (.ts)",
+        "route-handlers.js uses untyped function parameters (e.g., isAuthorType(value)) unlike the typed patterns in neighboring .ts files"
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor"
+    },
+    {
+      "dimension": "convention_outlier",
+      "identifier": "duplicated_compare_sequences",
+      "summary": "compareSequences utility function is identically defined in both use-channel.ts and use-dm-channel.ts",
+      "confidence": "high",
+      "suggestion": "Extract compareSequences into a shared utility (e.g., packages/web/lib/sequence.ts) and import it in both hooks. This removes the duplication and ensures both hooks stay in sync if the comparison logic changes.",
+      "related_files": [
+        "packages/web/lib/hooks/use-channel.ts",
+        "packages/web/lib/hooks/use-dm-channel.ts"
+      ],
+      "evidence": [
+        "use-channel.ts line 59-64: function compareSequences(a: string, b: string): number { ... }",
+        "use-dm-channel.ts line 27-32: identical function compareSequences(a: string, b: string): number { ... }",
+        "Both implementations are character-for-character identical"
+      ],
+      "impact_scope": "module",
+      "fix_scope": "single_edit"
+    },
+    {
+      "dimension": "error_consistency",
+      "identifier": "silent_non_ok_response_dm_list",
+      "summary": "useDmList.refresh silently drops non-ok HTTP responses without logging or surfacing error",
+      "confidence": "high",
+      "suggestion": "Add an else branch after the res.ok check: log the status/error and either set an error state on the hook's return value or re-throw so the catch block handles it consistently with the thrown-exception path",
+      "related_files": [
+        "packages/web/lib/hooks/use-dm-list.ts"
+      ],
+      "evidence": [
+        "Lines 43-72: when res.ok is false, execution falls through the if block with no else \u2014 no error state is set, no console.error logged, and isLoading transitions to false as if the fetch succeeded with zero results"
+      ],
+      "impact_scope": "module",
+      "fix_scope": "single_edit"
+    },
+    {
+      "dimension": "error_consistency",
+      "identifier": "silent_catch_fetch_members",
+      "summary": "DangerZoneSection.fetchMembers has an empty catch block that silently swallows all errors",
+      "confidence": "high",
+      "suggestion": "At minimum add console.error for developer diagnostics; ideally set error state so the user knows members could not be loaded (e.g., 'Could not load members for transfer')",
+      "related_files": [
+        "packages/web/components/server-settings/danger-zone-section.tsx"
+      ],
+      "evidence": [
+        "Lines 45-47: catch block is empty with only a '// Silently fail' comment \u2014 a network error, JSON parse error, or server 500 all vanish without any user or developer feedback, while sibling functions in the same component (handleTransfer, handleDelete) properly surface errors via setError()"
+      ],
+      "impact_scope": "local",
+      "fix_scope": "single_edit"
+    },
+    {
+      "dimension": "error_consistency",
+      "identifier": "silent_non_ok_channels_fetch",
+      "summary": "ChannelsSection.fetchChannels silently ignores non-ok HTTP responses",
+      "confidence": "high",
+      "suggestion": "Add an else branch to set error state when res.ok is false, consistent with the component's other fetch handlers (handleCreate, handleDelete, handleSaveEdit) which all surface errors via setError()",
+      "related_files": [
+        "packages/web/components/server-settings/channels-section.tsx"
+      ],
+      "evidence": [
+        "Lines 44-51: only processes data when res.ok is true; when res.ok is false, no error message is set \u2014 loading spinner disappears and user sees empty channel list with no explanation"
+      ],
+      "impact_scope": "local",
+      "fix_scope": "single_edit"
+    },
+    {
+      "dimension": "error_consistency",
+      "identifier": "persist_message_errors_swallowed",
+      "summary": "persistMessage and updateMessage in dispatch route log errors but never propagate them to callers",
+      "confidence": "high",
+      "suggestion": "Have persistMessage and updateMessage throw on failure (or return a success boolean) so the main handler can reflect persistence failures in its response \u2014 at minimum for the initial persistMessage call which is critical to message durability",
+      "related_files": [
+        "packages/web/app/api/internal/agents/[agentId]/dispatch/route.ts"
+      ],
+      "evidence": [
+        "Lines 301-338: both helper functions log errors via console.error but return void \u2014 the main handler at line 240 returns { ok: true } even if the message was never persisted, meaning a successful-looking webhook dispatch can silently lose messages"
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "single_edit"
+    },
+    {
+      "dimension": "error_consistency",
+      "identifier": "socket_null_conflates_errors",
+      "summary": "getSocket and fetchToken return null for three distinct failure modes with no way for callers to distinguish them",
+      "confidence": "medium",
+      "suggestion": "Return a discriminated result from getSocket indicating the failure reason (e.g., { socket: null, reason: 'auth_failed' | 'network_error' | 'ssr' }) so callers can provide appropriate feedback \u2014 or at minimum add console.warn with the failure context",
+      "related_files": [
+        "packages/web/lib/socket.ts"
+      ],
+      "evidence": [
+        "fetchToken (lines 11-20) returns null for network errors, non-ok responses, and missing token field; getSocket (lines 26-61) returns null for SSR context, auth failure, and network failure \u2014 useSocket (use-socket.ts) receives null and cannot provide meaningful diagnostics to the user"
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor"
+    },
+    {
+      "dimension": "error_consistency",
+      "identifier": "reorder_silent_fallback",
+      "summary": "ChannelsSection.handleReorder catches errors and silently refetches without notifying the user",
+      "confidence": "high",
+      "suggestion": "Add setError('Failed to reorder channels') before the fetchChannels() call in the catch block, matching the error reporting pattern used by sibling handlers in the same component",
+      "related_files": [
+        "packages/web/components/server-settings/channels-section.tsx"
+      ],
+      "evidence": [
+        "Lines 141-149: on reorder failure, the catch block calls fetchChannels() to revert optimistic update but never calls setError() \u2014 user sees channels snap back to original order with no explanation, while sibling handlers (handleCreate, handleDelete, handleSaveEdit) all surface errors"
+      ],
+      "impact_scope": "local",
+      "fix_scope": "single_edit"
+    },
+    {
+      "dimension": "naming_quality",
+      "identifier": "get_socket_side_effects",
+      "summary": "getSocket() creates connections and mutates global state \u2014 name implies pure retrieval",
+      "confidence": "high",
+      "suggestion": "Rename to connectSocket() or ensureSocketConnected() to communicate that the function creates connections and mutates state. The existing early-return path for already-connected sockets makes ensureSocketConnected() the most accurate name.",
+      "related_files": [
+        "packages/web/lib/socket.ts"
+      ],
+      "evidence": [
+        "getSocket() at line 26 in socket.ts: fetches a JWT token via network call, creates a new Socket instance, assigns it to module-level singleton, calls socket.connect(), and registers onOpen/onError handlers \u2014 all side effects hidden behind a getter name",
+        "The function is imported and called from use-socket.ts hook (line 20: const sock = await getSocket()) where the caller treats it as initialization but the name suggests retrieval"
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor"
+    },
+    {
+      "dimension": "naming_quality",
+      "identifier": "generic_data_in_error_paths",
+      "summary": "Variable 'data' reused for both success and error JSON parsing across fetch handlers",
+      "confidence": "low",
+      "suggestion": "In error-handling paths where JSON is parsed specifically to extract error messages, use 'errorBody' or 'errData' instead of 'data' to distinguish from success-path data parsing. This is a minor readability improvement \u2014 each occurrence is short-scoped.",
+      "related_files": [
+        "packages/web/components/server-settings/overview-section.tsx"
+      ],
+      "evidence": [
+        "In overview-section.tsx line 59: 'const data = await res.json().catch(() => ({}))' inside the error path of handleSave \u2014 this 'data' holds error information but is named identically to the success-path 'data' at line 32-33 in the useEffect",
+        "Same pattern at lines 91, 103 in handleIconUpload and line 124 in handleRemoveIcon \u2014 'data' is used for error response parsing in catch-adjacent code"
+      ],
+      "impact_scope": "local",
+      "fix_scope": "single_edit"
+    },
+    {
+      "dimension": "abstraction_fitness",
+      "identifier": "duplicated_reaction_logic",
+      "summary": "Server and DM reaction routes duplicate ~80 lines of identical aggregation, response-building, and broadcast logic",
+      "confidence": "high",
+      "suggestion": "Extract a shared reaction utility module (e.g. lib/reactions.ts) containing: ALLOWED_EMOJIS, a generic getAggregatedReactions(findMany callback), getReactionsResponse, and broadcastReactionUpdate(channelTopic). The two route files would call these shared helpers with their model-specific parameters, eliminating ~80 lines of duplication.",
+      "related_files": [
+        "packages/web/app/api/messages/[messageId]/reactions/route.ts",
+        "packages/web/app/api/dms/[dmId]/messages/[messageId]/reactions/route.ts"
+      ],
+      "evidence": [
+        "getAggregatedReactions in both files performs identical Map-based aggregation differing only in Prisma model name (reaction vs dmReaction, messageId vs dmMessageId)",
+        "getReactionsResponse is identical in both files \u2014 maps aggregated results with hasReacted flag",
+        "ALLOWED_EMOJIS constant is duplicated verbatim in both files",
+        "broadcastReactionUpdate / broadcastDmReactionUpdate differ only in channel prefix ('room:' vs 'dm:') and error message text"
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor"
+    },
+    {
+      "dimension": "dependency_health",
+      "identifier": "unused_jose_dep",
+      "summary": "jose is a direct dependency in web/package.json but is never imported by application code",
+      "confidence": "high",
+      "suggestion": "Remove jose from packages/web/package.json dependencies. next-auth already brings it in as a transitive dependency.",
+      "related_files": [
+        "packages/web/package.json"
+      ],
+      "evidence": [
+        "packages/web/package.json line 28 lists jose ^6.1.3 as a production dependency",
+        "No .ts or .tsx file in packages/web imports from 'jose' - grep across all TypeScript files returns zero matches",
+        "next-auth depends on jose transitively (jose ^4.15.5) for JWT handling, so the direct dependency is redundant"
+      ],
+      "impact_scope": "local",
+      "fix_scope": "single_edit"
+    },
+    {
+      "dimension": "dependency_health",
+      "identifier": "prisma_version_divergence",
+      "summary": "Root and web package.json specify different version strategies for @prisma/client and prisma",
+      "confidence": "medium",
+      "suggestion": "Align the version specs: either pin both to the same exact version (6.19.2) in web/package.json, or use the workspace protocol (workspace:*) to defer to the root. This eliminates ambiguity about which version is intended.",
+      "related_files": [
+        "package.json",
+        "packages/web/package.json"
+      ],
+      "evidence": [
+        "Root package.json pins @prisma/client at exact 6.19.2 and prisma at 6.19.2",
+        "packages/web/package.json uses caret ranges ^6.4.0 for both @prisma/client and prisma",
+        "In a pnpm workspace, the root pinning effectively controls resolution, but the divergent specs create confusion about intended version policy and could cause issues if the workspace structure changes"
+      ],
+      "impact_scope": "module",
+      "fix_scope": "single_edit"
+    },
+    {
+      "dimension": "low_level_elegance",
+      "identifier": "use_channel_monolithic_effect",
+      "summary": "use-channel.ts packs 15+ event handlers into a single 500-line useEffect body",
+      "confidence": "high",
+      "suggestion": "Extract event handler registration into grouped helper functions (e.g., registerStreamHandlers, registerTypingHandlers, registerEditHandlers) that each take the channel, mounted flag, and relevant refs as parameters. This keeps the useEffect body as a readable composition of setup steps without changing the hook's external interface.",
+      "related_files": [
+        "packages/web/lib/hooks/use-channel.ts"
+      ],
+      "evidence": [
+        "Lines 207-793 form a single useEffect that registers handlers for message_new, sync_response, history_response, agent_trigger_skipped, user_typing, stream_start, stream_token, stream_complete, stream_error, stream_thinking, stream_tool_call, stream_tool_result, typed_message, reaction_update, stream_checkpoint, charter_status, message_edited, message_deleted, plus timeout detection and cleanup \u2014 all in one closure"
+      ],
+      "impact_scope": "module",
+      "fix_scope": "single_edit"
+    },
+    {
+      "dimension": "low_level_elegance",
+      "identifier": "chat_provider_repetitive_refresh",
+      "summary": "ChatProvider has four near-identical refresh functions with copy-pasted serverDataById merge logic",
+      "confidence": "high",
+      "suggestion": "Extract a generic refreshServerField helper: async function refreshServerField<K extends keyof ServerScopedData>(field: K, url: string, extractor: (data: any) => ServerScopedData[K]) that handles the fetch, error logging, and serverDataById merge in one place. Each refresh function becomes a one-liner calling this helper.",
+      "related_files": [
+        "packages/web/components/providers/chat-provider.tsx"
+      ],
+      "evidence": [
+        "refreshChannels (lines 162-190), refreshMembers (lines 192-215), and refreshAgents (lines 217-242) each follow the same pattern: check serverId, fetch URL, extract array from response, call individual setter, then call setServerDataById with a spread that preserves other fields \u2014 the serverDataById merge block is duplicated three times with only the field name changing"
+      ],
+      "impact_scope": "local",
+      "fix_scope": "single_edit"
+    },
+    {
+      "dimension": "low_level_elegance",
+      "identifier": "chat_panel_mixed_concerns",
+      "summary": "ChatPanel interleaves window drag/resize management with chat channel logic in one 516-line component",
+      "confidence": "high",
+      "suggestion": "Extract the drag-and-resize behavior into a custom hook (e.g., usePanelDragResize) that accepts the panel state and workspace callbacks, returns the needed mouse-down handlers. This separates window management from chat concerns and makes both independently readable.",
+      "related_files": [
+        "packages/web/components/workspace/chat-panel.tsx"
+      ],
+      "evidence": [
+        "Lines 78-279 contain drag ref setup, resize ref setup, panelMetrics ref sync, OS detection, mouse event handlers for drag and resize with coordinate clamping, and global mousemove/mouseup listeners \u2014 all mixed with chat-specific logic like message handling, mention options, stream state, and route syncing in the same component body"
+      ],
+      "impact_scope": "local",
+      "fix_scope": "single_edit"
+    },
+    {
+      "dimension": "low_level_elegance",
+      "identifier": "inline_svg_duplication",
+      "summary": "Identical inline SVG icons duplicated across multiple components instead of being extracted",
+      "confidence": "medium",
+      "suggestion": "Extract repeated SVG icons into small components in a shared icons file or use lucide-react equivalents (e.g., Bot icon from lucide-react) to match the pattern already used for Hash, Plus, Settings2 etc. in the same components.",
+      "related_files": [
+        "packages/web/components/layout/channel-sidebar.tsx",
+        "packages/web/components/layout/left-panel.tsx",
+        "packages/web/components/chat/message-input.tsx"
+      ],
+      "evidence": [
+        "The bot/agent SVG icon (M8 1a2 2 0 012 2v1h2... path) appears identically in channel-sidebar.tsx lines 131-138 and again at lines 193-199. The upload/paperclip SVG and send arrow SVG in message-input.tsx are inline 6-line SVG blocks that could be shared icon components, especially since lucide-react icons are already used elsewhere in the same files"
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor"
+    },
+    {
+      "dimension": "low_level_elegance",
+      "identifier": "overview_section_chained_then",
+      "summary": "OverviewSection uses .then() chains in useEffect instead of async/await used everywhere else",
+      "confidence": "medium",
+      "suggestion": "Convert to an async IIFE or extracted async function with await/try-catch to match the codebase convention used in all sibling components.",
+      "related_files": [
+        "packages/web/components/server-settings/overview-section.tsx"
+      ],
+      "evidence": [
+        "Lines 29-41: useEffect uses fetch().then(res => res.json()).then(data => ...).catch() pattern, while every other data-fetching component in the codebase (chat-provider, members-section, roles-section, channel-settings-modal) uses async/await with try/catch \u2014 this is a style inconsistency within function internals"
+      ],
+      "impact_scope": "local",
+      "fix_scope": "single_edit"
+    },
+    {
+      "dimension": "mid_level_elegance",
+      "identifier": "triplicated_connection_method_type",
+      "summary": "ConnectionMethod string union defined independently in three files with no shared source of truth",
+      "confidence": "high",
+      "suggestion": "Use the shared type from packages/shared/types/agent.ts as the single source of truth. In agent-factory.ts, import ConnectionMethod and derive the runtime array from it. In modals/agent/types.ts, import and re-export ConnectionMethod instead of redefining it.",
+      "related_files": [
+        "packages/shared/types/agent.ts",
+        "packages/web/lib/agent-factory.ts",
+        "packages/web/components/modals/agent/types.ts"
+      ],
+      "evidence": [
+        "packages/shared/types/agent.ts defines ConnectionMethod as a union of 6 string literals",
+        "packages/web/lib/agent-factory.ts defines VALID_CONNECTION_METHODS array and derives ConnectionMethodValue \u2014 same 6 values",
+        "packages/web/components/modals/agent/types.ts defines ConnectionMethodType \u2014 same 6 values",
+        "No import relationship exists between these three definitions; adding a new method requires updating all three independently"
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor"
+    },
+    {
+      "dimension": "mid_level_elegance",
+      "identifier": "triplicated_agent_key_verification",
+      "summary": "Agent API key hash-and-lookup logic implemented in three separate locations with divergent return shapes",
+      "confidence": "high",
+      "suggestion": "Extract a single shared function (e.g., verifyAgentApiKey in agent-auth.ts) that takes an API key string, performs the hash+lookup+isActive check, and returns a discriminated union result. Have all three call sites (agent-auth, route-handlers, internal verify route) use this shared function and translate the result to their specific response format.",
+      "related_files": [
+        "packages/web/lib/agent-auth.ts",
+        "packages/web/lib/route-handlers.js",
+        "packages/web/app/api/internal/agents/verify/route.ts"
+      ],
+      "evidence": [
+        "agent-auth.ts::authenticateAgentRequest performs SHA-256 hash, findFirst on agentRegistration, checks isActive, returns AgentAuthResult",
+        "route-handlers.js::authenticateAgentKey performs same hash and findFirst but returns {authorized, error, status} \u2014 different shape",
+        "route-handlers.js::createAgentVerifyHandler duplicates the same hash+findFirst+isActive logic again for the internal verify endpoint",
+        "api/internal/agents/verify/route.ts has yet another independent implementation of the same hash+findFirst+isActive flow",
+        "Each implementation has slightly different error responses and Prisma select shapes for the same underlying operation"
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor"
+    },
+    {
+      "dimension": "mid_level_elegance",
+      "identifier": "near_identical_agent_auth_functions",
+      "summary": "authenticateAgentRequest and authenticateAgentKey in agent-auth.ts duplicate the same Prisma query and mapping",
+      "confidence": "high",
+      "suggestion": "Have authenticateAgentRequest extract the key from the header and delegate to authenticateAgentKey for the actual verification, eliminating the duplicated Prisma query and result mapping.",
+      "related_files": [
+        "packages/web/lib/agent-auth.ts"
+      ],
+      "evidence": [
+        "authenticateAgentRequest (line 27-68) and authenticateAgentKey (line 74-113) share identical Prisma query structure (same where clause, same select shape, same isActive check, same result mapping)",
+        "The only difference is header extraction vs direct string parameter \u2014 the core verification logic is copy-pasted"
+      ],
+      "impact_scope": "module",
+      "fix_scope": "single_edit"
+    },
+    {
+      "dimension": "mid_level_elegance",
+      "identifier": "untyped_metadata_boundary",
+      "summary": "MessageMetadata receives Record<string, unknown> and uses 6 type assertions instead of a typed interface",
+      "confidence": "high",
+      "suggestion": "Define an AgentMessageMetadata interface (e.g., in packages/shared/types or alongside MessageMetadata) with the known fields (model, provider, tokensIn, tokensOut, latencyMs, costUsd) as optional typed properties. Use this interface as the prop type and in MessagePayload, replacing the Record<string, unknown> at the boundary.",
+      "related_files": [
+        "packages/web/components/chat/MessageMetadata.tsx",
+        "packages/web/lib/hooks/use-channel.ts"
+      ],
+      "evidence": [
+        "MessageMetadata accepts metadata: Record<string, unknown> (line 6-7)",
+        "Lines 17-22 immediately cast model, provider, tokensIn, tokensOut, latencyMs, costUsd with 'as' assertions",
+        "The metadata shape is well-known from the streaming protocol (TASK-0039) and use-channel.ts already types it as Record<string, unknown> | null in MessagePayload",
+        "This means the boundary between the streaming protocol and the UI has no type enforcement \u2014 metadata shape changes would not produce compile errors"
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor"
+    },
+    {
+      "dimension": "test_strategy",
+      "identifier": "agent_factory_untested",
+      "summary": "agent-factory.ts has zero unit tests despite handling crypto key generation, Prisma transactions, and channel auto-assignment",
+      "confidence": "high",
+      "suggestion": "Add a unit test file packages/web/lib/__tests__/agent-factory.test.ts. Mock prisma.$transaction and crypto to test: (1) API key format and hash storage, (2) webhook secret generation only for WEBHOOK method, (3) channel auto-assignment when channels exist vs. empty, (4) buildConnectionInfo URL construction for each connection method.",
+      "related_files": [
+        "packages/web/lib/agent-factory.ts"
+      ],
+      "evidence": [
+        "createAgent() generates API keys with crypto.randomBytes, hashes with SHA-256, runs a multi-step Prisma transaction (Agent + AgentRegistration + ChannelAgent), and conditionally generates webhook secrets \u2014 none of this logic is unit tested",
+        "buildConnectionInfo() constructs method-specific URLs from env vars \u2014 no test validates the URL construction for each of the 5 connection methods"
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "single_edit"
+    },
+    {
+      "dimension": "test_strategy",
+      "identifier": "cli_package_zero_tests",
+      "summary": "Entire packages/cli has zero test files \u2014 runner.ts handles binary download, caching, and execution untested",
+      "confidence": "high",
+      "suggestion": "Add packages/cli/src/__tests__/runner.test.ts. Start with pure function tests for getReleaseBaseUrl, getBinaryDownloadUrl, getCacheBinaryPath, and trimVersionPrefix. Then add tests for ensureBinary with mocked fs and https to verify cache-hit path, download path, and cleanup on failure.",
+      "related_files": [
+        "packages/cli/src/runner.ts"
+      ],
+      "evidence": [
+        "runner.ts contains ensureBinary() with file I/O (mkdir, rename, unlink, chmod), HTTP download with redirect following, cache path resolution across platforms (win32 vs XDG), and timeout handling \u2014 no tests exist anywhere in packages/cli/",
+        "getReleaseBaseUrl() and getBinaryDownloadUrl() are pure functions that would be trivial to test but are not"
+      ],
+      "impact_scope": "module",
+      "fix_scope": "single_edit"
+    },
+    {
+      "dimension": "test_strategy",
+      "identifier": "e2e_waitfortimeout_fragility",
+      "summary": "70 waitForTimeout calls across 20 E2E files create systematic timing fragility",
+      "confidence": "high",
+      "suggestion": "Replace waitForTimeout calls with event-driven assertions: (1) In helpers.ts selectServer, wait for server name to appear in a heading or active indicator instead of 500ms. (2) In createServerViaUI/createChannelViaUI, wait for a URL change or success indicator. (3) For negative assertions like 'empty message not sent', use expect(input).toHaveValue('') which is already in the test \u2014 remove the preceding waitForTimeout(1000).",
+      "related_files": [
+        "packages/web/e2e/v1-checklist/helpers.ts",
+        "packages/web/e2e/v1-checklist/05-messaging.spec.ts",
+        "packages/web/e2e/v1-checklist/12-dms.spec.ts",
+        "packages/web/e2e/v1-checklist/15-bot-streaming.spec.ts"
+      ],
+      "evidence": [
+        "helpers.ts uses waitForTimeout(500) after selectServer (line 41), waitForTimeout(2000) after createServerViaUI (line 132) and createChannelViaUI (line 157) \u2014 these are timing assumptions rather than event-based waits",
+        "05-messaging.spec.ts line 237 uses waitForTimeout(1000) to verify no empty message was sent \u2014 a negative assertion that could miss fast failures",
+        "12-dms.spec.ts has 9 waitForTimeout calls, 15-bot-streaming.spec.ts has 6 \u2014 recent commits explicitly reference fixing 'flaky tests' caused by timing issues"
+      ],
+      "impact_scope": "codebase",
+      "fix_scope": "multi_file_refactor"
+    },
+    {
+      "dimension": "test_strategy",
+      "identifier": "socket_module_untested",
+      "summary": "socket.ts singleton WebSocket management with JWT refresh has zero unit tests",
+      "confidence": "medium",
+      "suggestion": "Add packages/web/lib/__tests__/socket.test.ts. Mock the phoenix Socket class and global fetch. Test: (1) getSocket returns null on server (typeof window === 'undefined'), (2) getSocket reuses connected socket, (3) token refresh on error callback, (4) disconnectSocket clears singleton state.",
+      "related_files": [
+        "packages/web/lib/socket.ts"
+      ],
+      "evidence": [
+        "getSocket() manages a module-level singleton with token refresh on error, reconnection backoff schedule [1000, 2000, 5000, 10000], and server-side rendering guard \u2014 no unit test validates any of this behavior",
+        "The onError handler silently refreshes the token (lines 51-57) \u2014 a failure in token refresh is swallowed, and this code path is only exercised through full E2E tests"
+      ],
+      "impact_scope": "module",
+      "fix_scope": "single_edit"
+    },
+    {
+      "dimension": "test_strategy",
+      "identifier": "mock_mcp_server_single_transport",
+      "summary": "Mock MCP server only supports a single SSE transport connection \u2014 concurrent test scenarios would fail silently",
+      "confidence": "medium",
+      "suggestion": "Create a new SSEServerTransport per connection request instead of reusing a singleton. For the EADDRINUSE case, either verify the existing process is actually a mock MCP server (health check) or propagate the error with a clear message.",
+      "related_files": [
+        "packages/web/e2e/mock-mcp-server.ts"
+      ],
+      "evidence": [
+        "Lines 133-138: the transport variable is a singleton \u2014 if a second client connects to /sse while one is active, the new connection gets no transport and the request handler falls through silently with no response",
+        "The EADDRINUSE handler (lines 148-153) silently resolves instead of throwing, meaning if another process occupies port 9998, tests proceed with no MCP server and fail with opaque timeout errors"
+      ],
+      "impact_scope": "module",
+      "fix_scope": "single_edit"
+    },
+    {
+      "dimension": "api_surface_coherence",
+      "identifier": "inconsistent_handler_signatures",
+      "summary": "route-handlers.js handler factories return functions with 4 distinct parameter shapes, making the API surface unpredictable",
+      "confidence": "high",
+      "suggestion": "Normalize all handler signatures to (request, context) where context always contains the relevant IDs, matching Next.js route handler conventions consistently",
+      "related_files": [
+        "packages/web/lib/route-handlers.js"
+      ],
+      "evidence": [
+        "agentGetHandler(agentId) takes bare ID",
+        "agentPatchHandler(request, agentId) takes request + bare ID",
+        "serverAgentPatchHandler(request, { params }) takes request + destructured params",
+        "internalMessagesPostHandler(request) takes only request",
+        "No shared signature pattern \u2014 callers must memorize each variant"
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor"
+    },
+    {
+      "dimension": "api_surface_coherence",
+      "identifier": "duplicate_connection_method_type",
+      "summary": "ConnectionMethodType and ConnectionMethodValue define identical string literal unions in two separate files with no shared source of truth",
+      "confidence": "high",
+      "suggestion": "Define the connection method type once (e.g. in agent-factory.ts or a shared types file) and import it in both locations",
+      "related_files": [
+        "packages/web/components/modals/agent/types.ts",
+        "packages/web/lib/agent-factory.ts"
+      ],
+      "evidence": [
+        "ConnectionMethodType in types.ts: 'WEBSOCKET' | 'WEBHOOK' | 'INBOUND_WEBHOOK' | 'REST_POLL' | 'SSE' | 'OPENAI_COMPAT'",
+        "ConnectionMethodValue in agent-factory.ts: derived from VALID_CONNECTION_METHODS with identical values",
+        "Adding a new connection method requires updating both files independently"
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor"
+    },
+    {
+      "dimension": "api_surface_coherence",
+      "identifier": "untyped_connection_info_return",
+      "summary": "buildConnectionInfo returns Record<string, string | undefined> instead of a typed shape, losing compile-time safety for callers",
+      "confidence": "high",
+      "suggestion": "Return a discriminated union type keyed by connection method, or at minimum a typed interface with all optional fields explicitly named",
+      "related_files": [
+        "packages/web/lib/agent-factory.ts"
+      ],
+      "evidence": [
+        "Line 138: return type is Record<string, string | undefined>",
+        "Each connection method populates different keys (websocketUrl, pollUrl, eventsUrl, etc.) but callers get no type narrowing",
+        "Callers spread the result directly into response JSON (agents/route.ts line 254) with no type verification"
+      ],
+      "impact_scope": "module",
+      "fix_scope": "single_edit"
+    },
+    {
+      "dimension": "api_surface_coherence",
+      "identifier": "route_handlers_untyped_js",
+      "summary": "route-handlers.js is a core API surface with 3 importers but written in untyped JavaScript, making error contracts and parameter types invisible",
+      "confidence": "high",
+      "suggestion": "Convert route-handlers.js to TypeScript to align with the rest of the codebase and make error contracts explicit",
+      "related_files": [
+        "packages/web/lib/route-handlers.js"
+      ],
+      "evidence": [
+        "File has 775 lines of untyped JavaScript in a TypeScript codebase",
+        "Handler factory parameters use destructured objects with no type annotations: { prismaClient }, { getServerSession, authOptions, prismaClient, encrypt }",
+        "authenticateAgentKey(authHeader, agentId, prismaClient) has no parameter or return types \u2014 callers must infer the { authorized, error, status } shape"
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor"
+    },
+    {
+      "dimension": "api_surface_coherence",
+      "identifier": "mixed_sync_async_socket_api",
+      "summary": "socket.ts public API exports async getSocket() alongside sync disconnectSocket() without a compelling asymmetry reason",
+      "confidence": "medium",
+      "suggestion": "Make disconnectSocket async or document why the asymmetry is intentional (e.g., sync disconnect is required for beforeunload handlers)",
+      "related_files": [
+        "packages/web/lib/socket.ts"
+      ],
+      "evidence": [
+        "getSocket() is async (returns Promise<Socket | null>)",
+        "disconnectSocket() is synchronous (returns void)",
+        "Both operate on the same module-level singleton socket \u2014 the asymmetry forces callers to handle two different invocation patterns for paired lifecycle operations"
+      ],
+      "impact_scope": "local",
+      "fix_scope": "single_edit"
+    },
+    {
+      "dimension": "authorization_consistency",
+      "identifier": "timing_unsafe_internal_secret_check",
+      "summary": "route-handlers.js uses plain === for INTERNAL_API_SECRET, bypassing timing-safe validateInternalSecret()",
+      "confidence": "high",
+      "suggestion": "Import and use validateInternalSecret from @/lib/internal-auth in both createInternalMessagesPostHandler and createAgentVerifyHandler, replacing the direct === comparison. Since route-handlers.js is a .js file, either convert it to .ts or use require/dynamic import to access the function.",
+      "related_files": [
+        "packages/web/lib/route-handlers.js",
+        "packages/web/lib/internal-auth.ts"
+      ],
+      "evidence": [
+        "route-handlers.js line 47: `if (secret !== process.env.INTERNAL_API_SECRET)` in createInternalMessagesPostHandler \u2014 simple string equality",
+        "route-handlers.js line 710: `if (secret !== process.env.INTERNAL_API_SECRET)` in createAgentVerifyHandler \u2014 same pattern",
+        "internal-auth.ts provides validateInternalSecret() using crypto.timingSafeEqual, created specifically to fix ISSUE-010 timing side-channel",
+        "All 15+ other internal route handlers correctly use validateInternalSecret() \u2014 this file is the sole outlier"
+      ],
+      "impact_scope": "module",
+      "fix_scope": "single_edit"
+    },
+    {
+      "dimension": "ai_generated_debt",
+      "identifier": "gateway_passthrough_wrappers",
+      "summary": "Six one-line pass-through wrappers in gateway-client.ts add no logic beyond hardcoding an event name string",
+      "confidence": "high",
+      "suggestion": "Replace the 6 wrappers with direct broadcastToChannel calls at each call site, or if the topic template convenience is valued, use a single helper like broadcastToRoom(channelId, event, payload) that callers invoke with the event name as a parameter",
+      "related_files": [
+        "packages/web/lib/gateway-client.ts"
+      ],
+      "evidence": [
+        "broadcastMessageNew, broadcastStreamStart, broadcastStreamToken, broadcastStreamComplete, broadcastStreamError, broadcastTypedMessage each call broadcastToChannel with only a topic template and event string \u2014 no validation, retry, or transformation",
+        "Each wrapper has a JSDoc comment that restates the function name (e.g., 'Broadcast a stream_token event to a channel' for broadcastStreamToken)"
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor"
+    },
+    {
+      "dimension": "ai_generated_debt",
+      "identifier": "quadruplicated_skill_file",
+      "summary": "condition-based-waiting-example.ts is copied identically across 4 agent skill directories",
+      "confidence": "high",
+      "suggestion": "Keep a single canonical copy and symlink or reference it from the other agent skill directories, or consolidate into a shared skills directory",
+      "related_files": [
+        ".agents/skills/systematic-debugging/condition-based-waiting-example.ts",
+        ".claude/skills/systematic-debugging/condition-based-waiting-example.ts",
+        ".openhands/skills/systematic-debugging/condition-based-waiting-example.ts",
+        ".pi/skills/systematic-debugging/condition-based-waiting-example.ts"
+      ],
+      "evidence": [
+        "All four files are byte-identical: 159 lines of TypeScript with the same functions (waitForEvent, waitForEventCount, waitForEventMatch) and the same 20-line commented usage example",
+        "No shared import or symlink \u2014 pure copy-paste across .agents/, .claude/, .openhands/, .pi/ directories"
+      ],
+      "impact_scope": "codebase",
+      "fix_scope": "single_edit"
+    },
+    {
+      "dimension": "ai_generated_debt",
+      "identifier": "skill_file_docstring_bloat",
+      "summary": "condition-based-waiting-example.ts has disproportionate JSDoc and commented examples relative to its straightforward logic",
+      "confidence": "medium",
+      "suggestion": "Trim JSDoc to brief one-line descriptions; the type signatures already document parameters. Remove the redundant bottom usage example or move it to a separate README if the pedagogical context is important",
+      "related_files": [
+        ".agents/skills/systematic-debugging/condition-based-waiting-example.ts"
+      ],
+      "evidence": [
+        "Each of 3 functions (waitForEvent, waitForEventCount, waitForEventMatch) has 8-12 line JSDoc blocks with full @param for every parameter plus multi-line Example: blocks, despite the functions being simple poll-timeout loops",
+        "A 20-line commented usage example at the bottom (lines 138-158) duplicates information already in the JSDoc examples"
+      ],
+      "impact_scope": "local",
+      "fix_scope": "single_edit"
+    },
+    {
+      "dimension": "ai_generated_debt",
+      "identifier": "restating_docstrings_gateway",
+      "summary": "Gateway client wrapper docstrings restate function names without adding information",
+      "confidence": "high",
+      "suggestion": "Remove the restating docstrings on the wrapper functions; the function names are self-documenting",
+      "related_files": [
+        "packages/web/lib/gateway-client.ts"
+      ],
+      "evidence": [
+        "Line 69: '/** Broadcast a stream_start event to a channel. */' on broadcastStreamStart \u2014 the function name already says this",
+        "Line 79: '/** Broadcast a stream_token event to a channel. */' on broadcastStreamToken \u2014 identical pattern on all 5 remaining wrappers",
+        "Contrast with broadcastToChannel's docstring which adds value by explaining the Gateway endpoint and fan-out mechanism"
+      ],
+      "impact_scope": "local",
+      "fix_scope": "single_edit"
+    },
+    {
+      "dimension": "ai_generated_debt",
+      "identifier": "ulid_passthrough_wrapper",
+      "summary": "generateId() in ulid.ts is a zero-value pass-through wrapper around ulid()",
+      "confidence": "medium",
+      "suggestion": "Consider re-exporting ulid directly (export { ulid as generateId } from 'ulid') to make the pass-through explicit, or just import ulid directly at call sites. The extractTimestamp companion function can live in the same file without requiring a wrapper",
+      "related_files": [
+        "packages/web/lib/ulid.ts"
+      ],
+      "evidence": [
+        "generateId() on line 8 contains only 'return ulid()' \u2014 no added validation, no format transformation, no dependency injection",
+        "Used in 14 files, so the wrapper is entrenched, but it provides no abstraction benefit since ulid() itself is a single stable function"
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor"
+    },
+    {
+      "dimension": "incomplete_migration",
+      "identifier": "js_ts_coexistence_lib",
+      "summary": "Three production .js files coexist with 19 .ts files in packages/web/lib/",
+      "confidence": "high",
+      "suggestion": "Convert the three .js files to .ts with proper type annotations. Start with api-safety.js and validation.js (small, pure functions) then tackle route-handlers.js which has complex Prisma interactions that would benefit from typed parameters.",
+      "related_files": [
+        "packages/web/lib/api-safety.js",
+        "packages/web/lib/route-handlers.js",
+        "packages/web/lib/validation.js"
+      ],
+      "evidence": [
+        "api-safety.js (62 lines), route-handlers.js (776 lines), and validation.js (25 lines) are untyped JavaScript in an otherwise fully-typed TypeScript directory",
+        "These files export functions consumed by .ts callers via @/lib/api-safety etc., forcing TypeScript consumers to rely on inferred types rather than explicit annotations",
+        "route-handlers.js is the largest file in lib/ and has the most complex logic \u2014 it would benefit most from type annotations"
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor"
+    },
+    {
+      "dimension": "incomplete_migration",
+      "identifier": "orphaned_lace_skill_files",
+      "summary": "Four identical skill files reference types from a different project ('Lace') that do not exist in Tavok",
+      "confidence": "high",
+      "suggestion": "Delete all four copies. If the skill example is useful as a reference pattern, create a single copy in a shared location (e.g., docs/examples/) adapted to Tavok's actual types.",
+      "related_files": [
+        ".agents/skills/systematic-debugging/condition-based-waiting-example.ts",
+        ".claude/skills/systematic-debugging/condition-based-waiting-example.ts",
+        ".openhands/skills/systematic-debugging/condition-based-waiting-example.ts",
+        ".pi/skills/systematic-debugging/condition-based-waiting-example.ts"
+      ],
+      "evidence": [
+        "All four files import from '~/threads/thread-manager' and '~/threads/types' (ThreadManager, LaceEvent, LaceEventType) \u2014 these modules do not exist anywhere in the Tavok repository",
+        "The file header says 'From: Lace test infrastructure improvements (2025-10-03)' confirming these are from a different project",
+        "The files are duplicated identically across four agent config directories"
+      ],
+      "impact_scope": "codebase",
+      "fix_scope": "single_edit"
+    },
+    {
+      "dimension": "incomplete_migration",
+      "identifier": "mixed_test_conventions_mjs_ts",
+      "summary": "Test files in packages/web/lib/ use two formats: .test.mjs at root and .test.ts in __tests__/",
+      "confidence": "high",
+      "suggestion": "Consolidate all tests into the __tests__/ directory using .test.ts format. The .mjs tests appear to be the older convention \u2014 migrate them to TypeScript and remove the originals.",
+      "related_files": [
+        "packages/web/lib/enforces_request_and_sequence_safety.test.mjs",
+        "packages/web/lib/validation.test.mjs",
+        "packages/web/lib/route_invocation_safety.test.mjs",
+        "packages/web/lib/__tests__/api-safety.test.ts",
+        "packages/web/lib/__tests__/route-handlers.test.ts"
+      ],
+      "evidence": [
+        "8 .test.mjs files sit at packages/web/lib/ root level importing from './api-safety.js' with .js extensions",
+        "11 .test.ts files sit in packages/web/lib/__tests__/ importing from '../api-safety.js' \u2014 same modules, different test format and location",
+        "Some modules have tests in both formats: api-safety has both enforces_request_and_sequence_safety.test.mjs and __tests__/api-safety.test.ts"
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor"
+    },
+    {
+      "dimension": "incomplete_migration",
+      "identifier": "route_handlers_bypasses_timing_safe_auth",
+      "summary": "route-handlers.js uses plain === for secret comparison while internal-auth.ts provides timing-safe equivalent",
+      "confidence": "high",
+      "suggestion": "Import and use validateInternalSecret from internal-auth.ts in route-handlers.js (or better, convert route-handlers.js to .ts first). This eliminates the timing side-channel and removes the duplicate auth pattern.",
+      "related_files": [
+        "packages/web/lib/route-handlers.js",
+        "packages/web/lib/internal-auth.ts"
+      ],
+      "evidence": [
+        "route-handlers.js line 47: secret !== process.env.INTERNAL_API_SECRET uses plain string comparison",
+        "internal-auth.ts exports validateInternalSecret() using crypto.timingSafeEqual, explicitly citing ISSUE-010",
+        "The .js file predates the .ts utility and was never updated to use it \u2014 a direct consequence of the incomplete migration"
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "single_edit"
+    },
+    {
+      "dimension": "incomplete_migration",
+      "identifier": "default_agent_legacy_fallback",
+      "summary": "defaultAgentId legacy path coexists with ChannelAgent multi-agent path without migration timeline",
+      "confidence": "medium",
+      "suggestion": "Add a migration script or startup check that ensures all channels with a defaultAgentId also have corresponding ChannelAgent entries. Once verified, remove the fallback path and the dual-write in the PATCH handler. Document the migration completion criteria in KNOWN-ISSUES.md.",
+      "related_files": [
+        "packages/web/app/api/internal/channels/[channelId]/agents/route.ts",
+        "packages/web/app/api/servers/[serverId]/channels/[channelId]/route.ts"
+      ],
+      "evidence": [
+        "agents/route.ts line 83: '// 2. Fallback: check defaultAgent (backward compat for channels not yet migrated)' \u2014 indicates channels exist that haven't migrated",
+        "channel PATCH route line 222-228 sets defaultAgentId = agentIds[0] for 'backward compat' when agentIds is provided, maintaining dual state",
+        "No TODO, migration script, or documentation indicates when the defaultAgentId fallback should be removed"
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor"
+    },
+    {
+      "dimension": "package_organization",
+      "identifier": "lib_flat_dir_overload",
+      "summary": "packages/web/lib/ has 19+ files mixing auth, crypto, agent logic, networking, and utilities flat",
+      "confidence": "high",
+      "suggestion": "Staged reorg: (1) Create lib/auth/ and move admin-auth.ts, agent-auth.ts, internal-auth.ts, auth.ts there, add an index.ts barrel; (2) Create lib/agents/ and move agent-factory.ts there; (3) Create lib/security/ and move encryption.ts, permissions.ts, check-member-permission.ts there; (4) Move route-handlers.js, api-safety.js, validation.js into lib/api/ or convert to TS and colocate with route consumers. After each move, update @/lib/X imports to @/lib/subdir/X and run `npx tsc --noEmit` to validate.",
+      "related_files": [
+        "packages/web/lib/admin-auth.ts",
+        "packages/web/lib/agent-auth.ts",
+        "packages/web/lib/internal-auth.ts",
+        "packages/web/lib/auth.ts",
+        "packages/web/lib/agent-factory.ts",
+        "packages/web/lib/encryption.ts",
+        "packages/web/lib/permissions.ts",
+        "packages/web/lib/check-member-permission.ts",
+        "packages/web/lib/gateway-client.ts",
+        "packages/web/lib/socket.ts",
+        "packages/web/lib/route-handlers.js",
+        "packages/web/lib/api-safety.js",
+        "packages/web/lib/validation.js"
+      ],
+      "evidence": [
+        "19 production files in packages/web/lib/ span at least 4 distinct domains: auth (admin-auth, agent-auth, internal-auth, auth), agent domain (agent-factory), crypto/security (encryption, permissions, check-member-permission), and networking (socket, gateway-client, rate-limit)",
+        "avg_fan_in is 0.3 and avg_fan_out is 0.1 \u2014 most files are imported by only a narrow set of consumers, suggesting they serve distinct subsystems rather than being genuinely shared utilities"
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor"
+    },
+    {
+      "dimension": "package_organization",
+      "identifier": "lib_test_placement_mixed",
+      "summary": "Test files scattered at lib/ root alongside production code despite __tests__/ directory existing",
+      "confidence": "high",
+      "suggestion": "Move all 8 root-level .test.mjs files into packages/web/lib/__tests__/, converting to .test.ts if possible to match the existing convention there. Update any test runner config (jest/vitest) glob patterns if they reference lib/*.test.mjs directly.",
+      "related_files": [
+        "packages/web/lib/enforces_request_and_sequence_safety.test.mjs",
+        "packages/web/lib/health_marks_redis_unhealthy_when_url_missing.test.mjs",
+        "packages/web/lib/rejects_cross_server_bot_delete.test.mjs",
+        "packages/web/lib/rejects_cross_server_bot_patch.test.mjs",
+        "packages/web/lib/rejects_cross_server_channel_patch.test.mjs",
+        "packages/web/lib/returns_sequence_as_safe_string.test.mjs",
+        "packages/web/lib/route_invocation_safety.test.mjs",
+        "packages/web/lib/validation.test.mjs",
+        "packages/web/lib/__tests__/"
+      ],
+      "evidence": [
+        "8 .test.mjs files sit at the packages/web/lib/ root level, while packages/web/lib/__tests__/ already contains 11 organized test files",
+        "The root-level test files use descriptive snake_case names (e.g., rejects_cross_server_bot_delete.test.mjs) while __tests__/ uses kebab-case (e.g., route-handlers.test.ts) \u2014 two co-existing test conventions in the same directory"
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor"
+    },
+    {
+      "dimension": "package_organization",
+      "identifier": "dm_singleton_directory",
+      "summary": "components/dm/ contains one file with >85% import affinity toward components/chat/",
+      "confidence": "medium",
+      "suggestion": "Move dm-chat-area.tsx into packages/web/components/chat/ (rename to dm-chat-area.tsx or chat-area-dm.tsx to clarify variant). Update the one import site. Remove the empty dm/ directory. Validate with `npx tsc --noEmit`.",
+      "related_files": [
+        "packages/web/components/dm/dm-chat-area.tsx",
+        "packages/web/components/chat/chat-area.tsx"
+      ],
+      "evidence": [
+        "dm-chat-area.tsx imports MessageInput, MarkdownContent, EditMessageInput, DeleteMessageModal, and ReactionBar \u2014 all from components/chat/ or components/modals/",
+        "The file's structure closely mirrors chat-area.tsx, serving as a DM variant of the same chat UI pattern",
+        "A developer looking for DM chat must know to check a separate dm/ directory rather than finding it alongside its chat/ siblings"
+      ],
+      "impact_scope": "local",
+      "fix_scope": "multi_file_refactor"
+    },
+    {
+      "dimension": "package_organization",
+      "identifier": "providers_file_and_dir_ambiguity",
+      "summary": "components/providers.tsx coexists with components/providers/ directory creating ambiguous placement",
+      "confidence": "medium",
+      "suggestion": "Move providers.tsx into providers/ directory as providers/index.tsx (or providers/root-providers.tsx). This makes the providers/ directory the single location for all provider-related code. Update imports from @/components/providers to reflect the new path.",
+      "related_files": [
+        "packages/web/components/providers.tsx",
+        "packages/web/components/providers/theme-provider.tsx",
+        "packages/web/components/providers/chat-provider.tsx",
+        "packages/web/components/providers/workspace-provider.tsx"
+      ],
+      "evidence": [
+        "providers.tsx at the components root composes SessionProvider and ThemeProvider, while providers/ directory contains theme-provider.tsx, chat-provider.tsx, and workspace-provider.tsx",
+        "A developer adding a new provider must decide whether it belongs in the root file or the directory \u2014 no clear convention distinguishes them"
+      ],
+      "impact_scope": "local",
+      "fix_scope": "single_edit"
+    },
+    {
+      "dimension": "initialization_coupling",
+      "identifier": "gateway_client_import_time_env_capture",
+      "summary": "gateway-client.ts captures INTERNAL_API_SECRET and GATEWAY_INTERNAL_URL at import time, contradicting the call-time pattern used by internal-auth.ts for the same variable",
+      "confidence": "high",
+      "suggestion": "Move env reads inside the functions that use them, matching internal-auth.ts pattern. Replace module-level const with a helper like getGatewayInternalUrl() and getInternalApiSecret(), or read process.env directly at each call site.",
+      "related_files": [
+        "packages/web/lib/gateway-client.ts",
+        "packages/web/lib/internal-auth.ts"
+      ],
+      "evidence": [
+        "gateway-client.ts line 15: const INTERNAL_API_SECRET = process.env.INTERNAL_API_SECRET; (module scope)",
+        "internal-auth.ts line 20: const expected = process.env.INTERNAL_API_SECRET; (inside function body)",
+        "gateway-client.ts lines 11-14: const GATEWAY_INTERNAL_URL = process.env.GATEWAY_INTERNAL_URL || ... (module scope)",
+        "Tests set process.env.INTERNAL_API_SECRET in beforeEach but gateway-client already captured a stale value at import time"
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "single_edit"
+    },
+    {
+      "dimension": "initialization_coupling",
+      "identifier": "rate_limiter_import_side_effect",
+      "summary": "RateLimiter constructor starts a setInterval timer as a side effect; three instances are created at import time across two files",
+      "confidence": "medium",
+      "suggestion": "Defer timer creation to first check() call using a lazy init flag, or export factory functions instead of pre-instantiated singletons. This avoids timer side effects in test environments and unused imports.",
+      "related_files": [
+        "packages/web/lib/rate-limit.ts",
+        "packages/web/middleware.ts"
+      ],
+      "evidence": [
+        "rate-limit.ts line 31: setInterval(() => this.cleanup(), 60_000) runs in the constructor",
+        "rate-limit.ts lines 98-101: authLimiter and webhookLimiter instantiated at module scope",
+        "middleware.ts line 7: loginLimiter instantiated at module scope",
+        "Any import of rate-limit.ts triggers timer creation even if the limiter is never used"
+      ],
+      "impact_scope": "module",
+      "fix_scope": "single_edit"
+    },
+    {
+      "dimension": "initialization_coupling",
+      "identifier": "test_env_snapshot_stale_restore",
+      "summary": "Test files capture process.env.INTERNAL_API_SECRET at module scope, but this cannot restore the stale snapshot held by gateway-client.ts",
+      "confidence": "high",
+      "suggestion": "Fix the root cause (gateway-client import-time capture). For tests, use vi.mock or vi.stubEnv to ensure all env reads are intercepted, or restructure gateway-client to read env at call time.",
+      "related_files": [
+        "packages/web/lib/__tests__/agent-handlers.test.ts",
+        "packages/web/lib/__tests__/route-handlers.test.ts",
+        "packages/web/lib/__tests__/typed-messages.test.ts"
+      ],
+      "evidence": [
+        "agent-handlers.test.ts line 37: const ORIGINAL_SECRET = process.env.INTERNAL_API_SECRET; captured at module scope",
+        "Tests modify process.env.INTERNAL_API_SECRET in beforeEach/afterEach but gateway-client.ts line 15 already holds a frozen copy from import time",
+        "This creates a hidden coupling: test isolation depends on gateway-client not being imported in the same test module"
+      ],
+      "impact_scope": "module",
+      "fix_scope": "single_edit"
+    },
+    {
+      "dimension": "initialization_coupling",
+      "identifier": "env_ts_eager_parse_dead_code",
+      "summary": "env.ts eagerly parses all server env vars at import time via Zod, but the export is never imported \u2014 latent bomb if anyone imports it",
+      "confidence": "medium",
+      "suggestion": "Either convert serverEnv to a lazy getter function (matching the existing getClientEnv() pattern on line 53), or remove the dead module. The getClientEnv() function in the same file already demonstrates the correct lazy approach.",
+      "related_files": [
+        "packages/web/lib/env.ts"
+      ],
+      "evidence": [
+        "env.ts line 50: export const serverEnv = serverEnvSchema.parse(process.env); runs at import time",
+        "Zod parse will throw immediately if any required env var is missing (DATABASE_URL, REDIS_URL, NEXTAUTH_SECRET, JWT_SECRET, INTERNAL_API_SECRET, ENCRYPTION_KEY)",
+        "No file in the codebase currently imports serverEnv \u2014 the module is dead code but remains a trap for future imports"
+      ],
+      "impact_scope": "local",
+      "fix_scope": "single_edit"
+    },
+    {
+      "dimension": "design_coherence",
+      "identifier": "duplicated_roles_ui",
+      "summary": "RoleManagementModal and RolesSection duplicate RoleData, togglePermission, and PermissionToggles verbatim",
+      "confidence": "high",
+      "suggestion": "Extract RoleData, togglePermission, and PermissionToggles into a shared module (e.g., packages/web/components/roles/shared.tsx). Both RoleManagementModal and RolesSection can import from it, eliminating ~80 lines of duplication and ensuring permission toggle behavior stays consistent.",
+      "related_files": [
+        "packages/web/components/modals/role-management-modal.tsx",
+        "packages/web/components/server-settings/roles-section.tsx"
+      ],
+      "evidence": [
+        "Both files define identical RoleData interface (lines 15-23 in role-management-modal, lines 14-22 in roles-section)",
+        "Both files define identical togglePermission(current, bit) function",
+        "Both files define identical PermissionToggles component with the same PERMISSION_INFO.map rendering logic",
+        "CRUD operations (handleCreate, handleEdit, handleDelete) follow the same structure with only minor differences in error handling style"
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor"
+    },
+    {
+      "dimension": "design_coherence",
+      "identifier": "chat_panel_mixed_concerns",
+      "summary": "ChatPanel mixes panel windowing mechanics (drag, resize, z-index) with chat domain logic in a single 516-line component",
+      "confidence": "high",
+      "suggestion": "Extract the draggable/resizable panel shell into a generic PanelWindow component that accepts children. ChatPanel would then only contain the chat-specific logic (messages, typing, mentions, streaming status) and be wrapped by PanelWindow for windowing behavior.",
+      "related_files": [
+        "packages/web/components/workspace/chat-panel.tsx"
+      ],
+      "evidence": [
+        "Lines 78-100 define dragRef and resizeRef for windowing, lines 178-206 implement mouse-down handlers for drag and resize, lines 221-279 attach global mousemove/mouseup listeners for panel manipulation",
+        "Lines 40-59 set up chat-specific hooks (useChannel, useChatContext), lines 281-307 compute mention options from server data, lines 309-317 manage streaming state",
+        "These are two independent responsibilities: one is a generic draggable/resizable panel shell, the other is a chat channel view"
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor"
+    },
+    {
+      "dimension": "design_coherence",
+      "identifier": "use_channel_monolithic_effect",
+      "summary": "useChannel registers 14+ channel event handlers inside a single ~600-line useEffect, creating a monolithic setup block",
+      "confidence": "medium",
+      "suggestion": "Group related event handlers into named setup functions (e.g., setupStreamingHandlers, setupTypingHandlers, setupEditDeleteHandlers) called from within the effect. This preserves the single join/cleanup lifecycle while making the effect body scannable and each handler group independently reviewable.",
+      "related_files": [
+        "packages/web/lib/hooks/use-channel.ts"
+      ],
+      "evidence": [
+        "The main useEffect (lines 207-793) registers handlers for: message_new, sync_response, history_response, agent_trigger_skipped, user_typing, stream_start, stream_token, stream_complete, stream_error, stream_thinking, stream_tool_call, stream_tool_result, typed_message, reaction_update, stream_checkpoint, charter_status, message_edited, message_deleted",
+        "Each handler follows the same pattern: mounted guard, type assertion of raw payload, then state update \u2014 but all are inlined in one effect body"
+      ],
+      "impact_scope": "local",
+      "fix_scope": "single_edit"
+    },
+    {
+      "dimension": "design_coherence",
+      "identifier": "triplicate_skill_files",
+      "summary": "condition-based-waiting-example.ts is duplicated verbatim across three AI-agent skill directories",
+      "confidence": "medium",
+      "suggestion": "Maintain a single canonical copy (e.g., under .claude/skills/) and either symlink or reference it from other agent config directories. Alternatively, if each agent tool requires its own copy, add a comment or script to keep them synchronized.",
+      "related_files": [
+        ".claude/skills/systematic-debugging/condition-based-waiting-example.ts",
+        ".openhands/skills/systematic-debugging/condition-based-waiting-example.ts",
+        ".pi/skills/systematic-debugging/condition-based-waiting-example.ts"
+      ],
+      "evidence": [
+        "All three files are byte-identical (158 LOC each), confirmed via diff",
+        "Each is orphaned with zero importers \u2014 they serve as reference documentation for AI agents, not runtime code"
+      ],
+      "impact_scope": "codebase",
+      "fix_scope": "single_edit"
+    },
+    {
+      "dimension": "design_coherence",
+      "identifier": "chat_provider_repetitive_refresh",
+      "summary": "ChatProvider has three structurally identical refresh functions (refreshChannels, refreshMembers, refreshAgents) with duplicated serverDataById merge logic",
+      "confidence": "medium",
+      "suggestion": "Extract a generic refreshServerData helper that accepts the URL suffix, response field name, and local setter, then applies the common serverDataById merge pattern. This consolidates the repeated merge logic into one place.",
+      "related_files": [
+        "packages/web/components/providers/chat-provider.tsx"
+      ],
+      "evidence": [
+        "refreshChannels (lines 162-190), refreshMembers (lines 192-215), refreshAgents (lines 217-242) each follow the same pattern: guard on serverId, fetch, parse JSON, set local state, merge into serverDataById preserving other fields",
+        "The serverDataById merge in each function is a copy-paste with one field name changed: channels/members/agents. If a fourth field is added, a fourth copy must be made"
+      ],
+      "impact_scope": "local",
+      "fix_scope": "single_edit"
+    },
+    {
+      "dimension": "design_coherence",
+      "identifier": "profile_modal_state_sprawl",
+      "summary": "ProfileSettingsModal manages 13 useState hooks spanning four unrelated feature areas (avatar, profile, theme, password) in one component",
+      "confidence": "medium",
+      "suggestion": "Extract each section (AvatarSection, PasswordSection) into sub-components that own their own state. The ProfileSettingsModal becomes a thin shell composing these sections, reducing cognitive load from 13 interwoven state variables to a few per sub-component.",
+      "related_files": [
+        "packages/web/components/user/profile-settings-modal.tsx"
+      ],
+      "evidence": [
+        "Lines 28-43 declare 13 useState calls: displayName, email, avatarUrl, avatarUrlInput, currentPassword, newPassword, confirmPassword, saving, savingPassword, uploading, error, passwordError, success, passwordSuccess",
+        "The component handles avatar upload/URL/remove (lines 68-155), profile save (lines 157-178), theme toggle (lines 180-193), and password change (lines 195-230) as four independent workflows sharing only the modal shell"
+      ],
+      "impact_scope": "local",
+      "fix_scope": "single_edit"
+    },
+    {
+      "dimension": "contract_coherence",
+      "identifier": "server_name_length_contract_divergence",
+      "summary": "POST /api/servers allows 100-char names but PATCH /api/servers/[serverId] rejects names over 50 chars",
+      "confidence": "high",
+      "suggestion": "Unify the max server name length to a single constant (e.g. MAX_SERVER_NAME_LENGTH = 100) shared by both POST and PATCH handlers. Define it in a shared constants file and import in both routes.",
+      "related_files": [
+        "packages/web/app/api/servers/route.ts",
+        "packages/web/app/api/servers/[serverId]/route.ts"
+      ],
+      "evidence": [
+        "POST /api/servers line 86: if (!name || name.length < 1 || name.length > 100) \u2014 allows up to 100 characters",
+        "PATCH /api/servers/[serverId] line 125: if (body.name.trim().length > 50) \u2014 rejects names over 50 characters",
+        "A server created with a 75-character name cannot be renamed without shortening it, and vice versa \u2014 the create and update contracts disagree on the valid name length"
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "single_edit"
+    },
+    {
+      "dimension": "contract_coherence",
+      "identifier": "buildConnectionInfo_missing_inbound_webhook",
+      "summary": "buildConnectionInfo silently returns empty object for INBOUND_WEBHOOK despite it being a valid connection method",
+      "confidence": "high",
+      "suggestion": "Add a case for 'INBOUND_WEBHOOK' in the switch statement that populates the appropriate inbound webhook URL (e.g. info.inboundWebhookUrl = `${webUrl}/api/v1/agents/${agentId}/webhook`), or if no URL is needed, add an explicit comment explaining why.",
+      "related_files": [
+        "packages/web/lib/agent-factory.ts"
+      ],
+      "evidence": [
+        "VALID_CONNECTION_METHODS includes 'INBOUND_WEBHOOK' (line 17)",
+        "buildConnectionInfo switch (lines 145-163) handles WEBSOCKET, WEBHOOK, REST_POLL, SSE, and OPENAI_COMPAT but has no case for INBOUND_WEBHOOK",
+        "The function's docstring says 'Build method-specific connection URLs for an agent' but for INBOUND_WEBHOOK it returns an empty Record with no URLs"
+      ],
+      "impact_scope": "module",
+      "fix_scope": "single_edit"
+    },
+    {
+      "dimension": "contract_coherence",
+      "identifier": "put_internal_message_unguarded_json_parse",
+      "summary": "PUT /api/internal/messages/{messageId} lacks try/catch on request.json() while sibling PATCH and DELETE guard it",
+      "confidence": "high",
+      "suggestion": "Wrap the PUT handler's request.json() call in a try/catch block returning { error: 'Invalid JSON body' } with status 400, matching the pattern used by PATCH and DELETE in the same file.",
+      "related_files": [
+        "packages/web/app/api/internal/messages/[messageId]/route.ts"
+      ],
+      "evidence": [
+        "PUT handler line 66: 'const body = await request.json();' \u2014 no try/catch, will throw unhandled on malformed JSON",
+        "PATCH handler line 132-136: wraps request.json() in try/catch and returns 400 on failure",
+        "DELETE handler line 242-246: wraps request.json() in try/catch and returns 400 on failure",
+        "Three handlers in the same file have divergent error contracts for JSON parsing"
+      ],
+      "impact_scope": "local",
+      "fix_scope": "single_edit"
+    },
+    {
+      "dimension": "contract_coherence",
+      "identifier": "access_check_return_shape_divergence",
+      "summary": "ensureMessageAccess and ensureDmMessageAccess return different success shapes without a shared type",
+      "confidence": "medium",
+      "suggestion": "Define a shared AccessCheckResult discriminated union type (e.g. type AccessCheckResult = { ok: true; channelId: string } | { ok: false; status: number; error: string }) and apply it to both functions. For DMs, include dmId in the success case for symmetry.",
+      "related_files": [
+        "packages/web/app/api/messages/[messageId]/reactions/route.ts",
+        "packages/web/app/api/dms/[dmId]/messages/[messageId]/reactions/route.ts"
+      ],
+      "evidence": [
+        "ensureMessageAccess returns { ok: true, channelId: string } on success (line 189)",
+        "ensureDmMessageAccess returns { ok: true } without channelId on success (line 186)",
+        "Callers use access.channelId conditionally (line 85: 'if (access.channelId)') but DM POST/DELETE call broadcastDmReactionUpdate unconditionally (line 88)",
+        "No shared type or discriminated union constrains either return shape"
+      ],
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor"
+    },
+    {
+      "dimension": "logic_clarity",
+      "identifier": "put_message_validation_conflation",
+      "summary": "PUT /internal/messages validation condition conflates empty-string and undefined checks",
+      "confidence": "medium",
+      "suggestion": "Replace `!content && content !== '' && !streamingStatus` with `content === undefined && content === null && !streamingStatus` or use `(content == null && !streamingStatus)` which is the idiomatic JS way to check null/undefined without catching empty string.",
+      "related_files": [
+        "packages/web/app/api/internal/messages/[messageId]/route.ts"
+      ],
+      "evidence": [
+        "Line 76: `if (!content && content !== '' && !streamingStatus)` \u2014 the double-negative `!content && content !== ''` is checking for `undefined` or `null` but not empty string. The intent is to allow empty-string content, but the expression is harder to parse than necessary. A developer reading this must mentally evaluate `!content && content !== ''` to understand it means `content is null or undefined`."
+      ],
+      "impact_scope": "local",
+      "fix_scope": "single_edit"
+    },
+    {
+      "dimension": "logic_clarity",
+      "identifier": "server_name_redundant_check",
+      "summary": "POST /api/servers validates `name.length < 1` after already checking `!name` on a trimmed string",
+      "confidence": "high",
+      "suggestion": "Simplify to `if (!name || name.length > 100)` \u2014 the `name.length < 1` condition is unreachable when `!name` is false.",
+      "related_files": [
+        "packages/web/app/api/servers/route.ts"
+      ],
+      "evidence": [
+        "Line 86: `if (!name || name.length < 1 || name.length > 100)` \u2014 since `name` is the result of `body.name?.trim()`, the `!name` check already catches empty strings and the `name.length < 1` check is redundant. If `name` is falsy (empty string after trim, null, or undefined), `!name` is true. If `!name` is false, `name.length < 1` can never be true."
+      ],
+      "impact_scope": "local",
+      "fix_scope": "single_edit"
+    },
+    {
+      "dimension": "logic_clarity",
+      "identifier": "channel_patch_double_update",
+      "summary": "PATCH /channels/{channelId} performs two sequential channel updates when agentIds is provided",
+      "confidence": "medium",
+      "suggestion": "Skip the final `prisma.channel.update` when `Object.keys(updateData).length === 0` and `agentIds` was already handled by the transaction, or merge both updates into a single transaction.",
+      "related_files": [
+        "packages/web/app/api/servers/[serverId]/channels/[channelId]/route.ts"
+      ],
+      "evidence": [
+        "Lines 215-238: When `agentIds` is in the request body, the handler first runs a transaction that updates the channel's `defaultAgentId` (line 223-228), and then unconditionally runs a second `prisma.channel.update` at line 232 with `updateData`. If the request body contains both `agentIds` and `defaultAgentId`, the second update overwrites the first's defaultAgentId value. Even when `updateData` is empty (only `agentIds` was sent), the second update still executes with an empty `data` object \u2014 a wasted DB call."
+      ],
+      "impact_scope": "local",
+      "fix_scope": "single_edit"
+    },
+    {
+      "dimension": "type_safety",
+      "identifier": "unvalidated_websocket_casts",
+      "summary": "use-channel.ts force-casts all Phoenix channel payloads via `as` without runtime validation",
+      "confidence": "high",
+      "suggestion": "Create a lightweight runtime validator (or use zod) for each channel event payload shape. At minimum, add a guard function that checks required fields exist before casting, e.g., `function isStreamToken(raw: unknown): raw is StreamTokenPayload`. Apply at each channel.on() handler to fail gracefully on malformed payloads.",
+      "related_files": [
+        "packages/web/lib/hooks/use-channel.ts"
+      ],
+      "evidence": [
+        "15+ occurrences of `raw as SomeType` across channel event handlers: message_new (line 276), sync_response (line 283), history_response (line 292), stream_start (line 350), stream_token (line 389), stream_complete (line 409), stream_error (line 443), stream_thinking (line 514), stream_tool_call (line 542), stream_tool_result (line 574), typed_message (line 608), reaction_update (line 616), charter_status (line 665), message_edited (line 687), message_deleted (line 705)",
+        "The `raw: unknown` parameter is immediately cast without any shape validation \u2014 if the Gateway sends a payload missing expected fields (e.g., no `messageId` in stream_token), the code will silently produce undefined values that propagate through the message state"
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor"
+    },
+    {
+      "dimension": "type_safety",
+      "identifier": "unsafe_trigger_mode_cast",
+      "summary": "agent-factory.ts casts triggerMode string to union type via `as` instead of validating",
+      "confidence": "high",
+      "suggestion": "Define `type TriggerMode = 'ALWAYS' | 'MENTION' | 'KEYWORD'` and type the `triggerMode` field in CreateAgentOptions as `TriggerMode` instead of `string`. Add a runtime validation guard before the Prisma call: `if (!['ALWAYS','MENTION','KEYWORD'].includes(opts.triggerMode)) throw new Error(...)`.",
+      "related_files": [
+        "packages/web/lib/agent-factory.ts"
+      ],
+      "evidence": [
+        "Line 81-84: `triggerMode: (opts.triggerMode || 'MENTION') as | 'ALWAYS' | 'MENTION' | 'KEYWORD'` \u2014 opts.triggerMode is typed as `string | undefined` in CreateAgentOptions (line 29), so any string value passes the type system silently",
+        "If a caller passes an invalid triggerMode like 'INVALID', the cast suppresses the type error and the invalid value reaches the Prisma query"
+      ],
+      "impact_scope": "module",
+      "fix_scope": "single_edit"
+    },
+    {
+      "dimension": "type_safety",
+      "identifier": "channel_type_widened_to_string",
+      "summary": "ChatProvider's ChannelData types `type` as `string` despite ChannelType union existing in shared types",
+      "confidence": "high",
+      "suggestion": "Import `ChannelType` from `@shared/types/channel` and use it in the ChannelData interface: `type: ChannelType`. This enables exhaustive switch/if checks and catches invalid values at compile time.",
+      "related_files": [
+        "packages/web/components/providers/chat-provider.tsx",
+        "packages/shared/types/channel.ts"
+      ],
+      "evidence": [
+        "chat-provider.tsx line 27: `type: string` in the ChannelData interface",
+        "shared/types/channel.ts line 3: `export type ChannelType = 'TEXT' | 'ANNOUNCEMENT'` \u2014 a proper union type exists but is not used",
+        "This means any code consuming ChannelData.type loses exhaustiveness checking and must compare against raw strings"
+      ],
+      "impact_scope": "module",
+      "fix_scope": "single_edit"
+    },
+    {
+      "dimension": "type_safety",
+      "identifier": "trigger_mode_typed_as_string",
+      "summary": "AgentListItem and CharterState use `string` for fields that have known union types",
+      "confidence": "high",
+      "suggestion": "Define and use union types for these fields: `type TriggerMode = 'ALWAYS' | 'MENTION' | 'KEYWORD'`, `type CharterStatus = 'INACTIVE' | 'ACTIVE' | 'PAUSED' | 'COMPLETED'`, `type AuthorType = 'USER' | 'AGENT'`. Replace the `string` annotations with these types in the respective interfaces.",
+      "related_files": [
+        "packages/web/components/modals/agent/types.ts",
+        "packages/web/lib/hooks/use-channel.ts"
+      ],
+      "evidence": [
+        "types.ts line 37: `triggerMode: string` in AgentListItem \u2014 should be 'ALWAYS' | 'MENTION' | 'KEYWORD'",
+        "types.ts line 40: `capabilities: unknown` \u2014 unnecessarily loose, should be `string[]` based on usage in agent-factory.ts line 31",
+        "use-channel.ts line 84: CharterState.status typed as `string` with only a comment hinting it should be 'INACTIVE' | 'ACTIVE' | 'PAUSED' | 'COMPLETED'",
+        "use-channel.ts line 34: MessagePayload.authorType is `string` rather than 'USER' | 'AGENT'"
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor"
+    },
+    {
+      "dimension": "type_safety",
+      "identifier": "untyped_request_json",
+      "summary": "All API route handlers parse request.json() as untyped `any` with ad-hoc runtime validation",
+      "confidence": "medium",
+      "suggestion": "Introduce zod schemas for request bodies at API boundaries. For example, define `const UpdateMessageBody = z.object({ content: z.string().optional(), streamingStatus: z.enum(['ACTIVE','COMPLETE','ERROR']).optional(), ... })` and use `UpdateMessageBody.parse(await request.json())` to get validated, typed data. Start with the internal API routes which are the most sensitive boundary.",
+      "related_files": [
+        "packages/web/app/api/servers/route.ts",
+        "packages/web/app/api/dms/route.ts",
+        "packages/web/app/api/internal/messages/[messageId]/route.ts",
+        "packages/web/app/api/servers/[serverId]/channels/[channelId]/route.ts"
+      ],
+      "evidence": [
+        "servers/route.ts POST line 63: `const body = await request.json()` \u2014 body is `any`, followed by manual property access like `body.name?.trim()`",
+        "internal/messages/[messageId]/route.ts PUT line 66: `const body = await request.json()` then destructures `{ content, streamingStatus, thinkingTimeline, metadata, tokenHistory, checkpoints }` from untyped body",
+        "This pattern repeats across every route handler in the seed files \u2014 no use of zod, io-ts, or other schema validation libraries",
+        "The manual validation is incomplete: e.g., PUT internal/messages accepts `metadata` and `tokenHistory` with only truthy checks, no shape validation"
+      ],
+      "impact_scope": "codebase",
+      "fix_scope": "multi_file_refactor"
+    },
+    {
+      "dimension": "type_safety",
+      "identifier": "presence_data_unsafe_cast",
+      "summary": "Presence callback casts unknown to ad-hoc object shape without validation",
+      "confidence": "medium",
+      "suggestion": "Add a type guard function for presence data: `function isPresenceMeta(data: unknown): data is { metas: Array<{ username: string; display_name: string; status: string }> }` and use it before accessing properties.",
+      "related_files": [
+        "packages/web/lib/hooks/use-channel.ts"
+      ],
+      "evidence": [
+        "Lines 258-259: `const data = presenceData as { metas: Array<Record<string, string>> }` \u2014 presenceData comes from Phoenix Presence which is typed as `unknown`, but the cast assumes a specific shape",
+        "Line 264: subsequent property access `meta.username || ''` would silently produce empty strings if the shape doesn't match, masking data issues"
+      ],
+      "impact_scope": "local",
+      "fix_scope": "single_edit"
+    }
+  ],
+  "review_quality": {
+    "batch_count": 20,
+    "dimension_coverage": 0.05,
+    "evidence_density": 2.209,
+    "high_score_missing_issue_note": 0,
+    "issue_pressure": 109.074,
+    "dimensions_with_issues": 20
+  },
+  "review_scope": {
+    "reviewed_files_count": 140,
+    "successful_batch_count": 20,
+    "full_sweep_included": false,
+    "total_files": 189,
+    "imported_dimensions": [
+      "abstraction_fitness",
+      "ai_generated_debt",
+      "api_surface_coherence",
+      "authorization_consistency",
+      "contract_coherence",
+      "convention_outlier",
+      "cross_module_architecture",
+      "dependency_health",
+      "design_coherence",
+      "error_consistency",
+      "high_level_elegance",
+      "incomplete_migration",
+      "initialization_coupling",
+      "logic_clarity",
+      "low_level_elegance",
+      "mid_level_elegance",
+      "naming_quality",
+      "package_organization",
+      "test_strategy",
+      "type_safety"
+    ]
+  },
+  "reviewed_files": [
+    "packages/web/e2e/v1-checklist/helpers.ts",
+    "packages/web/components/modals/agent/types.ts",
+    "packages/web/e2e/v1-checklist/streaming-fixture.ts",
+    "packages/web/app/(app)/servers/[serverId]/page.tsx",
+    "packages/web/app/api/auth/register/route.ts",
+    "packages/web/app/api/dms/[dmId]/messages/route.ts",
+    "packages/web/app/api/internal/agents/[agentId]/dispatch/route.ts",
+    "packages/web/app/api/internal/agents/[agentId]/enqueue/route.ts",
+    "packages/web/app/api/internal/agents/verify/route.ts",
+    "packages/web/app/api/internal/channels/[channelId]/charter-control/route.ts",
+    "packages/web/app/api/internal/channels/[channelId]/route.ts",
+    "packages/web/app/api/internal/dms/messages/[messageId]/route.ts",
+    "packages/web/app/api/internal/dms/messages/route.ts",
+    "packages/web/app/api/internal/dms/verify/route.ts",
+    "packages/web/app/api/internal/messages/route.ts",
+    "packages/web/app/api/internal/stream/resume/route.ts",
+    "packages/web/app/api/servers/[serverId]/channels/reorder/route.ts",
+    "packages/web/app/api/servers/[serverId]/members/[memberId]/roles/route.ts",
+    "packages/web/app/api/servers/[serverId]/roles/[roleId]/route.ts",
+    "packages/web/app/api/servers/[serverId]/transfer/route.ts",
+    "packages/web/app/api/uploads/route.ts",
+    "packages/web/app/api/users/me/route.ts",
+    "packages/web/lib/admin-auth.ts",
+    "packages/web/lib/agent-auth.ts",
+    "packages/web/lib/agent-factory.ts",
+    "packages/web/components/chat/MessageMetadata.tsx",
+    "packages/web/components/chat/channel-header.tsx",
+    "packages/web/components/chat/chat-area.tsx",
+    "packages/shared/types/agent.ts",
+    "packages/shared/types/channel.ts",
+    "packages/shared/types/index.ts",
+    "packages/cli/src/install-target.ts",
+    "packages/web/components/chat/typed-messages/index.ts",
+    "packages/web/components/server-settings/overview-section.tsx",
+    "packages/web/components/server-settings/server-settings-overlay.tsx",
+    "packages/web/components/workspace/workspace.tsx",
+    "packages/web/lib/hooks/use-panel-state.ts",
+    "packages/web/lib/hooks/use-dm-list.ts",
+    "packages/web/lib/hooks/use-socket.ts",
+    ".agents/skills/systematic-debugging/condition-based-waiting-example.ts",
+    "packages/web/e2e/helpers.ts",
+    "packages/web/components/providers/theme-provider.tsx",
+    "packages/web/components/modals/agent/credentials-display.tsx",
+    "packages/web/components/modals/agent/method-picker.tsx",
+    "packages/web/components/layout/channel-sidebar.tsx",
+    "packages/web/components/workspace/chat-panel.tsx",
+    "packages/web/app/api/servers/route.ts",
+    "packages/web/app/api/dms/route.ts",
+    "packages/web/e2e/mock-llm-server.ts",
+    "packages/web/components/chat/message-input.tsx",
+    "packages/web/app/api/invites/[code]/route.ts",
+    "packages/web/components/layout/left-panel.tsx",
+    "packages/web/e2e/mock-mcp-server.ts",
+    "packages/web/components/modals/agent/simple-agent-forms.tsx",
+    "packages/web/lib/hooks/use-channel.ts",
+    "packages/web/app/api/internal/channels/[channelId]/agents/route.ts",
+    "packages/web/components/modals/agent/byok-form.tsx",
+    "packages/web/app/api/messages/[messageId]/reactions/route.ts",
+    "packages/web/app/api/dms/[dmId]/messages/[messageId]/reactions/route.ts",
+    "packages/web/app/api/servers/[serverId]/route.ts",
+    "packages/web/app/api/servers/[serverId]/channels/[channelId]/route.ts",
+    "packages/web/components/dm/dm-chat-area.tsx",
+    "packages/web/app/api/internal/messages/[messageId]/route.ts",
+    "packages/web/components/providers/chat-provider.tsx",
+    "packages/web/components/user/profile-settings-modal.tsx",
+    "packages/web/components/modals/role-management-modal.tsx",
+    "packages/web/components/modals/channel-settings-modal.tsx",
+    "packages/web/components/server-settings/roles-section.tsx",
+    "packages/web/components/server-settings/channels-section.tsx",
+    "packages/web/components/server-settings/members-section.tsx",
+    "packages/web/components/modals/manage-agents-modal.tsx",
+    "packages/web/components/modals/agent/agent-list.tsx",
+    "packages/web/components/chat/reaction-bar.tsx",
+    "packages/web/components/chat/markdown-content.tsx",
+    "packages/cli/src/runner.ts",
+    "packages/web/lib/socket.ts",
+    "packages/web/app/api/health/route.ts",
+    "packages/web/app/api/internal/agents/[agentId]/route.ts",
+    "packages/web/app/api/internal/channels/[channelId]/agent/route.ts",
+    "packages/web/app/api/internal/channels/[channelId]/charter-turn/route.ts",
+    "packages/web/app/api/servers/[serverId]/members/route.ts",
+    "packages/web/app/api/v1/agents/[id]/channels/[channelId]/messages/route.ts",
+    "packages/web/app/api/v1/agents/[id]/events/route.ts",
+    "packages/web/app/api/v1/agents/[id]/messages/[messageId]/stream/route.ts",
+    "packages/web/app/api/v1/agents/[id]/messages/route.ts",
+    "packages/web/app/api/v1/agents/[id]/route.ts",
+    "packages/web/app/api/v1/agents/[id]/server/route.ts",
+    "packages/web/app/api/v1/bootstrap/agents/route.ts",
+    "packages/web/app/api/v1/bootstrap/route.ts",
+    "packages/web/app/api/v1/chat/completions/route.ts",
+    "packages/web/app/api/v1/models/route.ts",
+    "packages/web/app/api/v1/webhooks/[token]/route.ts",
+    "packages/web/app/api/v1/webhooks/[token]/stream/route.ts",
+    "packages/web/app/api/v1/webhooks/route.ts",
+    "packages/web/app/api/auth/token/route.ts",
+    ".claude/skills/systematic-debugging/condition-based-waiting-example.ts",
+    ".openhands/skills/systematic-debugging/condition-based-waiting-example.ts",
+    ".pi/skills/systematic-debugging/condition-based-waiting-example.ts",
+    "packages/web/lib/auth.ts",
+    "packages/web/lib/gateway-client.ts",
+    "packages/web/lib/internal-auth.ts",
+    "packages/web/lib/invite-code.ts",
+    "packages/web/lib/mention-parser.ts",
+    "packages/web/lib/ulid.ts",
+    "packages/web/lib/hooks/use-dm-channel.ts",
+    "packages/web/e2e/global-setup.ts",
+    "packages/cli/src/index.ts",
+    "packages/web/app/(app)/dms/[dmId]/page.tsx",
+    "packages/web/app/(app)/layout.tsx",
+    "packages/web/app/(app)/servers/[serverId]/channels/[channelId]/page.tsx",
+    "packages/web/app/(auth)/login/page.tsx",
+    "packages/web/app/(auth)/register/page.tsx",
+    "packages/web/app/api/invites/[code]/accept/route.ts",
+    "packages/web/app/api/servers/[serverId]/agents/[agentId]/route.ts",
+    "packages/web/app/api/servers/[serverId]/agents/route.ts",
+    "packages/web/app/api/servers/[serverId]/channels/[channelId]/charter/route.ts",
+    "packages/web/app/api/servers/[serverId]/channels/[channelId]/read/route.ts",
+    "packages/web/app/api/servers/[serverId]/channels/route.ts",
+    "packages/web/app/api/servers/[serverId]/invites/[inviteId]/route.ts",
+    "packages/web/app/api/servers/[serverId]/invites/route.ts",
+    "packages/web/app/api/servers/[serverId]/members/[memberId]/route.ts",
+    "packages/web/app/api/servers/[serverId]/permissions/route.ts",
+    "packages/web/app/api/servers/[serverId]/roles/route.ts",
+    "packages/web/app/invite/[code]/page.tsx",
+    "packages/web/app/layout.tsx",
+    "packages/web/components/chat/message-list.tsx",
+    "packages/web/components/chat/rewind-slider.tsx",
+    "packages/web/components/chat/streaming-message.tsx",
+    "packages/web/components/chat/typed-messages/ToolResultCard.tsx",
+    "packages/web/components/layout/bottom-bar.tsx",
+    "packages/web/components/layout/member-list.tsx",
+    "packages/web/components/layout/right-panel.tsx",
+    "packages/web/components/layout/server-sidebar.tsx",
+    "packages/web/components/layout/top-bar.tsx",
+    "packages/web/components/modals/agent/webhook-forms.tsx",
+    "packages/web/components/modals/create-channel-modal.tsx",
+    "packages/web/components/modals/create-server-modal.tsx",
+    "packages/web/components/modals/delete-message-modal.tsx",
+    "packages/web/components/modals/invite-modal.tsx",
+    "packages/web/components/providers/workspace-provider.tsx"
+  ],
+  "provenance": {
+    "kind": "blind_review_batch_import",
+    "blind": true,
+    "runner": "dry-run",
+    "run_stamp": "20260311_125030",
+    "created_at": "2026-03-11T13:05:55+00:00",
+    "batch_count": 20,
+    "batch_indexes": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20
+    ],
+    "packet_path": "/mnt/c/Users/njlec/Tavok/.desloppify/review_packet_blind.json",
+    "packet_sha256": "615d0f0c295f1213acb14d67119c54d3b7501fab86f23112bd1beb584a4d5bbf"
+  },
+  "assessment_coverage": {
+    "scored_dimensions": [
+      "naming_quality",
+      "logic_clarity",
+      "type_safety",
+      "contract_coherence",
+      "error_consistency",
+      "abstraction_fitness",
+      "ai_generated_debt",
+      "high_level_elegance",
+      "mid_level_elegance",
+      "low_level_elegance",
+      "cross_module_architecture",
+      "initialization_coupling",
+      "convention_outlier",
+      "dependency_health",
+      "test_strategy",
+      "api_surface_coherence",
+      "authorization_consistency",
+      "incomplete_migration",
+      "package_organization",
+      "design_coherence"
+    ],
+    "selected_dimensions": [
+      "naming_quality",
+      "logic_clarity",
+      "type_safety",
+      "contract_coherence",
+      "error_consistency",
+      "abstraction_fitness",
+      "ai_generated_debt",
+      "high_level_elegance",
+      "mid_level_elegance",
+      "low_level_elegance",
+      "cross_module_architecture",
+      "initialization_coupling",
+      "convention_outlier",
+      "dependency_health",
+      "test_strategy",
+      "api_surface_coherence",
+      "authorization_consistency",
+      "incomplete_migration",
+      "package_organization",
+      "design_coherence"
+    ],
+    "imported_dimensions": [
+      "abstraction_fitness",
+      "ai_generated_debt",
+      "api_surface_coherence",
+      "authorization_consistency",
+      "contract_coherence",
+      "convention_outlier",
+      "cross_module_architecture",
+      "dependency_health",
+      "design_coherence",
+      "error_consistency",
+      "high_level_elegance",
+      "incomplete_migration",
+      "initialization_coupling",
+      "logic_clarity",
+      "low_level_elegance",
+      "mid_level_elegance",
+      "naming_quality",
+      "package_organization",
+      "test_strategy",
+      "type_safety"
+    ],
+    "missing_dimensions": []
+  }
+}

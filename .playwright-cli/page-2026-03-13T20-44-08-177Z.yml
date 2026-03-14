@@ -1,0 +1,58 @@
+- generic [active] [ref=e1]:
+  - button "Open Next.js Dev Tools" [ref=e24] [cursor=pointer]:
+    - img [ref=e25]
+  - alert [ref=e28]
+  - generic [ref=e52]:
+    - generic [ref=e53]:
+      - generic [ref=e55]: TAVOK
+      - generic [ref=e57]: CONNECTED
+    - generic [ref=e59]:
+      - tablist [ref=e61]:
+        - tab "SERVERS" [ref=e62] [cursor=pointer]:
+          - img [ref=e63]
+          - text: SERVERS
+        - tab "CHANNELS" [selected] [ref=e66] [cursor=pointer]:
+          - img [ref=e67]
+          - text: CHANNELS
+        - tab "DMs" [ref=e70] [cursor=pointer]:
+          - img [ref=e71]
+          - text: DMs
+      - generic [ref=e128]:
+        - generic [ref=e129]:
+          - generic [ref=e130]: Test Server
+          - generic [ref=e131]:
+            - button "Create Channel" [ref=e132] [cursor=pointer]:
+              - img [ref=e133]
+            - button "Server Settings" [ref=e134] [cursor=pointer]:
+              - img [ref=e135]
+        - button "general" [ref=e139] [cursor=pointer]:
+          - generic [ref=e140]:
+            - img [ref=e141]
+            - generic [ref=e144]: general
+      - button "T Test User @testuser" [ref=e80] [cursor=pointer]:
+        - generic [ref=e82]: T
+        - generic [ref=e84]:
+          - generic [ref=e85]: Test User
+          - generic [ref=e86]: "@testuser"
+    - main [ref=e87]:
+      - generic [ref=e145]:
+        - generic:
+          - generic:
+            - heading "Welcome to the Workspace" [level=2]
+            - paragraph: Select a channel from the sidebar to begin.
+    - generic [ref=e102]:
+      - generic [ref=e103]:
+        - generic [ref=e104]:
+          - generic [ref=e105]:
+            - img [ref=e106]
+            - text: AGENTS
+          - button "Manage Agents" [ref=e146] [cursor=pointer]:
+            - img [ref=e147]
+        - generic [ref=e110]: No agents active
+      - generic [ref=e111]:
+        - generic [ref=e112]:
+          - img [ref=e113]
+          - text: MEMBERS
+        - generic [ref=e150]:
+          - generic [ref=e152]: Test User
+          - generic [ref=e153]: Owner

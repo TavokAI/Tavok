@@ -1,0 +1,20 @@
+{
+  "session_id": "ext_20260312_014234_be4be627",
+  "status": "submitted",
+  "runner": "claude",
+  "created_at": "2026-03-12T01:42:34+00:00",
+  "expires_at": "2026-03-13T01:42:34+00:00",
+  "ttl_hours": 24,
+  "token": "51f451344bbf2a023e29dde332da9453",
+  "attest": "I validated this review was completed without awareness of overall score and is unbiased.",
+  "packet_path": "/mnt/c/Users/njlec/Tavok/.desloppify/review_packets/holistic_packet_20260312_014234.json",
+  "blind_packet_path": "/mnt/c/Users/njlec/Tavok/.desloppify/review_packet_blind.json",
+  "packet_sha256": "27b88ff4e15fa625cfab0726814c6e3f0d4d2a3595de165207b6f4ac6807ead2",
+  "template_path": "/mnt/c/Users/njlec/Tavok/.desloppify/external_review_sessions/ext_20260312_014234_be4be627/review_result.template.json",
+  "launch_prompt_path": "/mnt/c/Users/njlec/Tavok/.desloppify/external_review_sessions/ext_20260312_014234_be4be627/claude_launch_prompt.md",
+  "instructions_path": "/mnt/c/Users/njlec/Tavok/.desloppify/external_review_sessions/ext_20260312_014234_be4be627/reviewer_instructions.md",
+  "expected_output_path": "/mnt/c/Users/njlec/Tavok/.desloppify/external_review_sessions/ext_20260312_014234_be4be627/review_result.json",
+  "submitted_at": "2026-03-12T01:44:58+00:00",
+  "submitted_input_file": "/mnt/c/Users/njlec/Tavok/.desloppify/external_review_sessions/ext_20260312_014234_be4be627/review_result.json",
+  "submitted_canonical_file": "/mnt/c/Users/njlec/Tavok/.desloppify/external_review_sessions/ext_20260312_014234_be4be627/canonical_import_20260312_014458.json"
+}

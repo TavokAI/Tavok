@@ -1,0 +1,44 @@
+- generic [active] [ref=e1]:
+  - button "Open Next.js Dev Tools" [ref=e24] [cursor=pointer]:
+    - img [ref=e25]
+  - alert [ref=e28]
+  - generic [ref=e52]:
+    - generic [ref=e53]:
+      - generic [ref=e55]: TAVOK
+      - generic [ref=e57]: CONNECTED
+    - generic [ref=e59]:
+      - tablist [ref=e61]:
+        - tab "SERVERS" [ref=e62] [cursor=pointer]:
+          - img [ref=e63]
+          - text: SERVERS
+        - tab "CHANNELS" [selected] [ref=e66] [cursor=pointer]:
+          - img [ref=e67]
+          - text: CHANNELS
+        - tab "DMs" [ref=e70] [cursor=pointer]:
+          - img [ref=e71]
+          - text: DMs
+      - generic [ref=e75]:
+        - img [ref=e76]
+        - text: Select a server from the SERVERS tab to view channels.
+      - button "T Test User @testuser" [ref=e80] [cursor=pointer]:
+        - generic [ref=e82]: T
+        - generic [ref=e84]:
+          - generic [ref=e85]: Test User
+          - generic [ref=e86]: "@testuser"
+    - main [ref=e87]:
+      - generic [ref=e88]:
+        - generic:
+          - generic:
+            - heading "Welcome to the Workspace" [level=2]
+            - paragraph: Select a channel from the sidebar to begin.
+    - generic [ref=e102]:
+      - generic [ref=e103]:
+        - generic [ref=e105]:
+          - img [ref=e106]
+          - text: AGENTS
+        - generic [ref=e110]: No agents active
+      - generic [ref=e111]:
+        - generic [ref=e112]:
+          - img [ref=e113]
+          - text: MEMBERS
+        - generic [ref=e119]: No members

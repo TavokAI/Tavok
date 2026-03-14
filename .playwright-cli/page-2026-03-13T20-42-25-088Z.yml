@@ -1,0 +1,29 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e29]:
+    - generic [ref=e30]:
+      - generic [ref=e31]: TAVOK
+      - heading "Create an account" [level=1] [ref=e32]
+    - generic [ref=e33]:
+      - generic [ref=e34]:
+        - generic [ref=e35]: Email
+        - textbox "Email" [ref=e36]
+      - generic [ref=e37]:
+        - generic [ref=e38]: Display Name
+        - textbox "Display Name" [ref=e39]
+      - generic [ref=e40]:
+        - generic [ref=e41]: Username
+        - textbox "Username" [ref=e42]
+      - generic [ref=e43]:
+        - generic [ref=e44]: Password
+        - textbox "Password" [ref=e45]
+      - generic [ref=e46]:
+        - generic [ref=e47]: Confirm Password
+        - textbox "Confirm Password" [ref=e48]
+      - button "Continue" [ref=e49] [cursor=pointer]
+      - paragraph [ref=e50]:
+        - text: Already have an account?
+        - link "Log In" [ref=e51] [cursor=pointer]:
+          - /url: /login
+  - button "Open Next.js Dev Tools" [ref=e24] [cursor=pointer]:
+    - img [ref=e25]
+  - alert [ref=e28]

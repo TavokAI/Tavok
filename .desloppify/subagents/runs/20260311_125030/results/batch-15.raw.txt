@@ -1,0 +1,134 @@
+{
+  "batch": "package_organization",
+  "batch_index": 15,
+  "assessments": {
+    "package_organization": 78.5
+  },
+  "dimension_notes": {
+    "package_organization": {
+      "evidence": [
+        "packages/web/lib/ contains 19 production TS files spanning auth (admin-auth, agent-auth, internal-auth, auth), crypto (encryption), permissions (permissions, check-member-permission), agent domain logic (agent-factory), utilities (ulid, format-time, invite-code, mention-parser), networking (socket, gateway-client), and infrastructure (rate-limit, env, image-dimensions, image-loader) — mixed concerns in a flat directory",
+        "packages/web/lib/ also contains JS files (route-handlers.js, api-safety.js, validation.js) alongside TS files, plus scattered .test.mjs files at the same level as production code (e.g., enforces_request_and_sequence_safety.test.mjs) while __tests__/ already exists as the test directory",
+        "packages/web/components/dm/ contains a single file (dm-chat-area.tsx) that imports 6 modules from components/chat/ — import affinity is >85% toward chat/",
+        "packages/web/components/chat/MessageMetadata.tsx uses PascalCase while all 17 sibling files use kebab-case, breaking navigability by name pattern",
+        "packages/web/components/providers.tsx sits alongside packages/web/components/providers/ directory — ambiguous whether provider-related code belongs in the file or the directory"
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    }
+  },
+  "dimension_judgment": {
+    "package_organization": {
+      "strengths": [
+        "Component directories (chat/, modals/, server-settings/, layout/, workspace/) align well with domain boundaries and have clear ownership",
+        "packages/shared/types/ is well-structured with 8 domain-aligned type files and a clean barrel export via index.ts",
+        "The modals/agent/ subdirectory correctly groups 8 related agent-modal files with a shared types.ts, and coupling_matrix confirms modals/ imports from modals/agent/ (8 edges) in one direction only",
+        "hooks/ subdirectory within lib/ correctly separates React hooks from server-side utilities"
+      ],
+      "issue_character": "Issues concentrate in the flat packages/web/lib/ directory which mixes 4+ distinct concern domains, and in minor structural inconsistencies (singleton dm/ directory, mixed test file placement, file naming drift) that collectively reduce navigability.",
+      "score_rationale": "The component tree is well-organized with clear domain folders and predictable one-directional coupling. However, packages/web/lib/ at 19 files with auth, crypto, agent domain logic, networking, and utilities mixed flat is a meaningful navigability drag — a developer cannot predict where to find or place server-side logic without scanning the whole directory. The singleton dm/ directory and scattered test files add minor friction. This places the codebase solidly in the 'encounters structural mismatches' range around 78-80, pulled slightly below 80 by the lib/ directory overload."
+    }
+  },
+  "issues": [
+    {
+      "dimension": "package_organization",
+      "identifier": "lib_flat_dir_overload",
+      "summary": "packages/web/lib/ has 19+ files mixing auth, crypto, agent logic, networking, and utilities flat",
+      "related_files": [
+        "packages/web/lib/admin-auth.ts",
+        "packages/web/lib/agent-auth.ts",
+        "packages/web/lib/internal-auth.ts",
+        "packages/web/lib/auth.ts",
+        "packages/web/lib/agent-factory.ts",
+        "packages/web/lib/encryption.ts",
+        "packages/web/lib/permissions.ts",
+        "packages/web/lib/check-member-permission.ts",
+        "packages/web/lib/gateway-client.ts",
+        "packages/web/lib/socket.ts",
+        "packages/web/lib/route-handlers.js",
+        "packages/web/lib/api-safety.js",
+        "packages/web/lib/validation.js"
+      ],
+      "evidence": [
+        "19 production files in packages/web/lib/ span at least 4 distinct domains: auth (admin-auth, agent-auth, internal-auth, auth), agent domain (agent-factory), crypto/security (encryption, permissions, check-member-permission), and networking (socket, gateway-client, rate-limit)",
+        "avg_fan_in is 0.3 and avg_fan_out is 0.1 — most files are imported by only a narrow set of consumers, suggesting they serve distinct subsystems rather than being genuinely shared utilities"
+      ],
+      "suggestion": "Staged reorg: (1) Create lib/auth/ and move admin-auth.ts, agent-auth.ts, internal-auth.ts, auth.ts there, add an index.ts barrel; (2) Create lib/agents/ and move agent-factory.ts there; (3) Create lib/security/ and move encryption.ts, permissions.ts, check-member-permission.ts there; (4) Move route-handlers.js, api-safety.js, validation.js into lib/api/ or convert to TS and colocate with route consumers. After each move, update @/lib/X imports to @/lib/subdir/X and run `npx tsc --noEmit` to validate.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor"
+    },
+    {
+      "dimension": "package_organization",
+      "identifier": "lib_test_placement_mixed",
+      "summary": "Test files scattered at lib/ root alongside production code despite __tests__/ directory existing",
+      "related_files": [
+        "packages/web/lib/enforces_request_and_sequence_safety.test.mjs",
+        "packages/web/lib/health_marks_redis_unhealthy_when_url_missing.test.mjs",
+        "packages/web/lib/rejects_cross_server_bot_delete.test.mjs",
+        "packages/web/lib/rejects_cross_server_bot_patch.test.mjs",
+        "packages/web/lib/rejects_cross_server_channel_patch.test.mjs",
+        "packages/web/lib/returns_sequence_as_safe_string.test.mjs",
+        "packages/web/lib/route_invocation_safety.test.mjs",
+        "packages/web/lib/validation.test.mjs",
+        "packages/web/lib/__tests__/"
+      ],
+      "evidence": [
+        "8 .test.mjs files sit at the packages/web/lib/ root level, while packages/web/lib/__tests__/ already contains 11 organized test files",
+        "The root-level test files use descriptive snake_case names (e.g., rejects_cross_server_bot_delete.test.mjs) while __tests__/ uses kebab-case (e.g., route-handlers.test.ts) — two co-existing test conventions in the same directory"
+      ],
+      "suggestion": "Move all 8 root-level .test.mjs files into packages/web/lib/__tests__/, converting to .test.ts if possible to match the existing convention there. Update any test runner config (jest/vitest) glob patterns if they reference lib/*.test.mjs directly.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor"
+    },
+    {
+      "dimension": "package_organization",
+      "identifier": "dm_singleton_directory",
+      "summary": "components/dm/ contains one file with >85% import affinity toward components/chat/",
+      "related_files": [
+        "packages/web/components/dm/dm-chat-area.tsx",
+        "packages/web/components/chat/chat-area.tsx"
+      ],
+      "evidence": [
+        "dm-chat-area.tsx imports MessageInput, MarkdownContent, EditMessageInput, DeleteMessageModal, and ReactionBar — all from components/chat/ or components/modals/",
+        "The file's structure closely mirrors chat-area.tsx, serving as a DM variant of the same chat UI pattern",
+        "A developer looking for DM chat must know to check a separate dm/ directory rather than finding it alongside its chat/ siblings"
+      ],
+      "suggestion": "Move dm-chat-area.tsx into packages/web/components/chat/ (rename to dm-chat-area.tsx or chat-area-dm.tsx to clarify variant). Update the one import site. Remove the empty dm/ directory. Validate with `npx tsc --noEmit`.",
+      "confidence": "medium",
+      "impact_scope": "local",
+      "fix_scope": "multi_file_refactor"
+    },
+    {
+      "dimension": "package_organization",
+      "identifier": "providers_file_and_dir_ambiguity",
+      "summary": "components/providers.tsx coexists with components/providers/ directory creating ambiguous placement",
+      "related_files": [
+        "packages/web/components/providers.tsx",
+        "packages/web/components/providers/theme-provider.tsx",
+        "packages/web/components/providers/chat-provider.tsx",
+        "packages/web/components/providers/workspace-provider.tsx"
+      ],
+      "evidence": [
+        "providers.tsx at the components root composes SessionProvider and ThemeProvider, while providers/ directory contains theme-provider.tsx, chat-provider.tsx, and workspace-provider.tsx",
+        "A developer adding a new provider must decide whether it belongs in the root file or the directory — no clear convention distinguishes them"
+      ],
+      "suggestion": "Move providers.tsx into providers/ directory as providers/index.tsx (or providers/root-providers.tsx). This makes the providers/ directory the single location for all provider-related code. Update imports from @/components/providers to reflect the new path.",
+      "confidence": "medium",
+      "impact_scope": "local",
+      "fix_scope": "single_edit"
+    }
+  ],
+  "retrospective": {
+    "root_causes": [
+      "packages/web/lib/ grew organically as a catch-all for server-side logic without subdirectory splitting as concerns accumulated beyond 10 files",
+      "Test files added in a second wave (the .test.mjs files) were placed at lib/ root rather than following the established __tests__/ convention"
+    ],
+    "likely_symptoms": [
+      "lib_test_placement_mixed is a symptom of the broader lib_flat_dir_overload — both stem from lib/ being used as an undifferentiated dumping ground"
+    ],
+    "possible_false_positives": []
+  }
+}

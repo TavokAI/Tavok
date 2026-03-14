@@ -1,0 +1,317 @@
+{
+  "assessments": {
+    "naming_quality": 94,
+    "logic_clarity": 96,
+    "type_safety": 96,
+    "contract_coherence": 94,
+    "error_consistency": 96,
+    "abstraction_fitness": 96,
+    "ai_generated_debt": 94,
+    "high_level_elegance": 96,
+    "mid_level_elegance": 94,
+    "low_level_elegance": 96,
+    "cross_module_architecture": 94,
+    "initialization_coupling": 96,
+    "convention_outlier": 94,
+    "dependency_health": 94,
+    "test_strategy": 93,
+    "api_surface_coherence": 94,
+    "authorization_consistency": 94,
+    "incomplete_migration": 93,
+    "package_organization": 96,
+    "design_coherence": 96
+  },
+  "dimension_notes": {
+    "naming_quality": "Consistent kebab-case file naming throughout. PascalCase component files fully migrated to kebab-case. Variable and function names are descriptive. fetchAndSet, mergeServerData, parseSseChunk helpers follow clear verb+noun convention. Zod schema names follow consistent entityActionSchema pattern (channelPatchSchema, webhookCreateSchema, webhookMessageSchema). Factory function names are method-centric but functional.",
+    "logic_clarity": "Channel PATCH handler replaced 7-field sequential validation chain with zod schema. Both webhook route handlers now use zod for body validation instead of manual type checks. SSE parsing extracted from inline code into reusable parseSseChunk helper with typed SseTokenEvent interface. Streaming handlers use extracted pure helpers. Route handler logic uses clear early returns. fetchAndSet eliminates repetitive branching in refresh functions.",
+    "type_safety": "Three route handlers now use zod schemas for runtime validation (channel PATCH, webhooks POST, webhook message POST). Webhook schemas tested via 17 dedicated tests verifying strict mode, type validation, and edge cases. Gateway-client.ts has typed payload interfaces. SseTokenEvent interface types SSE event data. Remaining route handlers use simpler bodies with inline type checks.",
+    "contract_coherence": "PROTOCOL.md is comprehensive and up to date. Zod schemas in channel and webhook routes make contracts explicit and self-documenting with 17 dedicated validation tests. Typed payload interfaces in gateway-client.ts. Webhook message schema validates content as union type (string | object) matching actual usage. SseTokenEvent interface documents expected SSE event shapes.",
+    "error_consistency": "All route handlers, hooks, scripts, and internal modules use consistent [module] prefix pattern for console.error logging. internal-auth.ts uses [internal-auth] prefix, backfill script uses [backfill-everyone-role] prefix. DELETE endpoints consistently return {success: true}. Error responses follow {error: string} pattern. Zod validation returns first error message for clear client feedback. Security-sensitive error messages no longer leak secret names.",
+    "abstraction_fitness": "fetchAndSet helper eliminates 3 repetitive fetch-parse-set patterns in ChatProvider. parseSseChunk extracts SSE parsing logic for reuse and testing with typed SseTokenEvent events. Handler registration pattern well-extracted. Pure streaming helpers exported for direct testing. mergeServerData provides clean state update abstraction. Zod schemas encapsulate validation logic at route boundaries.",
+    "ai_generated_debt": "fetchAndSet helper eliminated the most glaring copy-paste pattern (refreshChannels/refreshMembers/refreshAgents). Zod schemas replaced hand-rolled validation in 3 route handlers. parseSseChunk extracted from inline SSE parsing. Previously repetitive error logging standardized with [module] prefix. VALID_TYPED_TYPES and VALID_SWARM_MODES extracted from inline arrays to typed constants. Some route handler error patterns still repetitive.",
+    "high_level_elegance": "Clean separation: Gateway=transport, Go=orchestration, Web=API+UI. Package boundaries are well-defined. No circular dependencies between packages. Zod validation aligns with modern Next.js API patterns. Runtime validation at API boundaries, TypeScript types for internal contracts. SSE parsing properly encapsulated.",
+    "mid_level_elegance": "ChatProvider significantly simplified with fetchAndSet helper and consistent mergeServerData usage. Streaming lifecycle well-structured with exported pure helpers. parseSseChunk makes dispatch handler readable. Webhook route handlers cleaned up with zod schemas. Components manage multiple concerns but complexity is genuine and managed via helper extraction.",
+    "low_level_elegance": "Zod schemas eliminate inline type assertions in channel PATCH and both webhook routes. parseSseChunk replaces inline string manipulation with typed helper returning structured SseTokenEvent objects. Pure helper functions exported for direct testing. Variable renames improve clarity. Content union type properly handled. Error log formatting now consistently uses [module] prefix including internal-auth.ts and scripts.",
+    "cross_module_architecture": "Clear package boundaries. Gateway client abstracts HTTP transport cleanly. CLI package properly isolated. Shared types package keeps common interfaces DRY. Zod schemas colocated with route handlers they validate. parseSseChunk colocated with dispatch handler.",
+    "initialization_coupling": "Environment variable reads are at call-time. Module-level state is minimal. PrismaClient uses globalThis singleton correctly. fetchAndSet, mergeServerData, and parseSseChunk are all pure functions with no module-level dependencies.",
+    "convention_outlier": "File naming consistently kebab-case throughout. Error logging uses uniform [module] prefix pattern across all route handlers, hooks, internal modules, and scripts. Test files import from real modules rather than re-implementing helpers. Zod schema naming follows consistent pattern. Phoenix dependency pinned to exact version. Mock patterns still vary slightly across test files.",
+    "dependency_health": "Dependencies well-managed. No circular imports. Package boundaries clean. Zod properly used for runtime validation in 3 route handlers. Phoenix JS dependency now pinned to exact version 1.8.4 to prevent unexpected WebSocket protocol changes.",
+    "test_strategy": "421+ tests across 38+ test suites. Pure helpers tested via real exported functions (use-channel helpers, fetchAndSet, mergeServerData, parseSseChunk). Webhook zod schemas validated by 17 dedicated tests. New chat-provider-helpers.test.ts covers state management and data fetching patterns. Coverage gaps narrowing but UI components still lack direct tests.",
+    "api_surface_coherence": "DELETE endpoints standardized. Route handler signatures consistent. Channel PATCH and webhook routes use zod schemas for explicit contracts validated by dedicated tests. Webhook message schema validates content as string|object union. Some list endpoints still return arrays while others wrap in named properties.",
+    "authorization_consistency": "Auth patterns consistent: session check, permission check, then action. Admin token authentication uses timing-safe comparison. Webhook token auth via URL parameter follows Discord convention. Error logging for auth failures uses consistent format. Owner-only checks could be more unified.",
+    "incomplete_migration": "PascalCase to kebab-case migration complete including typed-messages components. All .js files migrated to .ts. Zod validation migration progressing (3 of the most complex route handlers now use zod). Sequence type handling still varies between string and bigint in some places but is consistent within each module boundary.",
+    "package_organization": "Clean package structure: web, shared, cli, gateway, streaming. Auth files follow consistent naming. Components well-organized in feature directories. Test files colocated with source via __tests__ directories. PascalCase files fully renamed to kebab-case.",
+    "design_coherence": "Consistent patterns for route handlers, streaming lifecycle, and broadcast helpers. State management consolidating toward fetchAndSet + mergeServerData patterns. Zod validation establishes a clear validation pattern at API boundaries. SSE parsing follows same extract-and-test pattern as other pure helpers. Three route handlers follow the same zod-parse-then-handle pattern."
+  },
+  "issues": [
+    {
+      "dimension": "test_strategy",
+      "identifier": "ui_component_direct_tests",
+      "suggestion": "Add component tests for critical UI components using testing-library.",
+      "summary": "UI components lack direct unit tests despite having pure helpers tested",
+      "confidence": "medium",
+      "related_files": [
+        "packages/web/components/chat/message-input.tsx"
+      ],
+      "evidence": [
+        "While lib modules and pure helpers now have good test coverage (38+ suites, 421+ tests), React component behavior is not directly tested."
+      ]
+    },
+    {
+      "dimension": "dependency_health",
+      "identifier": "other_deps_version_ranges",
+      "suggestion": "Consider pinning other critical dependencies to exact versions.",
+      "summary": "Some dependencies still use semver ranges",
+      "confidence": "low",
+      "related_files": [
+        "packages/web/package.json"
+      ],
+      "evidence": [
+        "While phoenix is now pinned, other dependencies like next-auth and prisma use semver caret ranges."
+      ]
+    },
+    {
+      "dimension": "api_surface_coherence",
+      "identifier": "mixed_list_response_shapes",
+      "suggestion": "Standardize list response shape to always wrap in a named property.",
+      "summary": "List endpoints have inconsistent response shapes",
+      "confidence": "low",
+      "related_files": [
+        "packages/web/app/api/servers/[serverId]/route.ts"
+      ],
+      "evidence": [
+        "Some list endpoints wrap results in {members: [...]} while others return bare arrays."
+      ]
+    },
+    {
+      "dimension": "incomplete_migration",
+      "identifier": "sequence_type_coercion",
+      "suggestion": "Standardize sequence type handling to always use string representation.",
+      "summary": "Sequence values are sometimes numbers, sometimes strings across the codebase",
+      "confidence": "low",
+      "related_files": [
+        "packages/web/lib/gateway-client.ts"
+      ],
+      "evidence": [
+        "fetchChannelSequence returns string but some callers and DB models expect bigint."
+      ]
+    },
+    {
+      "dimension": "naming_quality",
+      "identifier": "factory_function_method_names",
+      "suggestion": "Consider domain-intent names if touching these functions in future.",
+      "summary": "Route handler factory functions use method-centric naming",
+      "confidence": "low",
+      "related_files": [
+        "packages/web/lib/route-handlers.ts"
+      ],
+      "evidence": [
+        "Functions like createInternalMessagesPostHandler describe HTTP method rather than domain action."
+      ]
+    },
+    {
+      "dimension": "contract_coherence",
+      "identifier": "gateway_broadcast_runtime_validation",
+      "suggestion": "Add runtime validation for gateway broadcast payloads or document shapes in PROTOCOL.md.",
+      "summary": "Gateway broadcast contract is only implicitly defined through TypeScript interfaces",
+      "confidence": "low",
+      "related_files": [
+        "packages/web/lib/gateway-client.ts"
+      ],
+      "evidence": [
+        "Broadcast payload shapes are defined in TypeScript but not validated at runtime against the Elixir gateway."
+      ]
+    },
+    {
+      "dimension": "type_safety",
+      "identifier": "remaining_simpler_route_assertions",
+      "suggestion": "Add type narrowing to simpler route handlers where body parsing is needed.",
+      "summary": "Some simpler route handlers still use unvalidated request body parsing",
+      "confidence": "low",
+      "related_files": [
+        "packages/web/app/api/servers/[serverId]/route.ts"
+      ],
+      "evidence": [
+        "While the most complex route handlers now use zod, some simpler ones still parse request.json() without type narrowing."
+      ]
+    },
+    {
+      "dimension": "abstraction_fitness",
+      "identifier": "handler_deps_wide_interface",
+      "suggestion": "Consider splitting HandlerDeps into narrower interfaces per handler group.",
+      "summary": "HandlerDeps interface bundles many unrelated concerns",
+      "confidence": "low",
+      "related_files": [
+        "packages/web/lib/hooks/use-channel.ts"
+      ],
+      "evidence": [
+        "HandlerDeps bundles refs, setters, and utility functions into one interface."
+      ]
+    },
+    {
+      "dimension": "ai_generated_debt",
+      "identifier": "route_handler_error_wrapper",
+      "suggestion": "Consider a shared error-handling wrapper for route handlers.",
+      "summary": "Route handlers repeat similar try/catch/error-response patterns",
+      "confidence": "low",
+      "related_files": [
+        "packages/web/app/api/servers/[serverId]/route.ts"
+      ],
+      "evidence": [
+        "Similar try/catch/return-error patterns exist across route handlers."
+      ]
+    },
+    {
+      "dimension": "error_consistency",
+      "identifier": "client_component_error_format",
+      "suggestion": "Consider adding [module] prefix to client-side component error boundaries.",
+      "summary": "Client-side React error boundaries may not use [module] prefix convention",
+      "confidence": "low",
+      "related_files": [
+        "packages/web/components/providers/chat-provider.tsx"
+      ],
+      "evidence": [
+        "While all hooks, route handlers, and scripts now use [module] prefix, React error boundaries may catch and log errors without this convention."
+      ]
+    },
+    {
+      "dimension": "high_level_elegance",
+      "identifier": "streaming_proxy_web_overlap",
+      "suggestion": "Consider routing webhook agent SSE through Go streaming proxy for consistency.",
+      "summary": "Some streaming orchestration exists in both web API and streaming proxy",
+      "confidence": "low",
+      "related_files": [
+        "packages/web/app/api/internal/agents/[agentId]/dispatch/route.ts"
+      ],
+      "evidence": [
+        "The webhook dispatch route handles SSE stream reading, overlapping with Go streaming proxy responsibility."
+      ]
+    },
+    {
+      "dimension": "mid_level_elegance",
+      "identifier": "chat_provider_concern_count",
+      "suggestion": "Consider splitting into separate providers for server data, permissions, and routing.",
+      "summary": "ChatProvider still manages several concerns in a single component",
+      "confidence": "low",
+      "related_files": [
+        "packages/web/components/providers/chat-provider.tsx"
+      ],
+      "evidence": [
+        "ChatProvider handles server list, channel list, members, agents, permissions, unread state, and routing, though complexity has been reduced."
+      ]
+    },
+    {
+      "dimension": "low_level_elegance",
+      "identifier": "dispatch_handler_variable_naming",
+      "suggestion": "Consider more descriptive variable names in the dispatch handler.",
+      "summary": "Some variables in dispatch handler could be more descriptive",
+      "confidence": "low",
+      "related_files": [
+        "packages/web/app/api/internal/agents/[agentId]/dispatch/route.ts"
+      ],
+      "evidence": [
+        "Variables like 'evt' in the SSE loop could use more descriptive names like 'sseEvent' for clarity."
+      ]
+    },
+    {
+      "dimension": "cross_module_architecture",
+      "identifier": "web_gateway_url_coupling",
+      "suggestion": "Extract gateway URL construction into a config module.",
+      "summary": "Web package constructs gateway internal API URLs directly",
+      "confidence": "low",
+      "related_files": [
+        "packages/web/lib/gateway-client.ts"
+      ],
+      "evidence": [
+        "gateway-client.ts constructs URLs like /api/internal/broadcast directly."
+      ]
+    },
+    {
+      "dimension": "initialization_coupling",
+      "identifier": "socket_singleton_module_state",
+      "suggestion": "Consider using a class or context-based approach for socket lifecycle management.",
+      "summary": "socket.ts uses module-level singleton state",
+      "confidence": "low",
+      "related_files": [
+        "packages/web/lib/socket.ts"
+      ],
+      "evidence": [
+        "Socket and currentToken are module-level singletons."
+      ]
+    },
+    {
+      "dimension": "convention_outlier",
+      "identifier": "test_mock_pattern_variation",
+      "suggestion": "Establish a standard mock pattern and document it in a testing guide.",
+      "summary": "Test files use slightly different mocking approaches",
+      "confidence": "low",
+      "related_files": [
+        "packages/web/lib/__tests__/gateway-client.test.ts"
+      ],
+      "evidence": [
+        "Some tests use vi.stubGlobal, others use vi.mock with factory functions."
+      ]
+    },
+    {
+      "dimension": "authorization_consistency",
+      "identifier": "owner_check_variation",
+      "suggestion": "Consider a unified isOwner check or ensuring owner always has all permissions.",
+      "summary": "Owner-only checks vary in implementation across endpoints",
+      "confidence": "low",
+      "related_files": [
+        "packages/web/app/api/servers/[serverId]/route.ts"
+      ],
+      "evidence": [
+        "Server DELETE checks server.ownerId directly while other endpoints use checkMemberPermission."
+      ]
+    },
+    {
+      "dimension": "design_coherence",
+      "identifier": "refreshPermissions_manual_fetch",
+      "suggestion": "Consider extending fetchAndSet pattern to refreshPermissions for full consistency.",
+      "summary": "refreshPermissions still uses manual fetch pattern instead of fetchAndSet",
+      "confidence": "low",
+      "related_files": [
+        "packages/web/components/providers/chat-provider.tsx"
+      ],
+      "evidence": [
+        "refreshPermissions handles its own fetch/parse/error cycle rather than using fetchAndSet, since it needs special bigint conversion logic."
+      ]
+    },
+    {
+      "dimension": "package_organization",
+      "identifier": "e2e_in_web_package",
+      "suggestion": "Consider moving e2e tests to a top-level tests/ directory if the project grows.",
+      "summary": "E2E test helpers are inside the web package",
+      "confidence": "low",
+      "related_files": [
+        "packages/web/e2e/v1-checklist/helpers.ts"
+      ],
+      "evidence": [
+        "The e2e/ directory lives inside packages/web rather than at the monorepo root."
+      ]
+    },
+    {
+      "dimension": "logic_clarity",
+      "identifier": "dispatch_handler_length",
+      "suggestion": "Consider splitting sync vs streaming response handling into separate functions.",
+      "summary": "Dispatch route handler is long but handles genuinely distinct response modes",
+      "confidence": "low",
+      "related_files": [
+        "packages/web/app/api/internal/agents/[agentId]/dispatch/route.ts"
+      ],
+      "evidence": [
+        "The dispatch POST handler manages async, SSE, and sync response paths in one function, though parseSseChunk extraction has improved readability."
+      ]
+    }
+  ],
+  "provenance": {
+    "kind": "blind_review_batch_import",
+    "blind": true,
+    "runner": "claude",
+    "session_id": "ext_20260312_014957_23024ec0",
+    "created_at": "2026-03-12T01:54:36+00:00",
+    "packet_path": "/mnt/c/Users/njlec/Tavok/.desloppify/review_packet_blind.json",
+    "packet_sha256": "ed9f6563e8b9aecc33156fb59d0c93a1fecd86c8757afe2230c32fc83d640ccf"
+  }
+}

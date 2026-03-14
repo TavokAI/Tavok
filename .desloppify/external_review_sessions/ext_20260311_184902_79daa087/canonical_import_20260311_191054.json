@@ -1,0 +1,326 @@
+{
+  "assessments": {
+    "naming_quality": 90,
+    "logic_clarity": 78,
+    "type_safety": 76,
+    "contract_coherence": 74,
+    "error_consistency": 72,
+    "abstraction_fitness": 78,
+    "ai_generated_debt": 80,
+    "high_level_elegance": 88,
+    "mid_level_elegance": 76,
+    "low_level_elegance": 78,
+    "cross_module_architecture": 74,
+    "initialization_coupling": 88,
+    "convention_outlier": 72,
+    "dependency_health": 82,
+    "test_strategy": 70,
+    "api_surface_coherence": 74,
+    "authorization_consistency": 72,
+    "incomplete_migration": 90,
+    "package_organization": 88,
+    "design_coherence": 76
+  },
+  "dimension_notes": {
+    "naming_quality": "Names are consistently domain-aligned (channelId, serverId, agentId, triggerMode). No generic verbs or behavior mismatches found across the reviewed files.",
+    "logic_clarity": "Control flow is generally clear. The long-poll loop in GET /api/v1/agents/{id}/messages uses a busy-wait with setTimeout(resolve, 1000) inside a while loop. While functional, this is an unusual synchronous polling pattern in an async function body. No dead code or always-true conditions found.",
+    "type_safety": "TriggerMode is defined as a Literal union type in three separate files independently of each other, creating parallel type definitions. The AgentListItem.capabilities field is typed as 'unknown' rather than a concrete type. In several route handlers, incoming body fields are typed as Record<string,unknown> and then cast to specific shapes inline without runtime validation (agent/[id]/route.ts PATCH handler). The 'canMutateServerScopedResource' function in api-safety.ts performs redundant typeof string checks on parameters already typed as string.",
+    "contract_coherence": "GET /api/v1/agents/{id} has no authentication check \u2014 it is documented as requiring 'Authorization: Bearer sk-tvk-...' but the GET handler omits the auth call that PATCH and DELETE both perform. The function comment says all routes require API key auth, but the implementation does not enforce it on GET.",
+    "error_consistency": "persistMessage in dispatch/route.ts silently swallows errors via .catch(() => console.error(...)) \u2014 the caller continues regardless. The companion persistMessage in webhooks/[token]/route.ts does the same. The same helper is copy-pasted verbatim in at least three separate route files (dispatch, messages, webhooks) instead of being shared. The updateMessage function is also independently copy-pasted in dispatch and stream/route.ts.",
+    "abstraction_fitness": "The 'generateId' wrapper in lib/ulid.ts is a one-line pass-through around ulid() with no added behavior. Multiple route files also import ulid() directly, bypassing the wrapper, so the abstraction provides no value and creates an inconsistency. The route-handlers.ts factory approach (createInternalMessagesPostHandler, createServerAgentPatchHandler, createServerChannelPatchHandler) is well-justified for testability with injected deps.",
+    "ai_generated_debt": "The 'canMutateServerScopedResource' function checks typeof routeServerId === 'string' and typeof targetServerId === 'string' on parameters that are already typed as 'string', which is a defensive check on non-nullable typed values. The api-safety.ts function is otherwise clean. No restating comments or nosy debug logging detected at scale.",
+    "high_level_elegance": "The package boundary between shared types, web routes, lib utilities, and e2e test helpers is clear and predictable. The decomposition into /api/internal (machine-to-machine), /api/v1 (agent SDK), and /api (user-facing) is a coherent architectural pattern.",
+    "mid_level_elegance": "The persistMessage helper is duplicated across dispatch/route.ts, v1/agents/[id]/messages/route.ts, and v1/webhooks/[token]/route.ts rather than being placed in a shared module. This creates a maintenance seam where changes to message persistence must be applied in multiple places. The 'updateMessage' internal-fetch helper is also duplicated between dispatch and the stream route.",
+    "low_level_elegance": "The stream route's token field normalization (tokens, token, text, content, chunk, delta) is verbose but intentionally so. The useChannel hook is very long (~900 lines) but has a single coherent responsibility.",
+    "cross_module_architecture": "The 'ulid' package is imported directly in several route files (dispatch/route.ts, enqueue/route.ts, bootstrap/route.ts, webhooks/route.ts) alongside the generateId wrapper in lib/ulid.ts. This creates inconsistency in how IDs are generated \u2014 some callers use the wrapper, others bypass it. The e2e helpers.ts file (19 importers) is a genuine hub but serves a clear test-utility purpose.",
+    "initialization_coupling": "The socket singleton in lib/socket.ts uses module-level mutable state (let socket, let currentToken). This is intentional for a singleton connection, but the getSocket() function is async and restores connection on each call, which is reasonable. No import-time side effects or DB connections at module scope were found.",
+    "convention_outlier": "TriggerMode is defined as an identical Literal union ('ALWAYS' | 'MENTION' | 'KEYWORD') independently in three files: packages/shared/types/agent.ts, packages/web/lib/agent-factory.ts, and packages/web/components/modals/agent/types.ts. These are not imported from the shared package. The byok-form.tsx also casts to the inline union literal instead of importing the shared type. ConnectionMethod is also defined in shared/types/agent.ts as ConnectionMethod but in agent-factory.ts it is called ConnectionMethodValue (a different name for a derived type). The modals types.ts re-exports it as ConnectionMethodType, creating three names for essentially the same concept.",
+    "dependency_health": "Direct 'ulid' imports coexist with the generateId wrapper, meaning both the raw package and the wrapper are in active use. No multiple libraries for the same purpose were found otherwise. The dependency graph looks clean.",
+    "test_strategy": "The lib/agent-factory.ts createAgent function (critical business logic: generates API keys, creates Agent+AgentRegistration in a transaction, auto-assigns to all channels) has no unit tests visible in the seed files. lib/api-safety.ts high-importer utility functions (compareSequences, parseNonNegativeSequence) are tested indirectly through E2E tests but no dedicated unit tests were visible. lib/internal-auth.ts validateInternalSecretValue is similarly critical and untested. E2E tests cover UI flows but unit-test coverage of core utility and auth functions appears absent.",
+    "api_surface_coherence": "GET /api/v1/agents/{id} does not require authentication, but PATCH and DELETE on the same route do. This is an inconsistent surface for the same resource endpoint. The streaming token endpoint accepts 7 different field names for the token value (tokens, token, text, content, chunk, delta, and array/string variants), which is intentionally permissive but creates an unusually wide API surface for a single field.",
+    "authorization_consistency": "GET /api/v1/agents/{id} lacks the authenticateAgentById check that its sibling PATCH and DELETE handlers call. The handler comment states 'All routes require API key auth' but the GET implementation omits the check. This is the most concrete authorization gap found. Internal endpoints (/api/internal/*) consistently require validateInternalSecret. User-facing endpoints (/api/servers/*, /api/dms/*) consistently use getServerSession. Bootstrap endpoints use authenticateAdminToken. The layering is otherwise clean.",
+    "incomplete_migration": "No deprecated symbols, mixed JS/TS files, or stale migration TODOs were found across the reviewed files.",
+    "package_organization": "The shared/types/ directory is well-organized with one file per domain concept. The web/lib directory is flat with ~20+ files, but most have distinct high-fan-in justification. The e2e helpers hierarchy (root helpers.ts + v1-checklist/helpers.ts) has a clear layering.",
+    "design_coherence": "The useChannel hook (~900 lines) manages a large number of responsibilities: Phoenix channel lifecycle, message deduplication, streaming (tokens, thinking, tools, checkpoints, charter), presence, typing, history, edit/delete, and stream timeout. While it has a single conceptual owner (the channel subscription), the internal complexity is high and it handles many distinct event categories in one function body."
+  },
+  "issues": [
+    {
+      "dimension": "naming_quality",
+      "identifier": "no_significant_naming_issues",
+      "summary": "No significant naming quality issues found \u2014 names are consistently domain-aligned",
+      "related_files": [
+        "packages/web/lib/api-safety.ts"
+      ],
+      "evidence": "Names like channelId, serverId, agentId, triggerMode are consistently used and domain-aligned across the codebase. No generic verbs or behavior mismatches were found.",
+      "suggestion": "No action needed \u2014 naming quality is good. Continue using domain-aligned naming conventions.",
+      "confidence": "low"
+    },
+    {
+      "dimension": "high_level_elegance",
+      "identifier": "no_significant_decomposition_issues",
+      "summary": "Package boundaries are clear with coherent /api/internal, /api/v1, and /api decomposition",
+      "related_files": [
+        "packages/web/app/api"
+      ],
+      "evidence": "The decomposition into /api/internal (machine-to-machine), /api/v1 (agent SDK), and /api (user-facing) is coherent. Package boundary between shared types, web routes, lib utilities, and e2e helpers is predictable.",
+      "suggestion": "No action needed \u2014 the high-level architecture is well decomposed.",
+      "confidence": "low"
+    },
+    {
+      "dimension": "initialization_coupling",
+      "identifier": "socket_singleton_module_state",
+      "summary": "Socket singleton uses module-level mutable state but this is intentional for the singleton pattern",
+      "related_files": [
+        "packages/web/lib/socket.ts"
+      ],
+      "evidence": "lib/socket.ts uses module-level `let socket` and `let currentToken` for singleton connection state. The getSocket() function is async and handles reconnection. This is a standard singleton pattern, not an anti-pattern.",
+      "suggestion": "No action needed \u2014 module-level state is justified for the socket singleton.",
+      "confidence": "low"
+    },
+    {
+      "dimension": "incomplete_migration",
+      "identifier": "no_stale_migrations_found",
+      "summary": "No deprecated symbols, mixed JS/TS files, or stale migration TODOs were found",
+      "related_files": [
+        "packages/web/lib"
+      ],
+      "evidence": "All files are TypeScript. No TODO markers referencing migrations. No deprecated API usage detected across the reviewed seed files.",
+      "suggestion": "No action needed \u2014 codebase is cleanly migrated to TypeScript.",
+      "confidence": "low"
+    },
+    {
+      "dimension": "package_organization",
+      "identifier": "shared_types_well_organized",
+      "summary": "Package organization is clean with one file per domain concept in shared/types and justified flat structure in web/lib",
+      "related_files": [
+        "packages/shared/types"
+      ],
+      "evidence": "shared/types/ has agent.ts, channel.ts, index.ts \u2014 one per domain. web/lib/ is flat with ~20 files but most have distinct high-fan-in justification. e2e helpers hierarchy has clear layering.",
+      "suggestion": "No action needed \u2014 package organization is clean.",
+      "confidence": "low"
+    },
+    {
+      "dimension": "ai_generated_debt",
+      "identifier": "redundant_typeof_on_typed_params",
+      "summary": "canMutateServerScopedResource in api-safety.ts performs typeof checks on parameters already typed as string \u2014 a classic AI-generated defensive pattern",
+      "related_files": [
+        "packages/web/lib/api-safety.ts"
+      ],
+      "evidence": "The function signature is (routeServerId: string, targetServerId: string) but the body checks typeof routeServerId === 'string' && typeof targetServerId === 'string'. These checks are always true and serve no purpose in typed TypeScript code.",
+      "suggestion": "Remove the redundant typeof checks. The function body should simply be: return routeServerId === targetServerId;",
+      "confidence": "high"
+    },
+    {
+      "dimension": "api_surface_coherence",
+      "identifier": "get_agent_no_auth_inconsistent",
+      "summary": "GET /api/v1/agents/{id} does not require authentication while PATCH and DELETE on the same resource do",
+      "related_files": [
+        "packages/web/app/api/v1/agents/[id]/route.ts"
+      ],
+      "evidence": "The streaming token endpoint accepts 7 different field names (tokens, token, text, content, chunk, delta) for what is semantically one field. The GET handler on the same route as authenticated PATCH and DELETE has no auth check.",
+      "suggestion": "Add auth to GET handler consistent with sibling methods. Consider documenting the intentionally permissive token field normalization.",
+      "confidence": "high"
+    },
+    {
+      "dimension": "contract_coherence",
+      "identifier": "get_agent_documented_auth_not_enforced",
+      "summary": "GET /api/v1/agents/{id} is documented as requiring API key auth but the implementation omits the check",
+      "related_files": [
+        "packages/web/app/api/v1/agents/[id]/route.ts"
+      ],
+      "evidence": "File-level comment states all routes require API key auth via Authorization header. PATCH and DELETE enforce this. GET does not call authenticateAgentById, exposing agent details without authentication.",
+      "suggestion": "Add authenticateAgentById(request, id) to the GET handler to match the documented contract.",
+      "confidence": "high"
+    },
+    {
+      "dimension": "cross_module_architecture",
+      "identifier": "ulid_import_inconsistency",
+      "summary": "Direct ulid() imports coexist with the generateId() wrapper, creating an inconsistent ID generation boundary",
+      "related_files": [
+        "packages/web/lib/ulid.ts",
+        "packages/web/app/api/internal/agents/[agentId]/dispatch/route.ts",
+        "packages/web/app/api/internal/agents/[agentId]/enqueue/route.ts"
+      ],
+      "evidence": "lib/ulid.ts exports generateId() as the canonical ID generator. Multiple route files import ulid directly from the 'ulid' package, bypassing the wrapper. This blurs the boundary of where IDs should be generated.",
+      "suggestion": "Replace all direct ulid() imports with generateId() from lib/ulid.ts, or remove the wrapper if it adds no value.",
+      "confidence": "high"
+    },
+    {
+      "dimension": "dependency_health",
+      "identifier": "dual_ulid_import_paths",
+      "summary": "Both the raw 'ulid' package and the generateId wrapper are actively imported, creating parallel dependency paths",
+      "related_files": [
+        "packages/web/lib/ulid.ts",
+        "packages/web/app/api/internal/agents/[agentId]/dispatch/route.ts"
+      ],
+      "evidence": "Some files import { ulid } from 'ulid' directly while others import { generateId } from '@/lib/ulid'. Both resolve to the same underlying function but create two active import paths for the same dependency.",
+      "suggestion": "Standardize on one import path. Either use generateId() everywhere or remove the wrapper.",
+      "confidence": "high"
+    },
+    {
+      "dimension": "low_level_elegance",
+      "identifier": "use_channel_effect_body_580_lines",
+      "summary": "useChannel hook has a single useEffect with ~580 lines of inline handler registrations",
+      "related_files": [
+        "packages/web/lib/hooks/use-channel.ts"
+      ],
+      "evidence": "The joinChannel function within the useEffect registers 18 event handlers inline (message_new, sync_response, stream_start, stream_token, etc.). Each handler contains non-trivial logic. The entire effect body spans ~580 lines.",
+      "suggestion": "Extract groups of related event handlers into named functions (e.g., createStreamingHandlers, createMessageHandlers) defined outside the effect.",
+      "confidence": "medium"
+    },
+    {
+      "dimension": "authorization_consistency",
+      "identifier": "get_agent_missing_auth",
+      "summary": "GET /api/v1/agents/{id} omits authentication that sibling PATCH and DELETE handlers enforce",
+      "related_files": [
+        "packages/web/app/api/v1/agents/[id]/route.ts"
+      ],
+      "evidence": "The file-level comment states 'All routes require API key auth via Authorization header'. The PATCH and DELETE handlers call authenticateAgentById(request, id) before proceeding. The GET handler executes the Prisma query without any auth check, returning agent details (name, serverId, connectionMethod, capabilities, health URLs) to unauthenticated callers.",
+      "suggestion": "Add authenticateAgentById(request, id) at the top of the GET handler, consistent with PATCH and DELETE. Return 401 if not authorized.",
+      "confidence": "high"
+    },
+    {
+      "dimension": "convention_outlier",
+      "identifier": "trigger_mode_triple_definition",
+      "summary": "TriggerMode Literal union defined independently in three separate files instead of imported from shared types",
+      "related_files": [
+        "packages/shared/types/agent.ts",
+        "packages/web/lib/agent-factory.ts",
+        "packages/web/components/modals/agent/types.ts"
+      ],
+      "evidence": "All three files contain the identical declaration: `type TriggerMode = \"ALWAYS\" | \"MENTION\" | \"KEYWORD\"`. The shared package already exports TriggerMode but agent-factory.ts and modals/agent/types.ts define their own copies rather than importing from @tavok/shared.",
+      "suggestion": "Remove the local TriggerMode definitions in agent-factory.ts and modals/agent/types.ts. Import TriggerMode from @tavok/shared/types/agent (or the shared barrel).",
+      "confidence": "high"
+    },
+    {
+      "dimension": "convention_outlier",
+      "identifier": "connection_method_three_names",
+      "summary": "The connection method type has three different names across three files: ConnectionMethod, ConnectionMethodValue, ConnectionMethodType",
+      "related_files": [
+        "packages/shared/types/agent.ts",
+        "packages/web/lib/agent-factory.ts",
+        "packages/web/components/modals/agent/types.ts"
+      ],
+      "evidence": "shared/types/agent.ts exports `type ConnectionMethod`. agent-factory.ts derives `type ConnectionMethodValue = (typeof VALID_CONNECTION_METHODS)[number]` from a local const array. modals/agent/types.ts re-exports it as `type ConnectionMethodType = ConnectionMethodValue`. Three names for the same concept, none using the shared type directly.",
+      "suggestion": "Define one canonical type in shared/types/agent.ts and import it everywhere. The VALID_CONNECTION_METHODS runtime array in agent-factory.ts can remain for validation purposes, but the type should alias the shared definition.",
+      "confidence": "high"
+    },
+    {
+      "dimension": "error_consistency",
+      "identifier": "persist_message_helper_copy_pasted",
+      "summary": "persistMessage and updateMessage internal-fetch helpers are copy-pasted verbatim across three route files",
+      "related_files": [
+        "packages/web/app/api/internal/agents/[agentId]/dispatch/route.ts",
+        "packages/web/app/api/v1/agents/[id]/messages/route.ts",
+        "packages/web/app/api/v1/webhooks/[token]/route.ts"
+      ],
+      "evidence": "Each of the three files contains a private `persistMessage` function that constructs an identical fetch to `${internalUrl}/api/internal/messages` with the same headers and error handling. dispatch/route.ts and stream/route.ts each contain a private `updateMessage` helper with the same fetch shape. The bodies differ only in which error handling pattern is used (one throws, one silently logs).",
+      "suggestion": "Extract persistMessage and updateMessage into a shared module (e.g., lib/internal-api-client.ts) and import from there. This also resolves the inconsistency: messages/route.ts silently swallows persist errors via .catch(), while dispatch/route.ts throws on failure.",
+      "confidence": "high"
+    },
+    {
+      "dimension": "type_safety",
+      "identifier": "api_safety_redundant_typeof_checks",
+      "summary": "canMutateServerScopedResource checks typeof on parameters already typed as string",
+      "related_files": [
+        "packages/web/lib/api-safety.ts"
+      ],
+      "evidence": "Function signature is `(routeServerId: string, targetServerId: string): boolean` but the implementation returns `typeof routeServerId === 'string' && typeof targetServerId === 'string' && routeServerId === targetServerId`. The typeof checks are always true for typed string parameters and cannot guard against anything at the TypeScript layer.",
+      "suggestion": "Remove the typeof checks. The function body simplifies to `return routeServerId === targetServerId;`.",
+      "confidence": "high"
+    },
+    {
+      "dimension": "type_safety",
+      "identifier": "agent_capabilities_typed_unknown",
+      "summary": "AgentAuthResult.capabilities and AgentListItem.capabilities are typed as 'unknown' with no narrowing",
+      "related_files": [
+        "packages/web/lib/agent-auth.ts",
+        "packages/web/components/modals/agent/types.ts"
+      ],
+      "evidence": "AgentAuthResult interface in agent-auth.ts declares `capabilities: unknown`. AgentListItem in modals/agent/types.ts declares `capabilities: unknown`. Callers that need this field must cast or narrow at every use site. The field is consistently used as a JSON array of strings (string[]).",
+      "suggestion": "Type capabilities as `string[] | unknown` with a documented note, or as `string[]` if all known callers treat it as such. At minimum add a JSDoc comment explaining the expected shape.",
+      "confidence": "medium"
+    },
+    {
+      "dimension": "abstraction_fitness",
+      "identifier": "generate_id_wrapper_bypassed",
+      "summary": "lib/ulid.ts generateId wrapper is bypassed by direct ulid() imports in multiple route files",
+      "related_files": [
+        "packages/web/lib/ulid.ts",
+        "packages/web/app/api/internal/agents/[agentId]/dispatch/route.ts",
+        "packages/web/app/api/internal/agents/[agentId]/enqueue/route.ts",
+        "packages/web/app/api/v1/bootstrap/route.ts"
+      ],
+      "evidence": "lib/ulid.ts exports `generateId(): string` as a documented wrapper around ulid(). Multiple route files import `ulid` directly from the 'ulid' package and call `ulid()` instead of using generateId(). The wrapper adds no behavior but is inconsistently used.",
+      "suggestion": "Either enforce the wrapper consistently (replace all direct ulid() calls with generateId()) or remove the wrapper entirely and use ulid() directly. The wrapper currently provides no value and creates an inconsistency.",
+      "confidence": "high"
+    },
+    {
+      "dimension": "test_strategy",
+      "identifier": "critical_auth_utilities_untested",
+      "summary": "High-import auth utility functions in lib/internal-auth.ts, lib/agent-auth.ts, and lib/admin-auth.ts have no visible unit tests",
+      "related_files": [
+        "packages/web/lib/internal-auth.ts",
+        "packages/web/lib/agent-auth.ts",
+        "packages/web/lib/admin-auth.ts",
+        "packages/web/lib/api-safety.ts"
+      ],
+      "evidence": "validateInternalSecret, validateInternalSecretValue, authenticateAgentRequest, authenticateAgentById, and authenticateAdminToken are security-critical functions imported by 8+ route files. lib/api-safety.ts is imported by 8 modules. No unit test files for these modules were found in the seed file listing or via search.",
+      "suggestion": "Add unit tests for the auth utility functions covering: correct token accepted, wrong token rejected, missing env var fails closed, timing-safe comparison paths. These are pure-ish functions amenable to fast unit tests.",
+      "confidence": "medium"
+    },
+    {
+      "dimension": "test_strategy",
+      "identifier": "create_agent_factory_untested",
+      "summary": "lib/agent-factory.ts createAgent (API key generation + DB transaction) has no visible unit or integration tests",
+      "related_files": [
+        "packages/web/lib/agent-factory.ts"
+      ],
+      "evidence": "createAgent generates crypto-random API keys, SHA-256 hashes them, creates Agent + AgentRegistration in a transaction, and auto-assigns agents to channels. It is the single entry point for agent onboarding. No test file targeting this module was found.",
+      "suggestion": "Add integration tests for createAgent using a test database or Prisma mock: verify the API key is returned once, verify the hash is stored (not the key), verify ChannelAgent rows are created, and verify WEBHOOK generates a webhookSecret.",
+      "confidence": "medium"
+    },
+    {
+      "dimension": "mid_level_elegance",
+      "identifier": "webhook_sequence_fallback_silently_wrong",
+      "summary": "Webhook route falls back to timestamp-based sequence when gateway is unavailable, silently producing sequences that violate the monotonic BigInt ordering invariant",
+      "related_files": [
+        "packages/web/app/api/v1/webhooks/[token]/route.ts"
+      ],
+      "evidence": "`let sequence = String(Date.now())` is used as a fallback when the gateway sequence endpoint is unavailable. The message persistence layer treats sequence as a BigInt used for ordering. A Date.now() value (~1.7e12) is a valid BigInt but is not guaranteed to be monotonically higher than the channel's lastSequence, which may have advanced through normal message flow. The fallback also diverges from the consistent fetchChannelSequence() pattern used in other routes.",
+      "suggestion": "Replace the fallback with a call to fetchChannelSequence() from lib/gateway-client (which already handles the gateway call). Remove the inline gateway URL construction and the bespoke fallback logic.",
+      "confidence": "medium"
+    },
+    {
+      "dimension": "logic_clarity",
+      "identifier": "long_poll_busy_wait",
+      "summary": "REST poll endpoint implements long-polling with a 1-second busy-wait loop that holds an async function and a DB connection open",
+      "related_files": [
+        "packages/web/app/api/v1/agents/[id]/messages/route.ts"
+      ],
+      "evidence": "The GET handler contains: `while (Date.now() < deadline && messages.length === 0) { await new Promise(resolve => setTimeout(resolve, 1000)); messages = await prisma.agentMessage.findMany(...); }`. For a 30-second wait, this issues up to 30 sequential DB queries from within the request handler, keeping the function alive for up to 30 seconds with polling interval of 1 second.",
+      "suggestion": "Document this as a known limitation of the serverless-compatible polling approach, or replace with a push-based notification mechanism (Redis pub/sub or similar) for the long-poll case. If keeping the current approach, a comment explaining the trade-off is warranted.",
+      "confidence": "medium"
+    },
+    {
+      "dimension": "design_coherence",
+      "identifier": "use_channel_oversized_single_effect",
+      "summary": "useChannel contains a single useEffect that registers ~15 distinct Phoenix channel event handlers inline",
+      "related_files": [
+        "packages/web/lib/hooks/use-channel.ts"
+      ],
+      "evidence": "The joinChannel async function within the effect registers handlers for: message_new, sync_response, history_response, agent_trigger_skipped, user_typing, stream_start, stream_token, stream_complete, stream_error, stream_thinking, stream_tool_call, stream_tool_result, typed_message, reaction_update, stream_checkpoint, charter_status, message_edited, message_deleted \u2014 18 event bindings in one inline function. The effect body is ~580 lines.",
+      "suggestion": "Consider extracting groups of related handlers (e.g., streaming events, reaction events, charter events) into named functions defined outside the effect. This keeps the effect body as an orchestrator and makes individual handler logic easier to read and test.",
+      "confidence": "medium"
+    }
+  ],
+  "provenance": {
+    "kind": "blind_review_batch_import",
+    "blind": true,
+    "runner": "claude",
+    "session_id": "ext_20260311_184902_79daa087",
+    "created_at": "2026-03-11T19:10:54+00:00",
+    "packet_path": "/mnt/c/Users/njlec/Tavok/.desloppify/review_packet_blind.json",
+    "packet_sha256": "8c8ec3feb1f74ddbdabbdb9676d6494a43f2356cd63e3f2a6ef3262809219c26"
+  }
+}

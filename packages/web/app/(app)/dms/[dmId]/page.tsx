@@ -3,6 +3,15 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { DmChatArea } from "@/components/dm/dm-chat-area";
+import { getDmListFromResponse } from "@/lib/dm-api";
+
+interface DmListItem {
+  id: string;
+  participant: {
+    displayName: string;
+    username: string;
+  } | null;
+}
 
 /**
  * TASK-0019: DM conversation page.
@@ -25,7 +34,8 @@ export default function DmPage() {
         const res = await fetch("/api/dms");
         if (res.ok) {
           const data = await res.json();
-          const dm = data.dms?.find((c: { id: string }) => c.id === dmId);
+          const dms = getDmListFromResponse<DmListItem>(data);
+          const dm = dms.find((conversation) => conversation.id === dmId);
           if (dm) {
             setOtherUserName(
               dm.participant?.displayName || dm.participant?.username || "User",

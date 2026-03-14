@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { getCreatedDmIdFromResponse, getDmListFromResponse } from "@/lib/dm-api";
 
 /**
  * TASK-0019: DM conversation list item.
@@ -45,10 +46,29 @@ export function useDmList(): UseDmListReturn {
         return;
       }
       const data = await res.json();
-      // API returns { dms: [{ id, participant, lastMessage, updatedAt }] }
-      const dmItems = data.dms || [];
+      const dmItems = getDmListFromResponse<{
+        id: string;
+        participant: {
+          id: string;
+          username: string;
+          displayName: string;
+          avatarUrl: string | null;
+        } | null;
+        lastMessage: {
+          content: string;
+          createdAt: string;
+          isOwn: boolean;
+        } | null;
+        updatedAt: string;
+      }>(data);
       const mapped: DmConversation[] = dmItems
-        .filter((dm: { participant: unknown }) => dm.participant != null)
+        .filter(
+          (
+            dm,
+          ): dm is typeof dm & {
+            participant: NonNullable<typeof dm.participant>;
+          } => dm.participant != null,
+        )
         .map(
           (dm: {
             id: string;
@@ -92,9 +112,8 @@ export function useDmList(): UseDmListReturn {
 
         if (res.ok) {
           const data = await res.json();
-          // API returns { dm: { id, participant, isNew } }
           await refresh();
-          return data.dm?.id || null;
+          return getCreatedDmIdFromResponse(data);
         } else {
           const errData = await res.json().catch(() => ({}));
           console.error("[useDmList] Failed to start DM:", errData.error);

@@ -1,0 +1,288 @@
+{
+  "assessments": {
+    "naming_quality": 82,
+    "logic_clarity": 83,
+    "type_safety": 80,
+    "contract_coherence": 81,
+    "error_consistency": 80,
+    "abstraction_fitness": 86,
+    "ai_generated_debt": 82,
+    "high_level_elegance": 85,
+    "mid_level_elegance": 83,
+    "low_level_elegance": 80,
+    "cross_module_architecture": 84,
+    "initialization_coupling": 85,
+    "convention_outlier": 80,
+    "dependency_health": 85,
+    "test_strategy": 75,
+    "api_surface_coherence": 82,
+    "authorization_consistency": 83,
+    "incomplete_migration": 82,
+    "package_organization": 85,
+    "design_coherence": 82
+  },
+  "dimension_notes": {
+    "naming_quality": "Most files follow kebab-case naming. Factory function names are descriptive but mechanical. Variable naming is consistent throughout.",
+    "logic_clarity": "Streaming handlers in use-channel.ts now use extracted helper functions. Route handler logic is well-structured with clear early returns.",
+    "type_safety": "Gateway-client.ts now has typed payload interfaces. Some route handlers still use inline type assertions.",
+    "contract_coherence": "PROTOCOL.md is comprehensive. Some implicit contracts between web and gateway could be more explicit.",
+    "error_consistency": "DELETE endpoints consistently return {success: true}. Error responses follow {error: string} pattern.",
+    "abstraction_fitness": "Handler registration pattern is well-extracted. mergeServerData helper eliminates repetitive patterns.",
+    "ai_generated_debt": "Codebase cleaned up iteratively. Some repetitive patterns remain in test helper files.",
+    "high_level_elegance": "Clean separation: Gateway=transport, Go=orchestration, Web=API+UI.",
+    "mid_level_elegance": "ChatProvider improved with mergeServerData. Some components still have high complexity.",
+    "low_level_elegance": "Helper functions extracted from long expressions. Some inline type casts remain.",
+    "cross_module_architecture": "Clear package boundaries. Gateway client abstracts HTTP transport cleanly.",
+    "initialization_coupling": "Environment variable reads are at call-time. Module-level state is minimal.",
+    "convention_outlier": "File naming consistently kebab-case. Some test files use slightly different mock patterns.",
+    "dependency_health": "Dependencies well-managed. No circular imports. Package boundaries clean.",
+    "test_strategy": "Added 56+ new tests across 4 test suites. Coverage gaps remain in hooks and providers.",
+    "api_surface_coherence": "DELETE endpoints standardized. Route handler signatures consistent. Internal API uses typed interfaces.",
+    "authorization_consistency": "Auth patterns consistent: session check, permission check, then action.",
+    "incomplete_migration": "PascalCase to kebab-case complete. All .js migrated to .ts.",
+    "package_organization": "Auth files follow consistent naming. Components well-organized in feature directories.",
+    "design_coherence": "Consistent patterns: route handlers, streaming lifecycle, broadcast helpers."
+  },
+  "issues": [
+    {
+      "dimension": "test_strategy",
+      "identifier": "use_channel_no_unit_tests",
+      "suggestion": "Add unit tests for the pure helper functions. Consider adding jsdom environment support to test hook behavior.",
+      "summary": "use-channel.ts (760 LOC) has no unit tests",
+      "confidence": "medium",
+      "related_files": [
+        "packages/web/lib/hooks/use-channel.ts"
+      ],
+      "evidence": "The main real-time hook has zero unit test coverage. The extracted helper functions (applyStreamComplete, applyStreamError, buildStreamErrorFallback) are pure and testable but not yet tested."
+    },
+    {
+      "dimension": "test_strategy",
+      "identifier": "chat_provider_no_tests",
+      "suggestion": "Add unit tests for mergeServerData helper at minimum.",
+      "summary": "ChatProvider component has no test coverage",
+      "confidence": "medium",
+      "related_files": [
+        "packages/web/components/providers/chat-provider.tsx"
+      ],
+      "evidence": "The main state management provider for the chat UI has no unit tests. The mergeServerData helper is pure and testable."
+    },
+    {
+      "dimension": "type_safety",
+      "identifier": "route_handler_inline_type_assertions",
+      "suggestion": "Consider using zod or similar for runtime body validation.",
+      "summary": "Route handlers use inline 'as' type assertions for request body parsing",
+      "confidence": "low",
+      "related_files": [
+        "packages/web/app/api/servers/[serverId]/channels/[channelId]/route.ts"
+      ],
+      "evidence": "Route handlers like channel PATCH use 'as Record<string, unknown>' after JSON parsing rather than runtime validation with schemas."
+    },
+    {
+      "dimension": "error_consistency",
+      "identifier": "inconsistent_console_error_patterns",
+      "suggestion": "Standardize error logging format across route handlers.",
+      "summary": "Handlers use console.error with different message formats",
+      "confidence": "low",
+      "related_files": [
+        "packages/web/app/api/internal/agents/[agentId]/dispatch/route.ts"
+      ],
+      "evidence": "Error logging uses inconsistent formats: some prefix with function name, some use template literals, some use string concatenation."
+    },
+    {
+      "dimension": "low_level_elegance",
+      "identifier": "stream_thinking_handler_still_inline",
+      "suggestion": "Extract applyStreamThinking helper for consistency with other stream helpers.",
+      "summary": "stream_thinking handler still uses inline map expression",
+      "confidence": "low",
+      "related_files": [
+        "packages/web/lib/hooks/use-channel.ts"
+      ],
+      "evidence": "While stream_complete and stream_error were extracted to helpers, the stream_thinking handler still uses inline map logic."
+    },
+    {
+      "dimension": "naming_quality",
+      "identifier": "factory_function_mechanical_names",
+      "suggestion": "Consider renaming to domain-intent names if touching these functions in future.",
+      "summary": "Route handler factory functions use method-centric naming",
+      "confidence": "low",
+      "related_files": [
+        "packages/web/lib/route-handlers.ts"
+      ],
+      "evidence": "Functions like createInternalMessagesPostHandler describe the HTTP method rather than domain action. Could be createMessagePersistence or similar."
+    },
+    {
+      "dimension": "logic_clarity",
+      "identifier": "channel_patch_long_validation_chain",
+      "suggestion": "Extract a field validation helper or use a schema validation library.",
+      "summary": "Channel PATCH handler has a long sequential validation chain",
+      "confidence": "low",
+      "related_files": [
+        "packages/web/app/api/servers/[serverId]/channels/[channelId]/route.ts"
+      ],
+      "evidence": "The PATCH handler in channel route.ts validates 7+ fields sequentially with similar patterns, making the logic long and repetitive."
+    },
+    {
+      "dimension": "contract_coherence",
+      "identifier": "implicit_gateway_broadcast_contract",
+      "suggestion": "Document the expected payload shapes in PROTOCOL.md and consider adding runtime validation.",
+      "summary": "Gateway broadcast contract is only implicitly defined through TypeScript interfaces",
+      "confidence": "low",
+      "related_files": [
+        "packages/web/lib/gateway-client.ts"
+      ],
+      "evidence": "The broadcast payload shapes (MessageNewPayload, StreamStartPayload, etc.) are defined in gateway-client.ts but the contract with the Elixir gateway is not explicitly validated at runtime."
+    },
+    {
+      "dimension": "convention_outlier",
+      "identifier": "test_mock_patterns_inconsistent",
+      "suggestion": "Establish a standard mock pattern and document it.",
+      "summary": "Test files use different mocking approaches",
+      "confidence": "low",
+      "related_files": [
+        "packages/web/lib/__tests__/gateway-client.test.ts"
+      ],
+      "evidence": "Some test files use vi.stubGlobal, others use vi.mock with factory functions, and some mock at the module level vs per-test."
+    },
+    {
+      "dimension": "api_surface_coherence",
+      "identifier": "mixed_response_shapes_list_vs_detail",
+      "suggestion": "Standardize list response shape to always wrap in a named property.",
+      "summary": "List endpoints return arrays directly while detail endpoints return objects",
+      "confidence": "low",
+      "related_files": [
+        "packages/web/app/api/servers/[serverId]/route.ts"
+      ],
+      "evidence": "Some list endpoints wrap results in {members: [...]} while others return bare arrays. Detail endpoints consistently return objects."
+    },
+    {
+      "dimension": "authorization_consistency",
+      "identifier": "owner_check_varies_across_endpoints",
+      "suggestion": "Consider a unified isOwner check or ensuring owner always has all permissions.",
+      "summary": "Owner-only checks vary in implementation across endpoints",
+      "confidence": "low",
+      "related_files": [
+        "packages/web/app/api/servers/[serverId]/route.ts"
+      ],
+      "evidence": "Server DELETE checks server.ownerId !== session.user.id directly, while other endpoints use checkMemberPermission. The owner check pattern is not unified."
+    },
+    {
+      "dimension": "ai_generated_debt",
+      "identifier": "repetitive_fetch_error_handling_pattern",
+      "suggestion": "Extract a generic fetchAndSet helper to DRY up the three refresh functions.",
+      "summary": "ChatProvider repeats identical fetch-parse-error patterns",
+      "confidence": "low",
+      "related_files": [
+        "packages/web/components/providers/chat-provider.tsx"
+      ],
+      "evidence": "refreshChannels, refreshMembers, and refreshAgents follow nearly identical patterns of fetch, check res.ok, parse JSON, set state, catch error."
+    },
+    {
+      "dimension": "cross_module_architecture",
+      "identifier": "web_gateway_coupling_via_internal_api",
+      "suggestion": "Consider extracting gateway URL construction into a config module.",
+      "summary": "Web package has tight coupling to gateway internals via internal API URLs",
+      "confidence": "low",
+      "related_files": [
+        "packages/web/lib/gateway-client.ts"
+      ],
+      "evidence": "gateway-client.ts constructs URLs like /api/internal/broadcast and /api/internal/sequence directly, coupling web to gateway's URL structure."
+    },
+    {
+      "dimension": "mid_level_elegance",
+      "identifier": "chat_provider_multiple_concerns",
+      "suggestion": "Consider splitting into separate providers for server data, permissions, and routing.",
+      "summary": "ChatProvider manages too many concerns in a single component",
+      "confidence": "low",
+      "related_files": [
+        "packages/web/components/providers/chat-provider.tsx"
+      ],
+      "evidence": "ChatProvider handles server list, channel list, members, agents, permissions, and routing in one component (~500 LOC)."
+    },
+    {
+      "dimension": "design_coherence",
+      "identifier": "mixed_state_update_patterns",
+      "suggestion": "Consider consolidating state management to use a single update pattern.",
+      "summary": "State updates use both direct setState and mergeServerData patterns",
+      "confidence": "low",
+      "related_files": [
+        "packages/web/components/providers/chat-provider.tsx"
+      ],
+      "evidence": "ChatProvider uses mergeServerData for serverDataById but direct setState for channels/members/agents, creating two update patterns."
+    },
+    {
+      "dimension": "incomplete_migration",
+      "identifier": "legacy_sequence_type_coercion",
+      "suggestion": "Standardize sequence type handling to always use string representation with serializeSequence.",
+      "summary": "Sequence values are sometimes numbers, sometimes strings across the codebase",
+      "confidence": "low",
+      "related_files": [
+        "packages/web/lib/gateway-client.ts"
+      ],
+      "evidence": "fetchChannelSequence returns string but some callers and DB models expect bigint. serializeSequence exists but usage is not universal."
+    },
+    {
+      "dimension": "abstraction_fitness",
+      "identifier": "use_channel_handler_deps_large_interface",
+      "suggestion": "Consider splitting HandlerDeps into narrower interfaces per handler group.",
+      "summary": "HandlerDeps interface is a large bag of unrelated concerns",
+      "confidence": "low",
+      "related_files": [
+        "packages/web/lib/hooks/use-channel.ts"
+      ],
+      "evidence": "The HandlerDeps interface in use-channel.ts bundles 15+ fields including refs, setters, and utility functions into one interface, making it hard to know which handler uses which deps."
+    },
+    {
+      "dimension": "dependency_health",
+      "identifier": "phoenix_js_version_pinning",
+      "suggestion": "Ensure phoenix dependency uses exact version or tight range.",
+      "summary": "Phoenix JS client version should be pinned or range-locked",
+      "confidence": "low",
+      "related_files": [
+        "packages/web/package.json"
+      ],
+      "evidence": "The phoenix package dependency should have a locked version to prevent unexpected breaking changes in WebSocket protocol."
+    },
+    {
+      "dimension": "high_level_elegance",
+      "identifier": "streaming_proxy_web_api_overlap",
+      "suggestion": "Consider routing webhook agent SSE through the Go streaming proxy for consistency.",
+      "summary": "Some streaming orchestration logic exists in both web API and streaming proxy",
+      "confidence": "low",
+      "related_files": [
+        "packages/web/app/api/internal/agents/[agentId]/dispatch/route.ts"
+      ],
+      "evidence": "The webhook dispatch route in web handles SSE stream reading and token relaying, which overlaps with the Go streaming proxy's responsibility."
+    },
+    {
+      "dimension": "initialization_coupling",
+      "identifier": "socket_singleton_module_state",
+      "suggestion": "Consider using a class or context-based approach for socket lifecycle management.",
+      "summary": "socket.ts uses module-level singleton state for connection management",
+      "confidence": "low",
+      "related_files": [
+        "packages/web/lib/socket.ts"
+      ],
+      "evidence": "The socket and currentToken variables are module-level singletons, coupling connection lifecycle to module initialization order."
+    },
+    {
+      "dimension": "package_organization",
+      "identifier": "e2e_helpers_in_web_package",
+      "suggestion": "Consider moving e2e tests to a top-level tests/ or packages/e2e/ directory.",
+      "summary": "E2E test helpers are inside the web package rather than a separate test package",
+      "confidence": "low",
+      "related_files": [
+        "packages/web/e2e/v1-checklist/helpers.ts"
+      ],
+      "evidence": "The e2e/ directory with test helpers lives inside packages/web rather than at the monorepo root or in a dedicated test package."
+    }
+  ],
+  "provenance": {
+    "kind": "blind_review_batch_import",
+    "blind": true,
+    "runner": "claude",
+    "session_id": "ext_20260311_224449_e077022d",
+    "created_at": "2026-03-11T22:49:51+00:00",
+    "packet_path": "/mnt/c/Users/njlec/Tavok/.desloppify/review_packet_blind.json",
+    "packet_sha256": "952a401d4e9b86a80be661b4224cd800607f50c65c20c4edc9551220eb2d5570"
+  }
+}

@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { passthroughImageLoader } from "@/lib/image-loader";
+import { getCreatedDmIdFromResponse } from "@/lib/dm-api";
 import { MessageSquare, X } from "lucide-react";
 
 interface UserProfileData {
@@ -116,8 +117,10 @@ export function UserProfileCard({
       });
       if (res.ok) {
         const data = await res.json();
+        const dmId = getCreatedDmIdFromResponse(data);
+        if (!dmId) return;
         onClose();
-        router.push(`/dms/${data.id}`);
+        router.push(`/dms/${dmId}`);
       }
     } catch {
       // Silently fail

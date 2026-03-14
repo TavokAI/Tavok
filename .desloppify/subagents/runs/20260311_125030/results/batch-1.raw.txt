@@ -1,0 +1,150 @@
+{
+  "batch": "cross_module_architecture",
+  "batch_index": 1,
+  "assessments": {
+    "cross_module_architecture": 74.2
+  },
+  "dimension_notes": {
+    "cross_module_architecture": {
+      "evidence": [
+        "ConnectionMethod type defined three times independently: packages/shared/types/agent.ts (ConnectionMethod), packages/web/components/modals/agent/types.ts (ConnectionMethodType), packages/web/lib/agent-factory.ts (ConnectionMethodValue) — all enumerate the same 6 values with no cross-reference",
+        "Self-HTTP-call pattern in dispatch/route.ts: an internal API route (dispatch) constructs NEXTAUTH_URL and calls back to /api/internal/messages on the same Next.js server via HTTP, creating unnecessary network round-trips and duplicating the base URL construction across 8+ files",
+        "Inline base URL construction 'process.env.NEXTAUTH_URL || \"http://localhost:5555\"' duplicated in at least 8 route files across packages/web/app/api/v1/ and packages/web/app/api/internal/",
+        "Message payload shape (authorId, authorType, authorName, authorAvatarUrl, content, type, streamingStatus, sequence, createdAt, editedAt, reactions) manually constructed in at least 3 separate route files (internal/messages, dms/[dmId]/messages, internal/dms/messages) with no shared mapper function",
+        "Reaction aggregation logic (Map<emoji, userIds[]> -> [{emoji, count, userIds}]) duplicated in 3 route files with identical implementation",
+        "Internal API auth pattern (validateInternalSecret + early return 401) is consistent and well-factored via @/lib/internal-auth — a positive structural choice",
+        "gateway-client.ts provides a clean facade over Gateway HTTP calls with typed convenience wrappers",
+        "lib/api-safety.js and lib/route-handlers.js are JavaScript (.js) files in an otherwise TypeScript codebase, suggesting they predate the TS migration or were generated differently"
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "confidence": "high"
+    }
+  },
+  "dimension_judgment": {
+    "cross_module_architecture": {
+      "strengths": [
+        "Internal API boundary between Gateway/Go and Next.js is well-defined: all internal routes consistently use validateInternalSecret from @/lib/internal-auth with timing-safe comparison",
+        "gateway-client.ts provides a single, clean boundary module for all Gateway broadcast operations — no route file imports Gateway URLs directly",
+        "packages/shared/types/ barrel export provides a clear shared type boundary between packages with focused per-domain modules (user, server, channel, message, agent, protocol)",
+        "Permission checking is consistently delegated to @/lib/check-member-permission with a Permissions enum — no routes implement ad-hoc permission logic",
+        "agent-factory.ts extracts shared agent creation logic used by both UI and CLI routes, preventing duplication of complex transaction logic"
+      ],
+      "issue_character": "The issues cluster around missing shared abstractions for repeated cross-route patterns — particularly inline URL construction, message payload mapping, and parallel type definitions — rather than fundamental boundary violations or dependency direction problems.",
+      "score_rationale": "The codebase has well-defined inter-service boundaries (internal auth, gateway-client, shared types) and consistent dependency direction. However, a developer working across routes would encounter recurring duplication of message payload mapping, reaction aggregation, and internal URL construction that indicates missing shared modules. The triple-definition of ConnectionMethod types is a boundary integrity problem where the shared package exists but is bypassed. These are mid-severity issues that create maintenance drag without causing structural fragility, placing the score in the low-70s range — mixed quality where boundaries exist but aren't fully leveraged."
+    }
+  },
+  "issues": [
+    {
+      "dimension": "cross_module_architecture",
+      "identifier": "triple_connection_method_type",
+      "summary": "ConnectionMethod type defined independently in 3 locations with identical values, bypassing shared package",
+      "related_files": [
+        "packages/shared/types/agent.ts",
+        "packages/web/components/modals/agent/types.ts",
+        "packages/web/lib/agent-factory.ts"
+      ],
+      "evidence": [
+        "packages/shared/types/agent.ts defines 'ConnectionMethod' with 6 values (WEBSOCKET, WEBHOOK, INBOUND_WEBHOOK, REST_POLL, SSE, OPENAI_COMPAT)",
+        "packages/web/components/modals/agent/types.ts defines 'ConnectionMethodType' with the same 6 values",
+        "packages/web/lib/agent-factory.ts defines VALID_CONNECTION_METHODS const array and derives 'ConnectionMethodValue' type — same 6 values",
+        "None of these three definitions reference each other or the shared package canonical type"
+      ],
+      "suggestion": "Use the canonical ConnectionMethod from packages/shared/types/agent.ts everywhere. In agent-factory.ts, import ConnectionMethod and derive VALID_CONNECTION_METHODS from it. In components/modals/agent/types.ts, replace ConnectionMethodType with a re-export of ConnectionMethod from @tavok/shared.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "parallel_type_definitions"
+    },
+    {
+      "dimension": "cross_module_architecture",
+      "identifier": "duplicated_internal_base_url",
+      "summary": "Internal self-call base URL 'process.env.NEXTAUTH_URL || http://localhost:5555' duplicated across 8+ route files",
+      "related_files": [
+        "packages/web/app/api/internal/agents/[agentId]/dispatch/route.ts",
+        "packages/web/app/api/v1/webhooks/[token]/stream/route.ts",
+        "packages/web/app/api/v1/webhooks/[token]/route.ts",
+        "packages/web/app/api/v1/chat/completions/route.ts",
+        "packages/web/app/api/v1/agents/[id]/messages/route.ts",
+        "packages/web/app/api/v1/agents/[id]/messages/[messageId]/stream/route.ts"
+      ],
+      "evidence": [
+        "dispatch/route.ts lines 301 and 321: 'const internalUrl = process.env.NEXTAUTH_URL || \"http://localhost:5555\"'",
+        "Same pattern appears in v1/webhooks/[token]/stream/route.ts:236, v1/chat/completions/route.ts:150, v1/agents/[id]/messages/route.ts:197 and :252, v1/bootstrap/route.ts:147",
+        "Each file independently constructs the base URL and makes fetch() calls with x-internal-secret headers — duplicating both the URL resolution and the auth header construction"
+      ],
+      "suggestion": "Extract an internal HTTP client module (e.g. lib/internal-client.ts) similar to how gateway-client.ts wraps Gateway calls. Expose typed methods like persistMessage(), updateMessage() that handle URL resolution and auth header injection in one place.",
+      "confidence": "high",
+      "impact_scope": "subsystem",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "missing_internal_client_abstraction"
+    },
+    {
+      "dimension": "cross_module_architecture",
+      "identifier": "self_http_call_in_dispatch",
+      "summary": "dispatch/route.ts makes HTTP self-calls to /api/internal/messages instead of calling persistence logic directly",
+      "related_files": [
+        "packages/web/app/api/internal/agents/[agentId]/dispatch/route.ts"
+      ],
+      "evidence": [
+        "dispatch/route.ts defines local persistMessage() and updateMessage() helper functions (lines 291-339) that construct NEXTAUTH_URL and make fetch() calls to /api/internal/messages on the same Next.js server",
+        "This creates an unnecessary HTTP round-trip within the same process, adding latency and failure modes for what could be a direct function call to prisma or a shared persistence module",
+        "The dispatch route already imports prisma directly (line 2) for the agentRegistration lookup, so the DB client is available"
+      ],
+      "suggestion": "Extract the message persistence logic from /api/internal/messages/route.ts into a shared lib module (e.g. lib/message-persistence.ts). Have both the route handler and dispatch/route.ts call that function directly, eliminating the self-HTTP-call.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "missing_internal_client_abstraction"
+    },
+    {
+      "dimension": "cross_module_architecture",
+      "identifier": "duplicated_reaction_aggregation",
+      "summary": "Reaction aggregation logic (Map<emoji, userIds> -> array) duplicated identically in 3 route files",
+      "related_files": [
+        "packages/web/app/api/internal/messages/route.ts",
+        "packages/web/app/api/dms/[dmId]/messages/route.ts",
+        "packages/web/app/api/v1/agents/[id]/channels/[channelId]/messages/route.ts"
+      ],
+      "evidence": [
+        "internal/messages/route.ts lines 183-195: creates Map<string, string[]>, iterates reactions, converts to [{emoji, count, userIds}]",
+        "dms/[dmId]/messages/route.ts lines 78-89: identical implementation",
+        "All three use the exact same pattern: new Map -> for..of -> Array.from(entries).map"
+      ],
+      "suggestion": "Extract a shared helper function like aggregateReactions(reactions: {emoji: string, userId: string}[]): {emoji: string, count: number, userIds: string[]}[] into lib/message-utils.ts and import it in all three route files.",
+      "confidence": "high",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor",
+      "root_cause_cluster": "missing_message_payload_abstraction"
+    },
+    {
+      "dimension": "cross_module_architecture",
+      "identifier": "js_files_in_ts_codebase",
+      "summary": "lib/api-safety.js and lib/route-handlers.js are plain JavaScript in an otherwise TypeScript codebase, blurring the type boundary",
+      "related_files": [
+        "packages/web/lib/api-safety.js",
+        "packages/web/lib/route-handlers.js"
+      ],
+      "evidence": [
+        "api-safety.js exports serializeSequence, parseNonNegativeSequence, buildMonotonicLastSequenceUpdate — all without type annotations",
+        "route-handlers.js is imported by internal/messages/route.ts (createInternalMessagesPostHandler) — a TypeScript file importing an untyped JS module",
+        "All other lib/ modules in the web package are .ts files, making these two outliers that bypass the project's type boundary"
+      ],
+      "suggestion": "Convert both files to TypeScript (.ts) with proper type annotations. Since they are imported by typed route handlers, this would close the type gap at a key internal boundary. If they were intentionally JS for test isolation, add .d.ts declaration files alongside them.",
+      "confidence": "medium",
+      "impact_scope": "module",
+      "fix_scope": "multi_file_refactor"
+    }
+  ],
+  "retrospective": {
+    "root_causes": [
+      "Missing internal HTTP client abstraction: gateway-client.ts was built for Gateway calls but no equivalent exists for self-calls to internal Next.js routes, leading to duplicated URL construction and fetch boilerplate",
+      "Shared type boundary not fully adopted: packages/shared/types exists and defines ConnectionMethod, but web package components and lib modules define parallel types rather than importing the canonical one",
+      "Message payload mapping logic not extracted: the recurring pattern of mapping Prisma results to API response shapes (with author resolution, reaction aggregation, sequence serialization) is done inline in each route rather than in a shared mapper"
+    ],
+    "likely_symptoms": [
+      "duplicated_reaction_aggregation is a symptom of missing_message_payload_abstraction — if a shared message mapper existed, reaction aggregation would be part of it"
+    ],
+    "possible_false_positives": []
+  }
+}

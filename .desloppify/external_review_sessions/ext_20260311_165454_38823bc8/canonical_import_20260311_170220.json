@@ -1,0 +1,271 @@
+{
+  "assessments": {
+    "naming_quality": 82,
+    "logic_clarity": 80,
+    "type_safety": 76,
+    "contract_coherence": 74,
+    "error_consistency": 78,
+    "abstraction_fitness": 80,
+    "ai_generated_debt": 77,
+    "high_level_elegance": 82,
+    "mid_level_elegance": 78,
+    "low_level_elegance": 79,
+    "cross_module_architecture": 72,
+    "initialization_coupling": 79,
+    "convention_outlier": 76,
+    "dependency_health": 85,
+    "test_strategy": 73,
+    "api_surface_coherence": 75,
+    "authorization_consistency": 78,
+    "incomplete_migration": 81,
+    "package_organization": 80,
+    "design_coherence": 75
+  },
+  "issues": [
+    {
+      "dimension": "cross_module_architecture",
+      "identifier": "triplicated_agent_auth_logic",
+      "summary": "Agent API key authentication (hash + lookup) is implemented independently in three locations: lib/route-handlers.ts (authenticateAgentKey), lib/agent-auth.ts (authenticateApiKey), and app/api/v1/agents/[id]/route.ts (authenticateAgent). Each re-derives the SHA-256 hash and queries AgentRegistration with slightly different signatures and return types.",
+      "related_files": [
+        "packages/web/lib/route-handlers.ts",
+        "packages/web/lib/agent-auth.ts",
+        "packages/web/app/api/v1/agents/[id]/route.ts"
+      ],
+      "evidence": "route-handlers.ts exports hashApiKey and authenticateAgentKey (line 647). agent-auth.ts has a private authenticateApiKey and exports authenticateAgentRequest + authenticateAgentKey (line 22-91). v1/agents/[id]/route.ts has its own local authenticateAgent function (line 16-43). All three compute crypto.createHash('sha256').update(apiKey).digest('hex') and query agentRegistration.findFirst.",
+      "suggestion": "Consolidate to a single authenticateAgentKey implementation in lib/agent-auth.ts and import it everywhere. Remove the duplicate in route-handlers.ts and the local copy in v1/agents/[id]/route.ts.",
+      "confidence": "high"
+    },
+    {
+      "dimension": "cross_module_architecture",
+      "identifier": "duplicate_agent_verify_logic",
+      "summary": "Agent verification logic is duplicated between app/api/internal/agents/verify/route.ts (used by Gateway) and the createAgentVerifyHandler factory in lib/route-handlers.ts. Both perform the same SHA-256 hash lookup on agentRegistration with nearly identical query shapes and response formats.",
+      "related_files": [
+        "packages/web/app/api/internal/agents/verify/route.ts",
+        "packages/web/lib/route-handlers.ts"
+      ],
+      "evidence": "verify/route.ts (line 32-77) hashes the API key and queries agentRegistration with select {id, capabilities, agent: {id, name, avatarUrl, serverId, isActive}}. route-handlers.ts createAgentVerifyHandler (line 778-846) does the same operation with an identical query structure.",
+      "suggestion": "The verify route should delegate to createAgentVerifyHandler or a shared function. Currently it appears the route file is the one actually used while the factory function in route-handlers.ts may be dead code.",
+      "confidence": "high"
+    },
+    {
+      "dimension": "type_safety",
+      "identifier": "unsafe_body_casting_in_dispatch",
+      "summary": "Several internal API route handlers cast request.json() to a typed shape using 'as' without runtime validation, bypassing TypeScript's type safety at the trust boundary.",
+      "related_files": [
+        "packages/web/app/api/internal/agents/[agentId]/dispatch/route.ts",
+        "packages/web/app/api/internal/agents/[agentId]/enqueue/route.ts"
+      ],
+      "evidence": "dispatch/route.ts line 43-48: 'body as { channelId: string; triggerMessageId: string; ... }' with no runtime validation of field types. enqueue/route.ts line 32-40: same pattern, casting body to a typed shape then only checking a few fields with truthiness.",
+      "suggestion": "Add runtime validation (zod or manual type guards) consistent with the pattern already used in route-handlers.ts createInternalMessagesPostHandler, which properly validates each field type.",
+      "confidence": "high"
+    },
+    {
+      "dimension": "type_safety",
+      "identifier": "untyped_metadata_casting",
+      "summary": "MessageMetadata component casts metadata fields with 'as' assertions (e.g., metadata.model as string) on a Record<string, unknown> without narrowing, which silently produces undefined behavior if the actual value types differ.",
+      "related_files": [
+        "packages/web/components/chat/message-metadata.tsx"
+      ],
+      "evidence": "Lines 17-22: const model = metadata.model as string | undefined; const tokensIn = metadata.tokensIn as number | undefined; etc. These are unsafe casts on unknown values.",
+      "suggestion": "Use typeof narrowing or a validation function to safely extract values from the metadata record, e.g., typeof metadata.model === 'string' ? metadata.model : undefined.",
+      "confidence": "medium"
+    },
+    {
+      "dimension": "contract_coherence",
+      "identifier": "internal_messages_post_dual_implementation",
+      "summary": "The POST /api/internal/messages route uses the factory function createInternalMessagesPostHandler from route-handlers.ts, but this factory also contains its own isValidInternalSecret check (line 103-106) using a local reimplementation of timing-safe comparison, rather than the canonical validateInternalSecret from internal-auth.ts.",
+      "related_files": [
+        "packages/web/lib/route-handlers.ts",
+        "packages/web/lib/internal-auth.ts",
+        "packages/web/app/api/internal/messages/route.ts"
+      ],
+      "evidence": "route-handlers.ts defines isValidInternalSecret (line 76-83) as a local function. internal-auth.ts exports validateInternalSecret (line 19) as the canonical version. The POST handler at /api/internal/messages uses the route-handlers version, while all other internal endpoints use validateInternalSecret from internal-auth.ts.",
+      "suggestion": "Replace the local isValidInternalSecret in route-handlers.ts with a call to validateInternalSecret from internal-auth.ts. The local version takes a string|null while the canonical takes NextRequest, so a small adapter may be needed.",
+      "confidence": "high"
+    },
+    {
+      "dimension": "error_consistency",
+      "identifier": "silent_fetch_failures_in_chat_provider",
+      "summary": "ChatProvider's refresh functions (refreshServers, refreshChannels, refreshMembers, refreshAgents) silently swallow non-ok HTTP responses without surfacing errors to the user. A 403 or 500 response is treated the same as a network error.",
+      "related_files": [
+        "packages/web/components/providers/chat-provider.tsx"
+      ],
+      "evidence": "refreshServers (line 149-159): if res.ok, update state, else do nothing. refreshChannels (line 161-189): same pattern. The catch blocks log to console but the user gets no feedback.",
+      "suggestion": "At minimum, log the HTTP status in the catch path. Consider exposing an error state on the context so downstream components can show connection issues.",
+      "confidence": "medium"
+    },
+    {
+      "dimension": "ai_generated_debt",
+      "identifier": "restating_comments_gateway_client",
+      "summary": "Gateway client module has multiple wrapper functions whose docstrings merely restate the function name without adding information.",
+      "related_files": [
+        "packages/web/lib/gateway-client.ts"
+      ],
+      "evidence": "Line 69-70: '/** Broadcast a stream_start event to a channel. */' on broadcastStreamStart. Line 79-80: '/** Broadcast a stream_token event to a channel. */' on broadcastStreamToken. These add no value beyond the function name itself.",
+      "suggestion": "Remove the trivial JSDoc comments from the convenience wrappers. The main broadcastToChannel function has a good doc comment; the thin wrappers don't need their own.",
+      "confidence": "medium"
+    },
+    {
+      "dimension": "ai_generated_debt",
+      "identifier": "ulid_passthrough_wrapper",
+      "summary": "lib/ulid.ts is a single-line wrapper that re-exports ulid() as generateId() with a multi-line JSDoc comment. The wrapper adds naming ceremony without behavior, validation, or translation.",
+      "related_files": [
+        "packages/web/lib/ulid.ts"
+      ],
+      "evidence": "The entire file: import { ulid } from 'ulid'; export function generateId(): string { return ulid(); } with a 4-line docstring.",
+      "suggestion": "This is borderline acceptable as a centralization point for ID generation, but the JSDoc is disproportionate. If keeping the wrapper for future extensibility, trim the comment.",
+      "confidence": "low"
+    },
+    {
+      "dimension": "test_strategy",
+      "identifier": "no_unit_tests_for_route_files",
+      "summary": "API route handlers in app/api/ have no direct unit tests. Unit tests exist only for extracted logic in lib/ (route-handlers.ts, api-safety.ts, etc.). Critical route-level logic like the GET handler in /api/internal/messages/route.ts (author resolution, reaction aggregation, BUG-005 fallback) has no test coverage.",
+      "related_files": [
+        "packages/web/app/api/internal/messages/route.ts",
+        "packages/web/app/api/internal/messages/[messageId]/route.ts",
+        "packages/web/app/api/internal/agents/[agentId]/dispatch/route.ts"
+      ],
+      "evidence": "All 23 unit test files are in lib/__tests__/. No test files exist under app/api/. The e2e suite covers 21 spec files but these are integration-level, not unit-level coverage of route logic.",
+      "suggestion": "Extract the GET handler logic from /api/internal/messages/route.ts into a testable factory (similar to createInternalMessagesPostHandler) so it can be unit-tested with mock Prisma clients.",
+      "confidence": "high"
+    },
+    {
+      "dimension": "test_strategy",
+      "identifier": "e2e_global_setup_uses_timeouts",
+      "summary": "E2E global setup relies on fixed waitForTimeout(3000) calls for registration/login completion, which is a fragility pattern.",
+      "related_files": [
+        "packages/web/e2e/global-setup.ts"
+      ],
+      "evidence": "Line 48: await page.waitForTimeout(3000) after clicking register. Line 58: same after login. Fixed timeouts cause flaky tests on slow CI environments.",
+      "suggestion": "Replace waitForTimeout with waitForURL or waitForNavigation to detect actual page transitions.",
+      "confidence": "high"
+    },
+    {
+      "dimension": "api_surface_coherence",
+      "identifier": "inconsistent_agent_auth_return_types",
+      "summary": "The three agent authentication implementations return different shapes: route-handlers.ts authenticateAgentKey returns a discriminated union with authorized/error/status fields. agent-auth.ts authenticateAgentRequest returns AgentAuthResult|null. v1/agents/[id]/route.ts authenticateAgent returns {authorized, error?, status?}.",
+      "related_files": [
+        "packages/web/lib/route-handlers.ts",
+        "packages/web/lib/agent-auth.ts",
+        "packages/web/app/api/v1/agents/[id]/route.ts"
+      ],
+      "evidence": "route-handlers.ts line 651-654: Promise<{authorized: true}|{authorized: false; error: string; status: number}>. agent-auth.ts line 72-81: Promise<AgentAuthResult|null>. v1/agents/[id]/route.ts line 19: Promise<{authorized: boolean; error?: string; status?: number}>.",
+      "suggestion": "After consolidating to one implementation (see triplicated_agent_auth_logic), standardize on a single return type.",
+      "confidence": "high"
+    },
+    {
+      "dimension": "convention_outlier",
+      "identifier": "mixed_auth_function_signatures",
+      "summary": "Internal auth functions have inconsistent signatures: validateInternalSecret takes a NextRequest, while isValidInternalSecret in route-handlers.ts takes a string|null. authenticateAdminToken takes a Request, authenticateAgentRequest takes NextRequest, and authenticateAgentKey takes a raw string.",
+      "related_files": [
+        "packages/web/lib/internal-auth.ts",
+        "packages/web/lib/admin-auth.ts",
+        "packages/web/lib/agent-auth.ts",
+        "packages/web/lib/route-handlers.ts"
+      ],
+      "evidence": "internal-auth.ts: validateInternalSecret(request: NextRequest). admin-auth.ts: authenticateAdminToken(request: Request). agent-auth.ts: authenticateAgentRequest(request: NextRequest) and authenticateAgentKey(apiKey: string). route-handlers.ts: isValidInternalSecret(provided: string|null).",
+      "suggestion": "Standardize auth functions to consistently take either the request object or the extracted credential, not a mix of both patterns across sibling modules in lib/.",
+      "confidence": "medium"
+    },
+    {
+      "dimension": "design_coherence",
+      "identifier": "chat_provider_mixed_responsibilities",
+      "summary": "ChatProvider combines server list management, channel/member/agent data fetching, route-based state parsing, permission management, unread state tracking, and server-level unread aggregation in a single 489-line component. These are distinct concerns that create a large blast radius for changes.",
+      "related_files": [
+        "packages/web/components/providers/chat-provider.tsx"
+      ],
+      "evidence": "The component manages: servers state (line 110), channels/members/agents state (lines 111-113), serverDataById (line 114-116), URL parsing (line 108), permissions (line 123-124, 243-273), unread tracking (line 276-280), and server-level unread aggregation (line 283-325). Seven state variables and nine useCallback/useEffect hooks.",
+      "suggestion": "Consider splitting into focused providers: a ServerListProvider, a ServerScopedDataProvider, and a PermissionsProvider. The unread tracking is already partially extracted into useUnread.",
+      "confidence": "medium"
+    },
+    {
+      "dimension": "initialization_coupling",
+      "identifier": "gateway_client_module_level_env_reads",
+      "summary": "gateway-client.ts reads GATEWAY_INTERNAL_URL and INTERNAL_API_SECRET at module scope (import time), making these values stale if environment variables change and fragile in testing.",
+      "related_files": [
+        "packages/web/lib/gateway-client.ts"
+      ],
+      "evidence": "Lines 11-15: const GATEWAY_INTERNAL_URL = process.env.GATEWAY_INTERNAL_URL || ...; const INTERNAL_API_SECRET = process.env.INTERNAL_API_SECRET; These are computed once at import time.",
+      "suggestion": "Read process.env inside the function body (as internal-auth.ts does with validateInternalSecret reading process.env.INTERNAL_API_SECRET at call time).",
+      "confidence": "high"
+    },
+    {
+      "dimension": "initialization_coupling",
+      "identifier": "socket_module_level_singleton",
+      "summary": "lib/socket.ts uses module-level mutable variables (let socket, let currentToken) as a singleton pattern, which creates hidden state coupling between all consumers.",
+      "related_files": [
+        "packages/web/lib/socket.ts"
+      ],
+      "evidence": "Lines 5-6: let socket: Socket | null = null; let currentToken: string | null = null; These module-level variables are shared across all imports.",
+      "suggestion": "This is a common pattern for client-side singletons and may be intentional, but it makes testing difficult. Consider making it easier to reset in test environments.",
+      "confidence": "low"
+    },
+    {
+      "dimension": "abstraction_fitness",
+      "identifier": "gateway_client_trivial_wrappers",
+      "summary": "gateway-client.ts exports 5 convenience wrappers (broadcastMessageNew, broadcastStreamStart, broadcastStreamToken, broadcastStreamComplete, broadcastStreamError) that each just call broadcastToChannel with a hardcoded event name. These add naming but no logic, validation, or type narrowing.",
+      "related_files": [
+        "packages/web/lib/gateway-client.ts"
+      ],
+      "evidence": "broadcastMessageNew (line 61-66): return broadcastToChannel('room:${channelId}', 'message_new', payload). broadcastStreamStart (line 71-76): return broadcastToChannel('room:${channelId}', 'stream_start', payload). All 5 wrappers follow this exact pattern.",
+      "suggestion": "These wrappers provide discoverability and prevent event name typos, which has some value. However, the payload type is Record<string, unknown> on all of them, so they add no type safety. Consider adding specific payload types to justify their existence.",
+      "confidence": "low"
+    },
+    {
+      "dimension": "low_level_elegance",
+      "identifier": "hydrate_saved_panel_repeated_casts",
+      "summary": "hydrateSavedPanel in use-panel-state.ts casts the 'raw' parameter to PanelState 17 times with '(raw as PanelState).' expressions, creating visual noise that obscures the validation logic.",
+      "related_files": [
+        "packages/web/lib/hooks/use-panel-state.ts"
+      ],
+      "evidence": "Lines 150-196: Every field access uses (raw as PanelState).fieldName, e.g., (raw as PanelState).x, (raw as PanelState).width, etc. The same cast is repeated for each of 17 fields.",
+      "suggestion": "Cast once at the top: const r = raw as PanelState; then access r.x, r.width, etc.",
+      "confidence": "high"
+    },
+    {
+      "dimension": "authorization_consistency",
+      "identifier": "internal_messages_post_uses_different_auth",
+      "summary": "The POST /api/internal/messages endpoint uses isValidInternalSecret from route-handlers.ts (a local reimplementation), while every other internal endpoint uses validateInternalSecret from internal-auth.ts. This creates an inconsistency in the auth layer for internal APIs.",
+      "related_files": [
+        "packages/web/lib/route-handlers.ts",
+        "packages/web/app/api/internal/messages/route.ts",
+        "packages/web/lib/internal-auth.ts"
+      ],
+      "evidence": "The POST handler is created via createInternalMessagesPostHandler which calls isValidInternalSecret (route-handlers.ts line 76-83). All other 13+ internal routes import and call validateInternalSecret from internal-auth.ts.",
+      "suggestion": "Migrate createInternalMessagesPostHandler to use validateInternalSecret from internal-auth.ts for consistency.",
+      "confidence": "high"
+    },
+    {
+      "dimension": "mid_level_elegance",
+      "identifier": "dispatch_route_persistence_via_http_self_call",
+      "summary": "The dispatch route handler persists messages by making HTTP calls back to its own server's /api/internal/messages endpoint, adding network overhead and fragility for what could be a direct function call.",
+      "related_files": [
+        "packages/web/app/api/internal/agents/[agentId]/dispatch/route.ts"
+      ],
+      "evidence": "persistMessage function (line 291-318) calls fetch(`${internalUrl}/api/internal/messages`) with INTERNAL_API_SECRET header. updateMessage (line 320-341) calls fetch to /api/internal/messages/${messageId}. Both are self-calls within the same Next.js server.",
+      "suggestion": "Import and call the handler functions directly (e.g., the Prisma operations from route-handlers.ts) instead of making HTTP round-trips to the same process.",
+      "confidence": "medium"
+    },
+    {
+      "dimension": "incomplete_migration",
+      "identifier": "agent_get_handler_factory_potentially_unused",
+      "summary": "route-handlers.ts exports createAgentGetHandler, createAgentPatchHandler, createAgentDeleteHandler, and createAgentVerifyHandler factory functions, but the actual v1 agent routes (app/api/v1/agents/[id]/route.ts) implement the same logic inline rather than using these factories.",
+      "related_files": [
+        "packages/web/lib/route-handlers.ts",
+        "packages/web/app/api/v1/agents/[id]/route.ts"
+      ],
+      "evidence": "route-handlers.ts exports createAgentGetHandler (line 594), createAgentPatchHandler (line 682), createAgentDeleteHandler (line 752), createAgentVerifyHandler (line 778). But v1/agents/[id]/route.ts defines its own GET, PATCH, DELETE handlers inline with duplicate logic.",
+      "suggestion": "Either use the factory functions from route-handlers.ts in the route files (like /api/internal/messages does with createInternalMessagesPostHandler), or remove the unused factories.",
+      "confidence": "high"
+    }
+  ],
+  "provenance": {
+    "kind": "blind_review_batch_import",
+    "blind": true,
+    "runner": "claude",
+    "session_id": "ext_20260311_165454_38823bc8",
+    "created_at": "2026-03-11T17:02:20+00:00",
+    "packet_path": "/mnt/c/Users/njlec/Tavok/.desloppify/review_packet_blind.json",
+    "packet_sha256": "3de26408e619f95922b979342ae4cb2150cd5744da96511f6f8a58ca60584fd0"
+  }
+}
