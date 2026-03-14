@@ -90,7 +90,13 @@ defmodule TavokGateway.SequenceTest do
   test "retries transient Redis errors before succeeding" do
     Process.put(:sleep_delays, [])
 
-    Process.put({FakeRedis, :handler}, fn ["EVAL", _script, "1", "hive:channel:channel-3:seq", "0"] ->
+    Process.put({FakeRedis, :handler}, fn [
+                                            "EVAL",
+                                            _script,
+                                            "1",
+                                            "hive:channel:channel-3:seq",
+                                            "0"
+                                          ] ->
       attempts = Process.get(:attempts, 0)
       Process.put(:attempts, attempts + 1)
 

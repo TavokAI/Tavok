@@ -13,7 +13,8 @@ defmodule TavokGatewayWeb.SequenceController do
   @doc """
   GET /api/internal/sequence?channelId=...
   """
-  def index(conn, %{"channelId" => channel_id}) when is_binary(channel_id) and byte_size(channel_id) > 0 do
+  def index(conn, %{"channelId" => channel_id})
+      when is_binary(channel_id) and byte_size(channel_id) > 0 do
     internal_secret = Application.get_env(:tavok_gateway, :internal_api_secret)
 
     provided_secret =
@@ -21,12 +22,14 @@ defmodule TavokGatewayWeb.SequenceController do
       |> get_req_header("x-internal-secret")
       |> List.first()
 
-    if not is_binary(internal_secret) or internal_secret == "" or provided_secret != internal_secret do
+    if not is_binary(internal_secret) or internal_secret == "" or
+         provided_secret != internal_secret do
       conn
       |> put_status(401)
       |> json(%{error: "Unauthorized"})
     else
-      sequence_module = Application.get_env(:tavok_gateway, :sequence_module, TavokGateway.Sequence)
+      sequence_module =
+        Application.get_env(:tavok_gateway, :sequence_module, TavokGateway.Sequence)
 
       case sequence_module.next_channel_sequence(channel_id) do
         {:ok, sequence} ->
