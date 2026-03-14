@@ -11,7 +11,8 @@ export const runtime = "nodejs";
 
 /**
  * GET /api/uploads/[fileId] — Serve an uploaded file
- * Auth: any logged-in user
+ * Auth: logged-in user who owns the unattached upload or is a member of the
+ * server that contains the message the attachment belongs to.
  */
 export async function GET(
   _request: NextRequest,
@@ -23,6 +24,8 @@ export async function GET(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const userId = session.user.id;
+
   try {
     const attachment = await prisma.attachment.findUnique({
       where: { id: fileId },
@@ -30,11 +33,48 @@ export async function GET(
         filename: true,
         mimeType: true,
         storagePath: true,
+        userId: true,
+        messageId: true,
+        message: {
+          select: {
+            channel: {
+              select: { serverId: true },
+            },
+          },
+        },
       },
     });
 
     if (!attachment) {
       return NextResponse.json({ error: "File not found" }, { status: 404 });
+    }
+
+    // Authorization check
+    if (!attachment.messageId) {
+      // Unattached upload — only the owner can access it
+      if (attachment.userId !== userId) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
+    } else if (attachment.message) {
+      // Attached to a message — user must be a member of the server
+      const member = await prisma.member.findUnique({
+        where: {
+          userId_serverId: {
+            userId,
+            serverId: attachment.message.channel.serverId,
+          },
+        },
+        select: { id: true },
+      });
+
+      if (!member) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
+    } else {
+      // messageId set but message not found (deleted) — only owner
+      if (attachment.userId !== userId) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
     }
 
     const fullPath = join(UPLOADS_DIR, attachment.storagePath);

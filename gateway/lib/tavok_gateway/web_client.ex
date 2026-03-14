@@ -495,10 +495,11 @@ defmodule TavokGateway.WebClient do
   Soft-delete a DM message via DELETE /api/internal/dms/messages/{messageId}.
   Returns {:ok, response_body} or {:error, reason}.
   """
-  def delete_dm_message(message_id) do
+  def delete_dm_message(message_id, body) do
     url = "#{web_url()}/api/internal/dms/messages/#{message_id}"
 
     case Req.delete(url,
+           json: body,
            headers: [{"x-internal-secret", internal_secret()}],
            receive_timeout: 10_000
          ) do
@@ -559,11 +560,11 @@ defmodule TavokGateway.WebClient do
   session-based auth. We pass the user_id for the API to verify permission.
   For simplicity, we use the internal secret and the charter API directly.
   """
-  def charter_control(server_id, channel_id, action, _user_id) do
+  def charter_control(server_id, channel_id, action, user_id) do
     url = "#{web_url()}/api/internal/channels/#{channel_id}/charter-control"
 
     case Req.post(url,
-           json: %{action: action, serverId: server_id},
+           json: %{action: action, serverId: server_id, userId: user_id},
            headers: [{"x-internal-secret", internal_secret()}],
            receive_timeout: 10_000
          ) do

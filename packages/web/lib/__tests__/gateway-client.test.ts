@@ -235,53 +235,14 @@ describe("gateway-client", () => {
   });
 
   describe("fetchChannelSequence", () => {
-    it("returns sequence from Gateway", async () => {
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve({ sequence: 42 }),
-      });
-
+    it("returns a timestamp-based sequence string", async () => {
+      const before = Date.now();
       const seq = await fetchChannelSequence("ch-1");
+      const after = Date.now();
 
-      expect(seq).toBe("42");
-      expect(mockFetch).toHaveBeenCalledWith(
-        "http://gateway:4001/api/internal/sequence?channelId=ch-1",
-        {
-          headers: { "x-internal-secret": "test-secret" },
-        },
-      );
-    });
-
-    it("falls back to timestamp when Gateway returns non-ok", async () => {
-      mockFetch.mockResolvedValue({ ok: false });
-
-      const seq = await fetchChannelSequence("ch-1");
-
-      // Should be a numeric timestamp string
-      expect(Number(seq)).toBeGreaterThan(0);
-      expect(Number(seq)).toBeLessThanOrEqual(Date.now());
-    });
-
-    it("falls back to timestamp when fetch throws", async () => {
-      mockFetch.mockRejectedValue(new Error("network error"));
-
-      const seq = await fetchChannelSequence("ch-1");
-
-      expect(Number(seq)).toBeGreaterThan(0);
-    });
-
-    it("uses empty string for secret when not configured", async () => {
-      delete process.env.INTERNAL_API_SECRET;
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve({ sequence: 1 }),
-      });
-
-      await fetchChannelSequence("ch-1");
-
-      expect(mockFetch).toHaveBeenCalledWith(expect.any(String), {
-        headers: { "x-internal-secret": "" },
-      });
+      const num = Number(seq);
+      expect(num).toBeGreaterThanOrEqual(before);
+      expect(num).toBeLessThanOrEqual(after);
     });
   });
 });

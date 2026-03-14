@@ -26,9 +26,12 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // Get all channels in the agent's server
+    // Get channels the agent is assigned to
     const channels = await prisma.channel.findMany({
-      where: { serverId: agent.serverId },
+      where: {
+        serverId: agent.serverId,
+        channelAgents: { some: { agentId: agent.agentId } },
+      },
       select: {
         id: true,
         name: true,

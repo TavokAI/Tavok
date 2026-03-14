@@ -25,12 +25,12 @@ export default function DmPage() {
         const res = await fetch("/api/dms");
         if (res.ok) {
           const data = await res.json();
-          const dm = data.conversations?.find(
+          const dm = data.dms?.find(
             (c: { id: string }) => c.id === dmId,
           );
           if (dm) {
             setOtherUserName(
-              dm.otherUser?.displayName || dm.otherUser?.username || "User",
+              dm.participant?.displayName || dm.participant?.username || "User",
             );
           }
         }

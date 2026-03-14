@@ -166,26 +166,10 @@ export async function broadcastTypedMessage(
 }
 
 /**
- * Fetch the next monotonic sequence number for a channel from the Gateway.
- * Falls back to Date.now() if the Gateway is unreachable.
+ * Generate a monotonic sequence number for a channel message.
+ * Uses Date.now() as the sequence source — the Gateway does not
+ * implement a sequence endpoint (the previous fetch was a no-op).
  */
-export async function fetchChannelSequence(channelId: string): Promise<string> {
-  try {
-    const gatewayUrl = getGatewayInternalUrl();
-    const response = await fetch(
-      `${gatewayUrl}/api/internal/sequence?channelId=${channelId}`,
-      {
-        headers: {
-          "x-internal-secret": getInternalApiSecret() || "",
-        },
-      },
-    );
-    if (response.ok) {
-      const data = await response.json();
-      return String(data.sequence);
-    }
-  } catch {
-    // Gateway unavailable — fall back to timestamp
-  }
+export async function fetchChannelSequence(_channelId: string): Promise<string> {
   return String(Date.now());
 }

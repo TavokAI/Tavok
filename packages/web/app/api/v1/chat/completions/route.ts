@@ -125,6 +125,23 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // Verify agent is assigned to this channel
+  const channelAgent = await prisma.channelAgent.findFirst({
+    where: { channelId, agentId: agent.agentId },
+  });
+  if (!channelAgent) {
+    return NextResponse.json(
+      {
+        error: {
+          message: "Agent is not assigned to this channel",
+          type: "invalid_request_error",
+          code: "unauthorized_channel",
+        },
+      },
+      { status: 403 },
+    );
+  }
+
   // Extract the last user message
   const lastUserMsg = [...messages].reverse().find((m) => m.role === "user");
   if (!lastUserMsg) {

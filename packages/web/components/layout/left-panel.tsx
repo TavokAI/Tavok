@@ -152,9 +152,6 @@ export function LeftPanel() {
                 <span className="text-[10px] font-semibold tracking-[0.14em] text-text-dim">
                   DIRECT MESSAGES
                 </span>
-                <button className="rounded p-1 text-text-muted hover:bg-white/[0.04] hover:text-text-secondary">
-                  <Plus className="h-3.5 w-3.5" />
-                </button>
               </div>
 
               {dmsLoading ? (

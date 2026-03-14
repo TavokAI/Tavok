@@ -186,7 +186,7 @@ defmodule TavokGatewayWeb.DmChannel do
     if String.trim(content) == "" do
       {:reply, {:error, %{reason: "empty_content"}}, socket}
     else
-      case WebClient.edit_dm_message(message_id, %{content: content}) do
+      case WebClient.edit_dm_message(message_id, %{content: content, userId: socket.assigns.user_id}) do
         {:ok, %{"id" => id, "content" => new_content, "editedAt" => edited_at}} ->
           Broadcast.broadcast_pre_serialized!(socket, "message_edited", %{
             messageId: id,
@@ -212,7 +212,7 @@ defmodule TavokGatewayWeb.DmChannel do
   @impl true
   def handle_in("message_delete", %{"messageId" => message_id}, socket)
       when is_binary(message_id) do
-    case WebClient.delete_dm_message(message_id) do
+    case WebClient.delete_dm_message(message_id, %{userId: socket.assigns.user_id}) do
       {:ok, _} ->
         Broadcast.broadcast_pre_serialized!(socket, "message_deleted", %{
           messageId: message_id,

@@ -41,6 +41,9 @@ export function DmChatArea({ dmId, otherUserName }: DmChatAreaProps) {
 
   // TASK-0022: Search state
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [scrollToMessageId, setScrollToMessageId] = useState<string | null>(
+    null,
+  );
 
   // Delete modal state
   const [deleteTarget, setDeleteTarget] = useState<DmMessagePayload | null>(
@@ -78,6 +81,8 @@ export function DmChatArea({ dmId, otherUserName }: DmChatAreaProps) {
         onEditMessage={editMessage}
         onDeleteMessage={handleDeleteRequest}
         dmId={dmId}
+        scrollToMessageId={scrollToMessageId}
+        onScrollToMessageComplete={() => setScrollToMessageId(null)}
       />
 
       {/* Typing indicator */}
@@ -106,8 +111,8 @@ export function DmChatArea({ dmId, otherUserName }: DmChatAreaProps) {
           dmId={dmId}
           mode="dm"
           onClose={() => setIsSearchOpen(false)}
-          onJumpToMessage={() => {
-            // DM search jumps within same DM — just close panel
+          onJumpToMessage={(_dmId: string, messageId: string) => {
+            setScrollToMessageId(messageId);
             setIsSearchOpen(false);
           }}
         />
@@ -192,6 +197,8 @@ function DmMessageList({
   onEditMessage,
   onDeleteMessage,
   dmId,
+  scrollToMessageId,
+  onScrollToMessageComplete,
 }: {
   messages: DmMessagePayload[];
   hasMoreHistory: boolean;
@@ -200,10 +207,13 @@ function DmMessageList({
   onEditMessage?: (messageId: string, content: string) => Promise<boolean>;
   onDeleteMessage?: (messageId: string) => void;
   dmId: string;
+  scrollToMessageId?: string | null;
+  onScrollToMessageComplete?: () => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const isAtBottomRef = useRef(true);
   const prevMessageCountRef = useRef(0);
+  const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
 
   const handleScroll = useCallback(() => {
     const el = containerRef.current;
@@ -240,6 +250,27 @@ function DmMessageList({
       el.scrollTop = el.scrollHeight;
     });
   }, [messages.length > 0]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // TASK-0022: Scroll to and highlight a specific message (search jump)
+  useEffect(() => {
+    if (!scrollToMessageId) return;
+    const el = containerRef.current;
+    if (!el) return;
+
+    const target = el.querySelector<HTMLElement>(
+      `[data-message-id="${scrollToMessageId}"]`,
+    );
+    if (target) {
+      target.scrollIntoView({ behavior: "smooth", block: "center" });
+      setHighlightedMessageId(scrollToMessageId);
+      const timeout = setTimeout(() => {
+        setHighlightedMessageId(null);
+        onScrollToMessageComplete?.();
+      }, 2000);
+      return () => clearTimeout(timeout);
+    }
+    onScrollToMessageComplete?.();
+  }, [scrollToMessageId, onScrollToMessageComplete]);
 
   return (
     <div
@@ -298,6 +329,7 @@ function DmMessageList({
             onEdit={onEditMessage}
             onDelete={onDeleteMessage}
             dmId={dmId}
+            highlightedId={highlightedMessageId}
           />
         );
       })}
@@ -314,6 +346,7 @@ function DmMessageItem({
   onEdit,
   onDelete,
   dmId,
+  highlightedId,
 }: {
   message: DmMessagePayload;
   isGrouped: boolean;
@@ -321,6 +354,7 @@ function DmMessageItem({
   onEdit?: (messageId: string, content: string) => Promise<boolean>;
   onDelete?: (messageId: string) => void;
   dmId: string;
+  highlightedId?: string | null;
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const [isHovering, setIsHovering] = useState(false);
@@ -345,7 +379,8 @@ function DmMessageItem({
   if (isGrouped) {
     return (
       <div
-        className="group relative py-0.5 pl-14 pr-4 hover:bg-background-secondary/50 transition-colors"
+        data-message-id={message.id}
+        className={`group relative py-0.5 pl-14 pr-4 hover:bg-background-secondary/50 transition-colors${highlightedId === message.id ? " ring-1 ring-accent-primary/50 bg-accent-primary/10" : ""}`}
         onMouseEnter={() => setIsHovering(true)}
         onMouseLeave={() => setIsHovering(false)}
       >
@@ -405,7 +440,8 @@ function DmMessageItem({
 
   return (
     <div
-      className="group relative flex gap-3 py-2 px-2 hover:bg-background-secondary/50 transition-colors mt-2"
+      data-message-id={message.id}
+      className={`group relative flex gap-3 py-2 px-2 hover:bg-background-secondary/50 transition-colors mt-2${highlightedId === message.id ? " ring-1 ring-accent-primary/50 bg-accent-primary/10" : ""}`}
       onMouseEnter={() => setIsHovering(true)}
       onMouseLeave={() => setIsHovering(false)}
     >
