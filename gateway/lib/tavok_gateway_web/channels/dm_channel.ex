@@ -186,7 +186,10 @@ defmodule TavokGatewayWeb.DmChannel do
     if String.trim(content) == "" do
       {:reply, {:error, %{reason: "empty_content"}}, socket}
     else
-      case WebClient.edit_dm_message(message_id, %{content: content, userId: socket.assigns.user_id}) do
+      case WebClient.edit_dm_message(message_id, %{
+             content: content,
+             userId: socket.assigns.user_id
+           }) do
         {:ok, %{"id" => id, "content" => new_content, "editedAt" => edited_at}} ->
           Broadcast.broadcast_pre_serialized!(socket, "message_edited", %{
             messageId: id,
