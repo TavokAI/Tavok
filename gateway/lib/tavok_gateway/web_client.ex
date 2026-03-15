@@ -26,10 +26,15 @@ defmodule TavokGateway.WebClient do
         id -> [{"x-request-id", id} | base]
       end
 
-    # Inject W3C traceparent for distributed tracing
-    :otel_propagator_text_map.inject(base, fn headers, key, value ->
-      [{key, value} | headers]
-    end)
+    # Inject W3C traceparent for distributed tracing.
+    # Gracefully no-op when OpenTelemetry SDK is not started (e.g. tests).
+    try do
+      :otel_propagator_text_map.inject(base, fn headers, key, value ->
+        [{key, value} | headers]
+      end)
+    rescue
+      _ -> base
+    end
   end
 
   # Wraps an HTTP call in an OpenTelemetry span.

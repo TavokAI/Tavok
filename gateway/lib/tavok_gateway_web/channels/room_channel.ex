@@ -1113,12 +1113,17 @@ defmodule TavokGatewayWeb.RoomChannel do
         # 7. Publish stream request to Redis for Go Proxy
         request_id = Logger.metadata()[:request_id] || Ulid.generate()
 
-        # Extract W3C traceparent from current span for cross-service propagation
+        # Extract W3C traceparent from current span for cross-service propagation.
+        # Gracefully no-op when OpenTelemetry SDK is not started (e.g. tests).
         traceparent =
-          :otel_propagator_text_map.inject([], fn acc, key, value ->
-            [{key, value} | acc]
-          end)
-          |> Enum.find_value("", fn {k, v} -> if k == "traceparent", do: v end)
+          try do
+            :otel_propagator_text_map.inject([], fn acc, key, value ->
+              [{key, value} | acc]
+            end)
+            |> Enum.find_value("", fn {k, v} -> if k == "traceparent", do: v end)
+          rescue
+            _ -> ""
+          end
 
         stream_request =
           Jason.encode!(%{
