@@ -264,6 +264,8 @@ jobs:
     permissions:
       contents: read
       id-token: write
+    env:
+      PYPI_TOKEN: ${{ secrets.PYPI_TOKEN }}
     steps:
       - uses: actions/checkout@v4
 
@@ -279,12 +281,12 @@ jobs:
         working-directory: sdk/python
 
       - name: Skip PyPI publish when token is absent
-        if: ${{ secrets.PYPI_TOKEN == '' }}
+        if: ${{ env.PYPI_TOKEN == '' }}
         run: echo "PYPI_TOKEN not configured; skipping PyPI publish."
 
       - name: Publish to PyPI
-        if: ${{ secrets.PYPI_TOKEN != '' }}
+        if: ${{ env.PYPI_TOKEN != '' }}
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: sdk/python/dist/
-          password: ${{ secrets.PYPI_TOKEN }}
+          password: ${{ env.PYPI_TOKEN }}
