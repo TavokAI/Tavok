@@ -17,8 +17,8 @@ defmodule TavokGatewayWeb.MetricsController do
 
     if provided_secret != internal_secret do
       conn
-      |> put_status(401)
-      |> json(%{error: "Unauthorized"})
+      |> put_resp_content_type("application/json")
+      |> send_resp(401, Jason.encode!(%{error: "Unauthorized"}))
     else
       serve_metrics(conn)
     end
@@ -56,10 +56,4 @@ defmodule TavokGatewayWeb.MetricsController do
     |> send_resp(200, Enum.join(lines, "\n"))
   end
 
-  # json/2 helper for error responses (text format doesn't include it)
-  defp json(conn, data) do
-    conn
-    |> put_resp_content_type("application/json")
-    |> send_resp(conn.status || 200, Jason.encode!(data))
-  end
 end

@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getRequestCount, getErrorCount } from "@/lib/metrics";
-import { validateInternalSecret, unauthorizedResponse } from "@/lib/internal-auth";
+import {
+  validateInternalSecret,
+  unauthorizedResponse,
+} from "@/lib/internal-auth";
 
 /**
  * GET /api/metrics — Prometheus-format metrics for the Web service.

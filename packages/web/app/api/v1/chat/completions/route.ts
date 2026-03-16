@@ -164,11 +164,17 @@ export async function POST(request: NextRequest) {
         sequence,
       }),
     }).catch((err) => {
-      console.error("[v1/chat/completions] Failed to persist user message:", err);
+      console.error(
+        "[v1/chat/completions] Failed to persist user message:",
+        err,
+      );
       return null;
     });
     if (persistRes && !persistRes.ok) {
-      console.error("[v1/chat/completions] Message persist returned", persistRes.status);
+      console.error(
+        "[v1/chat/completions] Message persist returned",
+        persistRes.status,
+      );
     }
 
     await broadcastMessageNew(channelId, {
@@ -273,7 +279,13 @@ export async function POST(request: NextRequest) {
               object: "chat.completion.chunk",
               created,
               model,
-              choices: [{ index: 0, delta: { role: "assistant", content: "" }, finish_reason: null }],
+              choices: [
+                {
+                  index: 0,
+                  delta: { role: "assistant", content: "" },
+                  finish_reason: null,
+                },
+              ],
             })}\n\n`,
           ),
         );
@@ -287,7 +299,13 @@ export async function POST(request: NextRequest) {
                 object: "chat.completion.chunk",
                 created,
                 model,
-                choices: [{ index: 0, delta: { content: agentResponse }, finish_reason: null }],
+                choices: [
+                  {
+                    index: 0,
+                    delta: { content: agentResponse },
+                    finish_reason: null,
+                  },
+                ],
               })}\n\n`,
             ),
           );
