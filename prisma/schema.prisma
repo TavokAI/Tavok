@@ -454,7 +454,7 @@ model DirectMessage {
   updatedAt DateTime  @updatedAt
 
   dm        DirectMessageChannel @relation(fields: [dmId], references: [id], onDelete: Cascade)
-  author    User                 @relation("DirectMessageAuthor", fields: [authorId], references: [id])
+  author    User                 @relation("DirectMessageAuthor", fields: [authorId], references: [id], onDelete: Cascade)
   reactions DmReaction[]
 
   @@index([dmId, sequence])

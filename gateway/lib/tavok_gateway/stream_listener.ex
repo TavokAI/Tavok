@@ -94,33 +94,9 @@ defmodule TavokGateway.StreamListener do
 
   @impl true
   def handle_info({:redix_pubsub, _pubsub, _ref, :reconnected, _}, state) do
-    # Redix.PubSub auto-resubscribes on reconnect, but explicitly re-subscribe
-    # as a safety measure in case auto-resubscription fails silently. (ISSUE-025)
-    Logger.info("[StreamListener] Redis reconnected — re-subscribing to patterns")
-
-    {:ok, _ref_tokens} =
-      Redix.PubSub.psubscribe(state.pubsub, "hive:stream:tokens:*", self())
-
-    {:ok, _ref_status} =
-      Redix.PubSub.psubscribe(state.pubsub, "hive:stream:status:*", self())
-
-    {:ok, _ref_thinking} =
-      Redix.PubSub.psubscribe(state.pubsub, "hive:stream:thinking:*", self())
-
-    # TASK-0018: Re-subscribe to tool events
-    {:ok, _ref_tool_call} =
-      Redix.PubSub.psubscribe(state.pubsub, "hive:stream:tool_call:*", self())
-
-    {:ok, _ref_tool_result} =
-      Redix.PubSub.psubscribe(state.pubsub, "hive:stream:tool_result:*", self())
-
-    # TASK-0021: Re-subscribe to checkpoint events
-    {:ok, _ref_checkpoint} =
-      Redix.PubSub.psubscribe(state.pubsub, "hive:stream:checkpoint:*", self())
-
-    # TASK-0020: Re-subscribe to charter status events
-    {:ok, _ref_charter} =
-      Redix.PubSub.psubscribe(state.pubsub, "hive:stream:charter_status:*", self())
+    # Redix.PubSub auto-resubscribes on reconnect — no manual re-subscribe
+    # needed. Previous explicit re-subscribe caused duplicate message delivery.
+    Logger.info("[StreamListener] Redis reconnected — Redix auto-resubscription active")
 
     {:noreply, state}
   end

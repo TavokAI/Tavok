@@ -22,6 +22,7 @@ import (
 
 	"github.com/TavokAI/Tavok/streaming/internal/config"
 	"github.com/TavokAI/Tavok/streaming/internal/gateway"
+	"github.com/TavokAI/Tavok/streaming/internal/metrics"
 	"github.com/TavokAI/Tavok/streaming/internal/provider"
 	"github.com/TavokAI/Tavok/streaming/internal/tools"
 	"github.com/TavokAI/Tavok/streaming/internal/tracing"
@@ -245,12 +246,17 @@ func (m *Manager) handleStream(ctx context.Context, req streamRequest) {
 		logger = logger.With("requestId", req.RequestID)
 	}
 
-	// Register active stream
+	// Register active stream and record metrics
+	metrics.Get().StreamStarted()
 	m.mu.Lock()
 	m.active[req.MessageID] = struct{}{}
 	m.mu.Unlock()
 
+	streamErrored := true // assume error unless we reach successful completion
 	defer func() {
+		if streamErrored {
+			metrics.Get().StreamError()
+		}
 		m.mu.Lock()
 		delete(m.active, req.MessageID)
 		m.mu.Unlock()
@@ -569,6 +575,12 @@ func (m *Manager) handleStream(ctx context.Context, req streamRequest) {
 		)
 	}
 
+	// Record successful completion metrics
+	streamErrored = false
+	metrics.Get().StreamCompleted()
+	metrics.Get().TokenEmitted(int64(totalTokenCount))
+	metrics.Get().RecordTTFT(time.Duration(durationMs) * time.Millisecond)
+
 	m.logger.Info("Stream completed",
 		"messageId", req.MessageID,
 		"tokenCount", totalTokenCount,
@@ -795,34 +807,46 @@ func (m *Manager) executeTools(
 }
 
 // appendToolContext adds tool call and result messages to the conversation context.
-// The format depends on the provider:
-//   - Anthropic: structured content blocks (tool_use + tool_result)
-//   - OpenAI: function call messages + tool result messages
-//
-// For simplicity, we serialize as JSON strings in StreamMessage format.
-// The provider will receive these as part of ContextMessages.
+// Uses structured ToolCalls/ToolResults fields on StreamMessage so that
+// providers can convert them to the correct wire format (Anthropic tool_use/
+// tool_result content blocks, OpenAI tool_calls array + tool role messages).
 func (m *Manager) appendToolContext(
 	messages []provider.StreamMessage,
 	toolCalls []provider.ToolCall,
 	results []tools.ToolCallResult,
 	providerName string,
 ) []provider.StreamMessage {
-	// Build assistant message with tool calls (as JSON)
-	toolCallsJSON, _ := json.Marshal(toolCalls)
+	// Build structured tool results
+	toolResults := make([]provider.ToolResult, 0, len(results))
+	for _, r := range results {
+		toolResults = append(toolResults, provider.ToolResult{
+			Type:      "tool_result",
+			ToolUseID: r.CallID,
+			Content:   r.Content,
+			IsError:   r.IsError,
+		})
+	}
+
+	// Assistant message carrying the tool calls
 	messages = append(messages, provider.StreamMessage{
-		Role:    "assistant",
-		Content: fmt.Sprintf("[Tool calls: %s]", string(toolCallsJSON)),
+		Role:      "assistant",
+		ToolCalls: toolCalls,
 	})
 
-	// Build tool result messages
-	for _, result := range results {
-		resultContent := result.Content
-		if result.IsError {
-			resultContent = fmt.Sprintf("[Tool error: %s]", result.Content)
+	if providerName == "openai" || providerName == "openrouter" {
+		// OpenAI: individual "tool" role messages per result
+		for _, r := range toolResults {
+			messages = append(messages, provider.StreamMessage{
+				Role:       "tool",
+				Content:    r.Content,
+				ToolCallID: r.ToolUseID,
+			})
 		}
+	} else {
+		// Anthropic: single "user" message with all tool_result blocks
 		messages = append(messages, provider.StreamMessage{
-			Role:    "user",
-			Content: fmt.Sprintf("[Tool result for %s (call %s)]: %s", result.Name, result.CallID, resultContent),
+			Role:        "user",
+			ToolResults: toolResults,
 		})
 	}
 

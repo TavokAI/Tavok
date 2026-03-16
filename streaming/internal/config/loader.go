@@ -12,6 +12,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"time"
 )
 
@@ -42,7 +43,7 @@ func (l *Loader) GetAgent(agentID string) (*AgentConfig, error) {
 
 // GetAgentWithContext fetches agent configuration with context for cancellation.
 func (l *Loader) GetAgentWithContext(ctx context.Context, agentID string) (*AgentConfig, error) {
-	url := fmt.Sprintf("%s/api/internal/agents/%s", l.webURL, agentID)
+	url := fmt.Sprintf("%s/api/internal/agents/%s", l.webURL, url.PathEscape(agentID))
 
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
@@ -78,7 +79,7 @@ func (l *Loader) FinalizeMessage(messageID, content, streamingStatus string) err
 
 // FinalizeMessageWithContext updates a streaming message with context for cancellation.
 func (l *Loader) FinalizeMessageWithContext(ctx context.Context, messageID, content, streamingStatus string) error {
-	url := fmt.Sprintf("%s/api/internal/messages/%s", l.webURL, messageID)
+	url := fmt.Sprintf("%s/api/internal/messages/%s", l.webURL, url.PathEscape(messageID))
 
 	body := map[string]string{
 		"content":         content,
@@ -223,7 +224,7 @@ func (l *Loader) FinalizeMessageFullCtx(ctx context.Context, messageID, content,
 
 // finalizeWithFullData sends the finalize PUT with all optional fields. (TASK-0021)
 func (l *Loader) finalizeWithFullData(ctx context.Context, messageID, content, streamingStatus, thinkingTimeline, tokenHistory, checkpoints string) error {
-	url := fmt.Sprintf("%s/api/internal/messages/%s", l.webURL, messageID)
+	url := fmt.Sprintf("%s/api/internal/messages/%s", l.webURL, url.PathEscape(messageID))
 
 	body := map[string]string{
 		"content":          content,
@@ -324,7 +325,7 @@ func (l *Loader) FinalizeMessageWithRetryCtx(ctx context.Context, messageID, con
 // GET /api/internal/channels/{channelId}
 // Parses the charter fields from the response. (TASK-0020)
 func (l *Loader) GetChannelCharter(ctx context.Context, channelID string) (*CharterConfig, error) {
-	url := fmt.Sprintf("%s/api/internal/channels/%s", l.webURL, channelID)
+	url := fmt.Sprintf("%s/api/internal/channels/%s", l.webURL, url.PathEscape(channelID))
 
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
@@ -359,7 +360,7 @@ func (l *Loader) GetChannelCharter(ctx context.Context, channelID string) (*Char
 // Returns a non-error result for all application-level responses (200, 409, 404).
 // Only returns an error for transport/server failures (5xx, network). (P1-Fix 4)
 func (l *Loader) ClaimCharterTurn(ctx context.Context, channelID, agentID string) (*ClaimCharterTurnResult, error) {
-	url := fmt.Sprintf("%s/api/internal/channels/%s/charter-turn", l.webURL, channelID)
+	url := fmt.Sprintf("%s/api/internal/channels/%s/charter-turn", l.webURL, url.PathEscape(channelID))
 
 	body := map[string]string{"agentId": agentID}
 	bodyJSON, err := json.Marshal(body)
@@ -398,7 +399,7 @@ func (l *Loader) ClaimCharterTurn(ctx context.Context, channelID, agentID string
 // Returns the new turn count and whether the charter is completed. (TASK-0020)
 // Deprecated: Use ClaimCharterTurn for atomic turn claiming at stream start.
 func (l *Loader) IncrementCharterTurn(ctx context.Context, channelID string) (currentTurn int, completed bool, err error) {
-	url := fmt.Sprintf("%s/api/internal/channels/%s/charter-turn", l.webURL, channelID)
+	url := fmt.Sprintf("%s/api/internal/channels/%s/charter-turn", l.webURL, url.PathEscape(channelID))
 
 	req, err := http.NewRequestWithContext(ctx, "POST", url, nil)
 	if err != nil {

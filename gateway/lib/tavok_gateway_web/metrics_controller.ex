@@ -8,6 +8,23 @@ defmodule TavokGatewayWeb.MetricsController do
   use Phoenix.Controller, formats: [:text]
 
   def index(conn, _params) do
+    internal_secret = Application.get_env(:tavok_gateway, :internal_api_secret)
+
+    provided_secret =
+      conn
+      |> get_req_header("x-internal-secret")
+      |> List.first()
+
+    if provided_secret != internal_secret do
+      conn
+      |> put_status(401)
+      |> json(%{error: "Unauthorized"})
+    else
+      serve_metrics(conn)
+    end
+  end
+
+  defp serve_metrics(conn) do
     # Basic BEAM/VM metrics
     memory = :erlang.memory()
     process_count = :erlang.system_info(:process_count)
@@ -37,5 +54,12 @@ defmodule TavokGatewayWeb.MetricsController do
     conn
     |> put_resp_content_type("text/plain")
     |> send_resp(200, Enum.join(lines, "\n"))
+  end
+
+  # json/2 helper for error responses (text format doesn't include it)
+  defp json(conn, data) do
+    conn
+    |> put_resp_content_type("application/json")
+    |> send_resp(conn.status || 200, Jason.encode!(data))
   end
 end

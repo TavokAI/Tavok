@@ -103,7 +103,33 @@ func (a *Anthropic) Stream(ctx context.Context, req StreamRequest, tokens chan<-
 	// return empty responses (stopReason: "end_turn", zero content blocks). (ISSUE-027)
 	rawMessages := make([]anthropicMessage, 0, len(req.ContextMessages))
 	for _, m := range req.ContextMessages {
-		rawMessages = append(rawMessages, anthropicMessage{Role: m.Role, Content: m.Content})
+		if len(m.ToolCalls) > 0 {
+			// Assistant message with tool_use content blocks
+			blocks := make([]anthropicContentBlock, len(m.ToolCalls))
+			for i, tc := range m.ToolCalls {
+				blocks[i] = anthropicContentBlock{
+					Type:  "tool_use",
+					ID:    tc.ID,
+					Name:  tc.Name,
+					Input: tc.Arguments,
+				}
+			}
+			rawMessages = append(rawMessages, anthropicMessage{Role: m.Role, Content: blocks})
+		} else if len(m.ToolResults) > 0 {
+			// User message with tool_result content blocks
+			blocks := make([]anthropicContentBlock, len(m.ToolResults))
+			for i, tr := range m.ToolResults {
+				blocks[i] = anthropicContentBlock{
+					Type:      "tool_result",
+					ToolUseID: tr.ToolUseID,
+					Content:   tr.Content,
+					IsError:   tr.IsError,
+				}
+			}
+			rawMessages = append(rawMessages, anthropicMessage{Role: m.Role, Content: blocks})
+		} else {
+			rawMessages = append(rawMessages, anthropicMessage{Role: m.Role, Content: m.Content})
+		}
 	}
 
 	messages := consolidateMessages(rawMessages)

@@ -1,5 +1,6 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getRequestCount, getErrorCount } from "@/lib/metrics";
+import { validateInternalSecret, unauthorizedResponse } from "@/lib/internal-auth";
 
 /**
  * GET /api/metrics — Prometheus-format metrics for the Web service.
@@ -8,11 +9,9 @@ import { getRequestCount, getErrorCount } from "@/lib/metrics";
  * INTERNAL_API_SECRET to prevent public scraping.
  */
 
-export async function GET(request: Request) {
-  const secret = request.headers.get("x-internal-secret");
-  const expected = process.env.INTERNAL_API_SECRET;
-  if (expected && secret !== expected) {
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+export async function GET(request: NextRequest) {
+  if (!validateInternalSecret(request)) {
+    return unauthorizedResponse();
   }
 
   const mem = process.memoryUsage();

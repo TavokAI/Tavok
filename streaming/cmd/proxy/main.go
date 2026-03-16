@@ -116,13 +116,16 @@ func main() {
 	mux.HandleFunc("GET /health", health.Handler)
 	mux.HandleFunc("GET /metrics", metrics.Handler)
 
-	// Debug endpoint: show service info
+	// Debug endpoint: show service info (requires internal secret)
 	mux.HandleFunc("GET /info", func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("x-internal-secret") != internalSecret {
+			http.Error(w, `{"error":"Unauthorized"}`, http.StatusUnauthorized)
+			return
+		}
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"service":       "streaming",
 			"version":       "0.1.0",
-			"redis":         "connected",
 			"activeStreams": manager.ActiveCount(),
 		})
 	})

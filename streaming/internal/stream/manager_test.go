@@ -2,7 +2,6 @@ package stream
 
 import (
 	"encoding/json"
-	"fmt"
 	"io"
 	"log/slog"
 	"strings"
@@ -377,7 +376,7 @@ func TestAppendToolContext_SingleToolCall(t *testing.T) {
 
 	got := m.appendToolContext(initialMsgs, toolCalls, results, "anthropic")
 
-	// Should have: original message + assistant tool_use message + tool result message
+	// Should have: original message + assistant tool_use message + user tool_result message
 	if len(got) != 3 {
 		t.Fatalf("expected 3 messages, got %d", len(got))
 	}
@@ -387,32 +386,32 @@ func TestAppendToolContext_SingleToolCall(t *testing.T) {
 		t.Errorf("first message modified: role=%q content=%q", got[0].Role, got[0].Content)
 	}
 
-	// Second message: assistant with tool calls JSON
+	// Second message: assistant with structured tool calls
 	if got[1].Role != "assistant" {
 		t.Errorf("second message role = %q, want assistant", got[1].Role)
 	}
-	if !strings.Contains(got[1].Content, "Tool calls:") {
-		t.Errorf("second message should contain tool calls marker, got: %q", got[1].Content)
+	if len(got[1].ToolCalls) != 1 {
+		t.Fatalf("expected 1 tool call, got %d", len(got[1].ToolCalls))
 	}
-	if !strings.Contains(got[1].Content, "current_time") {
-		t.Errorf("second message should contain tool name, got: %q", got[1].Content)
+	if got[1].ToolCalls[0].Name != "current_time" {
+		t.Errorf("tool call name = %q, want current_time", got[1].ToolCalls[0].Name)
 	}
-	if !strings.Contains(got[1].Content, "call-1") {
-		t.Errorf("second message should contain call ID, got: %q", got[1].Content)
+	if got[1].ToolCalls[0].ID != "call-1" {
+		t.Errorf("tool call ID = %q, want call-1", got[1].ToolCalls[0].ID)
 	}
 
-	// Third message: user with tool result
+	// Third message: user with structured tool results (Anthropic format)
 	if got[2].Role != "user" {
 		t.Errorf("third message role = %q, want user", got[2].Role)
 	}
-	if !strings.Contains(got[2].Content, "Tool result for current_time") {
-		t.Errorf("third message should contain tool result marker, got: %q", got[2].Content)
+	if len(got[2].ToolResults) != 1 {
+		t.Fatalf("expected 1 tool result, got %d", len(got[2].ToolResults))
 	}
-	if !strings.Contains(got[2].Content, "call-1") {
-		t.Errorf("third message should contain call ID, got: %q", got[2].Content)
+	if got[2].ToolResults[0].ToolUseID != "call-1" {
+		t.Errorf("tool result ID = %q, want call-1", got[2].ToolResults[0].ToolUseID)
 	}
-	if !strings.Contains(got[2].Content, "2026-03-02T12:00:00Z") {
-		t.Errorf("third message should contain result content, got: %q", got[2].Content)
+	if got[2].ToolResults[0].Content != "2026-03-02T12:00:00Z" {
+		t.Errorf("tool result content = %q, want 2026-03-02T12:00:00Z", got[2].ToolResults[0].Content)
 	}
 }
 
@@ -435,25 +434,31 @@ func TestAppendToolContext_MultipleToolCalls(t *testing.T) {
 
 	got := m.appendToolContext(initialMsgs, toolCalls, results, "anthropic")
 
-	// original + 1 assistant message + 2 tool result messages = 4
-	if len(got) != 4 {
-		t.Fatalf("expected 4 messages, got %d", len(got))
+	// Anthropic: original + 1 assistant (with tool calls) + 1 user (with all tool results) = 3
+	if len(got) != 3 {
+		t.Fatalf("expected 3 messages, got %d", len(got))
 	}
 
-	// The single assistant message should contain both tool calls
-	if !strings.Contains(got[1].Content, "web_search") {
-		t.Errorf("assistant message should contain web_search, got: %q", got[1].Content)
+	// Assistant message should have both tool calls
+	if len(got[1].ToolCalls) != 2 {
+		t.Fatalf("expected 2 tool calls, got %d", len(got[1].ToolCalls))
 	}
-	if !strings.Contains(got[1].Content, "current_time") {
-		t.Errorf("assistant message should contain current_time, got: %q", got[1].Content)
+	if got[1].ToolCalls[0].Name != "web_search" {
+		t.Errorf("first tool call name = %q, want web_search", got[1].ToolCalls[0].Name)
+	}
+	if got[1].ToolCalls[1].Name != "current_time" {
+		t.Errorf("second tool call name = %q, want current_time", got[1].ToolCalls[1].Name)
 	}
 
-	// Each result gets its own message
-	if !strings.Contains(got[2].Content, "web_search") {
-		t.Errorf("first result message should reference web_search, got: %q", got[2].Content)
+	// User message should contain both tool results
+	if len(got[2].ToolResults) != 2 {
+		t.Fatalf("expected 2 tool results, got %d", len(got[2].ToolResults))
 	}
-	if !strings.Contains(got[3].Content, "current_time") {
-		t.Errorf("second result message should reference current_time, got: %q", got[3].Content)
+	if got[2].ToolResults[0].ToolUseID != "call-1" {
+		t.Errorf("first result ID = %q, want call-1", got[2].ToolResults[0].ToolUseID)
+	}
+	if got[2].ToolResults[1].ToolUseID != "call-2" {
+		t.Errorf("second result ID = %q, want call-2", got[2].ToolResults[1].ToolUseID)
 	}
 }
 
@@ -472,17 +477,20 @@ func TestAppendToolContext_ErrorResult(t *testing.T) {
 
 	got := m.appendToolContext(initialMsgs, toolCalls, results, "openai")
 
-	// assistant + tool result = 2
+	// OpenAI: assistant + 1 tool message = 2
 	if len(got) != 2 {
 		t.Fatalf("expected 2 messages, got %d", len(got))
 	}
 
-	// Error result should be wrapped with [Tool error: ...]
-	if !strings.Contains(got[1].Content, "Tool error:") {
-		t.Errorf("error result should contain 'Tool error:' marker, got: %q", got[1].Content)
+	// OpenAI tool message should have the content and tool call ID
+	if got[1].Role != "tool" {
+		t.Errorf("result message role = %q, want tool", got[1].Role)
 	}
-	if !strings.Contains(got[1].Content, "connection refused") {
-		t.Errorf("error result should contain error message, got: %q", got[1].Content)
+	if got[1].ToolCallID != "call-err" {
+		t.Errorf("result message ToolCallID = %q, want call-err", got[1].ToolCallID)
+	}
+	if got[1].Content != "connection refused" {
+		t.Errorf("result message content = %q, want connection refused", got[1].Content)
 	}
 }
 
@@ -499,16 +507,20 @@ func TestAppendToolContext_NonErrorResultNotWrapped(t *testing.T) {
 
 	got := m.appendToolContext(nil, toolCalls, results, "anthropic")
 
+	// Anthropic: assistant + user (with tool results) = 2
 	if len(got) != 2 {
 		t.Fatalf("expected 2 messages, got %d", len(got))
 	}
 
-	// Non-error result should NOT contain "Tool error:" wrapper
-	if strings.Contains(got[1].Content, "Tool error:") {
-		t.Errorf("non-error result should not contain 'Tool error:' marker, got: %q", got[1].Content)
+	// Tool result should not be marked as error
+	if len(got[1].ToolResults) != 1 {
+		t.Fatalf("expected 1 tool result, got %d", len(got[1].ToolResults))
 	}
-	if !strings.Contains(got[1].Content, "success data") {
-		t.Errorf("result should contain actual content, got: %q", got[1].Content)
+	if got[1].ToolResults[0].IsError {
+		t.Errorf("non-error result should have IsError=false")
+	}
+	if got[1].ToolResults[0].Content != "success data" {
+		t.Errorf("result content = %q, want success data", got[1].ToolResults[0].Content)
 	}
 }
 
@@ -555,12 +567,15 @@ func TestAppendToolContext_EmptyToolCallsAndResults(t *testing.T) {
 
 	got := m.appendToolContext(existing, []provider.ToolCall{}, []tools.ToolCallResult{}, "anthropic")
 
-	// original + 1 assistant (empty tool calls array) + 0 results = 2
-	if len(got) != 2 {
-		t.Fatalf("expected 2 messages, got %d", len(got))
+	// Anthropic: original + 1 assistant (empty tool calls) + 1 user (empty tool results) = 3
+	if len(got) != 3 {
+		t.Fatalf("expected 3 messages, got %d", len(got))
 	}
 	if got[1].Role != "assistant" {
 		t.Errorf("second message role = %q, want assistant", got[1].Role)
+	}
+	if len(got[1].ToolCalls) != 0 {
+		t.Errorf("expected 0 tool calls, got %d", len(got[1].ToolCalls))
 	}
 }
 
@@ -582,7 +597,7 @@ func TestAppendToolContext_NilInitialMessages(t *testing.T) {
 	}
 }
 
-func TestAppendToolContext_ToolCallsSerializedAsJSON(t *testing.T) {
+func TestAppendToolContext_ToolCallsStructured(t *testing.T) {
 	m := newTestManager()
 
 	toolCalls := []provider.ToolCall{
@@ -594,28 +609,25 @@ func TestAppendToolContext_ToolCallsSerializedAsJSON(t *testing.T) {
 
 	got := m.appendToolContext(nil, toolCalls, results, "anthropic")
 
-	// The assistant message content should contain valid JSON for tool calls
-	assistantContent := got[0].Content
-	// Extract JSON from "[Tool calls: {...}]" format
-	prefix := "[Tool calls: "
-	suffix := "]"
-	if !strings.HasPrefix(assistantContent, prefix) || !strings.HasSuffix(assistantContent, suffix) {
-		t.Fatalf("unexpected assistant content format: %q", assistantContent)
+	// Assistant message should carry structured tool calls, not serialized text
+	if got[0].Role != "assistant" {
+		t.Fatalf("first message role = %q, want assistant", got[0].Role)
 	}
-	jsonStr := assistantContent[len(prefix) : len(assistantContent)-len(suffix)]
-
-	var parsed []provider.ToolCall
-	if err := json.Unmarshal([]byte(jsonStr), &parsed); err != nil {
-		t.Fatalf("failed to parse tool calls JSON from assistant message: %v\nJSON: %s", err, jsonStr)
+	if got[0].Content != "" {
+		t.Errorf("assistant message content should be empty, got %q", got[0].Content)
 	}
-	if len(parsed) != 1 {
-		t.Fatalf("expected 1 tool call in JSON, got %d", len(parsed))
+	if len(got[0].ToolCalls) != 1 {
+		t.Fatalf("expected 1 tool call, got %d", len(got[0].ToolCalls))
 	}
-	if parsed[0].Name != "web_search" {
-		t.Errorf("parsed tool call name = %q, want web_search", parsed[0].Name)
+	if got[0].ToolCalls[0].Name != "web_search" {
+		t.Errorf("tool call name = %q, want web_search", got[0].ToolCalls[0].Name)
 	}
-	if parsed[0].ID != "tc-42" {
-		t.Errorf("parsed tool call ID = %q, want tc-42", parsed[0].ID)
+	if got[0].ToolCalls[0].ID != "tc-42" {
+		t.Errorf("tool call ID = %q, want tc-42", got[0].ToolCalls[0].ID)
+	}
+	q, ok := got[0].ToolCalls[0].Arguments["query"]
+	if !ok || q != "golang testing" {
+		t.Errorf("tool call arguments[query] = %v, want golang testing", q)
 	}
 }
 
@@ -631,10 +643,22 @@ func TestAppendToolContext_ResultMessageFormat(t *testing.T) {
 
 	got := m.appendToolContext(nil, toolCalls, results, "anthropic")
 
-	// Verify the exact format: "[Tool result for {name} (call {callID})]: {content}"
-	expected := fmt.Sprintf("[Tool result for my_tool (call id-99)]: the result")
-	if got[1].Content != expected {
-		t.Errorf("result message content = %q, want %q", got[1].Content, expected)
+	// Anthropic: user message with structured ToolResults
+	if got[1].Role != "user" {
+		t.Errorf("result message role = %q, want user", got[1].Role)
+	}
+	if len(got[1].ToolResults) != 1 {
+		t.Fatalf("expected 1 tool result, got %d", len(got[1].ToolResults))
+	}
+	r := got[1].ToolResults[0]
+	if r.ToolUseID != "id-99" {
+		t.Errorf("tool result ID = %q, want id-99", r.ToolUseID)
+	}
+	if r.Content != "the result" {
+		t.Errorf("tool result content = %q, want 'the result'", r.Content)
+	}
+	if r.Type != "tool_result" {
+		t.Errorf("tool result type = %q, want tool_result", r.Type)
 	}
 }
 

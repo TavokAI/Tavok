@@ -234,12 +234,16 @@ defmodule TavokGatewayWeb.UserSocketTest do
       assert claims["username"] == ""
     end
 
-    test "connect rejects params with no token or api_key" do
-      # The third connect/3 clause handles missing credentials.
-      # We can't easily test connect/3 without a full Phoenix.Socket struct,
-      # but verify the function exists and handles the case.
-      # This is covered by the pattern match: connect(_params, _socket, _connect_info)
-      assert is_atom(:ok)
+    test "verify_token returns error for nil input" do
+      assert {:error, _} = UserSocket.verify_token(nil)
+    end
+
+    test "verify_token returns error for empty string" do
+      assert {:error, _} = UserSocket.verify_token("")
+    end
+
+    test "verify_token returns error for malformed JWT" do
+      assert {:error, _} = UserSocket.verify_token("not-a-jwt")
     end
   end
 

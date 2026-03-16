@@ -42,7 +42,7 @@ lint-fix: ## Auto-fix lint and formatting issues
 # ============================================================
 
 dev: ## Start all services in development mode (with hot reload)
-	docker-compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+	docker compose -f docker compose.yml -f docker compose.dev.yml up --build
 
 up: ## Start all services (pulls pre-built images, detached)
 	docker compose up -d
@@ -51,10 +51,10 @@ up-build: ## Start all services, building from source
 	docker compose up --build -d
 
 down: ## Stop all services
-	docker-compose down
+	docker compose down
 
 build: ## Build all Docker images without starting
-	docker-compose build
+	docker compose build
 
 # ============================================================
 # TESTS
@@ -111,7 +111,7 @@ test-all: ## Run all tests (unit + E2E + SDK)
 # ============================================================
 
 demo: ## Start demo agents (requires TAVOK_SERVER_ID and TAVOK_CHANNEL_ID)
-	docker-compose -f docker-compose.demo.yml up --build
+	docker compose -f docker compose.demo.yml up --build
 
 # ============================================================
 # REGRESSION HARNESS
@@ -125,32 +125,32 @@ regression-harness: ## Run full regression harness (K-001 through K-022, 130+ as
 # ============================================================
 
 logs: ## Follow logs from all services
-	docker-compose logs -f
+	docker compose logs -f
 
 logs-web: ## Follow logs from Next.js web service
-	docker-compose logs -f web
+	docker compose logs -f web
 
 logs-gateway: ## Follow logs from Elixir gateway
-	docker-compose logs -f gateway
+	docker compose logs -f gateway
 
 logs-stream: ## Follow logs from Go streaming proxy
-	docker-compose logs -f streaming
+	docker compose logs -f streaming
 
 logs-db: ## Follow logs from PostgreSQL
-	docker-compose logs -f db
+	docker compose logs -f db
 
 # ============================================================
 # DATABASE
 # ============================================================
 
 db-migrate: ## Run Prisma migrations
-	docker-compose exec web npx prisma migrate dev --schema=./prisma/schema.prisma
+	docker compose exec web npx prisma migrate dev --schema=./prisma/schema.prisma
 
 db-studio: ## Open Prisma Studio (database browser)
-	docker-compose exec web npx prisma studio
+	docker compose exec web npx prisma studio
 
 db-reset: ## Reset database (WARNING: destroys all data)
-	docker-compose exec web npx prisma migrate reset --schema=./prisma/schema.prisma
+	docker compose exec web npx prisma migrate reset --schema=./prisma/schema.prisma
 
 db-backup: ## Create timestamped PostgreSQL backup (./backups/)
 	bash scripts/db-backup.sh
@@ -172,24 +172,24 @@ health: ## Check health of all services
 	@echo -n "Streaming: " && curl -sf http://localhost:4002/health 2>/dev/null && echo "" || echo "UNREACHABLE"
 
 status: ## Show Docker container status
-	docker-compose ps
+	docker compose ps
 
 # ============================================================
 # MONITORING
 # ============================================================
 
 monitoring-up: ## Start Prometheus + Grafana (Grafana at localhost:3001)
-	docker compose -f docker-compose.yml -f docker-compose.monitoring.yml up -d prometheus grafana
+	docker compose -f docker compose.yml -f docker compose.monitoring.yml up -d prometheus grafana
 
 monitoring-down: ## Stop monitoring stack
-	docker compose -f docker-compose.yml -f docker-compose.monitoring.yml stop prometheus grafana
+	docker compose -f docker compose.yml -f docker compose.monitoring.yml stop prometheus grafana
 
 # ============================================================
 # CLEANUP
 # ============================================================
 
 clean: ## Stop services and remove all volumes (WARNING: destroys data)
-	docker-compose down -v --remove-orphans
+	docker compose down -v --remove-orphans
 
 prune: ## Remove all unused Docker resources
 	docker system prune -f

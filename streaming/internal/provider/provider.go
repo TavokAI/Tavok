@@ -11,8 +11,11 @@ import (
 
 // StreamMessage represents a single message in the conversation context.
 type StreamMessage struct {
-	Role    string `json:"role"` // "user", "assistant", or "system"
-	Content string `json:"content"`
+	Role        string       `json:"role"` // "user", "assistant", "system", or "tool"
+	Content     string       `json:"content"`
+	ToolCalls   []ToolCall   `json:"toolCalls,omitempty"`   // Assistant tool_use blocks (set by appendToolContext)
+	ToolResults []ToolResult `json:"toolResults,omitempty"` // Tool results (set by appendToolContext)
+	ToolCallID  string       `json:"toolCallId,omitempty"`  // For OpenAI tool role messages
 }
 
 // StreamRequest contains everything needed to start an LLM stream.

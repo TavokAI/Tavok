@@ -8,11 +8,24 @@ defmodule TavokGatewayWeb.CacheController do
   alias TavokGateway.ConfigCache
 
   def invalidate(conn, %{"channelId" => channel_id}) do
-    ConfigCache.invalidate_channel(channel_id)
+    internal_secret = Application.get_env(:tavok_gateway, :internal_api_secret)
 
-    conn
-    |> put_status(200)
-    |> json(%{ok: true, invalidated: channel_id})
+    provided_secret =
+      conn
+      |> get_req_header("x-internal-secret")
+      |> List.first()
+
+    if provided_secret != internal_secret do
+      conn
+      |> put_status(401)
+      |> json(%{error: "Unauthorized"})
+    else
+      ConfigCache.invalidate_channel(channel_id)
+
+      conn
+      |> put_status(200)
+      |> json(%{ok: true, invalidated: channel_id})
+    end
   end
 
   def invalidate(conn, _params) do

@@ -10,6 +10,8 @@
 // - Publish charter status to Redis for real-time UI updates
 package config
 
+import "strconv"
+
 // CharterConfig holds the channel charter / swarm mode configuration.
 // Loaded from the Next.js internal API via Loader.GetChannelCharter().
 type CharterConfig struct {
@@ -77,7 +79,7 @@ func (c *CharterConfig) SystemPromptInjection() string {
 	}
 
 	if c.MaxTurns > 0 {
-		injection += "Turn: " + itoa(c.CurrentTurn+1) + " of " + itoa(c.MaxTurns) + "\n"
+		injection += "Turn: " + strconv.Itoa(c.CurrentTurn+1) + " of " + strconv.Itoa(c.MaxTurns) + "\n"
 	}
 
 	return injection
@@ -91,20 +93,4 @@ type ClaimCharterTurnResult struct {
 	CurrentTurn int    `json:"currentTurn,omitempty"`
 	MaxTurns    int    `json:"maxTurns,omitempty"`
 	Completed   bool   `json:"completed,omitempty"`
-}
-
-// itoa is a simple int to string conversion without importing strconv.
-func itoa(n int) string {
-	if n == 0 {
-		return "0"
-	}
-	if n < 0 {
-		return "-" + itoa(-n)
-	}
-	digits := ""
-	for n > 0 {
-		digits = string(rune('0'+n%10)) + digits
-		n /= 10
-	}
-	return digits
 }

@@ -575,6 +575,11 @@ describe("createServerChannelPatchHandler", () => {
         agent: {
           findMany: async () => [{ id: "agent-1" }, { id: "agent-2" }],
         },
+        channelAgent: {
+          deleteMany: async () => ({ count: 0 }),
+          create: async () => ({}),
+        },
+        $transaction: async (ops: unknown[]) => ops,
       },
     });
     const res = await handler(
@@ -599,6 +604,11 @@ describe("createServerChannelPatchHandler", () => {
             defaultAgentId: null,
           }),
         },
+        channelAgent: {
+          deleteMany: async () => ({ count: 0 }),
+          create: async () => ({}),
+        },
+        $transaction: async (ops: unknown[]) => ops,
       },
     });
     const res = await handler(
