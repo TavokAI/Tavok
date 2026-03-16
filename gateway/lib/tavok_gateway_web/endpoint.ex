@@ -11,7 +11,11 @@ defmodule TavokGatewayWeb.Endpoint do
 
   # CORS support — restrict to configured origins (default: localhost dev ports)
   plug CORSPlug,
-    origin: String.split(System.get_env("CORS_ALLOWED_ORIGINS") || "http://localhost:5555,http://localhost:3000", ","),
+    origin:
+      String.split(
+        System.get_env("CORS_ALLOWED_ORIGINS") || "http://localhost:5555,http://localhost:3000",
+        ","
+      ),
     methods: ["GET", "POST"],
     headers: ["content-type", "x-internal-secret", "x-request-id", "authorization"]
 

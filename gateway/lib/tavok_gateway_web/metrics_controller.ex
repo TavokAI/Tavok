@@ -55,5 +55,4 @@ defmodule TavokGatewayWeb.MetricsController do
     |> put_resp_content_type("text/plain")
     |> send_resp(200, Enum.join(lines, "\n"))
   end
-
 end
