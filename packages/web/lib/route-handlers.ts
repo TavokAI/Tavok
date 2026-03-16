@@ -573,6 +573,26 @@ export function createServerChannelPatchHandler({
       }
     }
 
+    // Apply agentIds to ChannelAgent join table if provided
+    if ("agentIds" in body) {
+      const agentIds = body.agentIds as string[];
+      // Delete existing channel-agent assignments and recreate
+      await prismaClient.$transaction([
+        prismaClient.channelAgent.deleteMany({
+          where: { channelId },
+        }),
+        ...agentIds.map((agentId) =>
+          prismaClient.channelAgent.create({
+            data: {
+              id: generateId(),
+              channelId,
+              agentId,
+            },
+          }),
+        ),
+      ]);
+    }
+
     const channel = await prismaClient.channel.update({
       where: { id: channelId },
       data: updateData as Parameters<

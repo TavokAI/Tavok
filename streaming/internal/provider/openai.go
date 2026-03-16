@@ -104,7 +104,25 @@ func (o *OpenAI) Stream(ctx context.Context, req StreamRequest, tokens chan<- To
 		messages = append(messages, openaiMessage{Role: "system", Content: req.SystemPrompt})
 	}
 	for _, m := range req.ContextMessages {
-		messages = append(messages, openaiMessage{Role: m.Role, Content: m.Content})
+		if len(m.ToolCalls) > 0 {
+			// Assistant message with tool_calls array
+			oaiCalls := make([]openaiToolCallMsg, len(m.ToolCalls))
+			for i, tc := range m.ToolCalls {
+				argsJSON, _ := json.Marshal(tc.Arguments)
+				oaiCalls[i] = openaiToolCallMsg{
+					ID:   tc.ID,
+					Type: "function",
+				}
+				oaiCalls[i].Function.Name = tc.Name
+				oaiCalls[i].Function.Arguments = string(argsJSON)
+			}
+			messages = append(messages, openaiMessage{Role: "assistant", ToolCalls: oaiCalls})
+		} else if m.Role == "tool" && m.ToolCallID != "" {
+			// Tool result message
+			messages = append(messages, openaiMessage{Role: "tool", Content: m.Content, ToolCallID: m.ToolCallID})
+		} else {
+			messages = append(messages, openaiMessage{Role: m.Role, Content: m.Content})
+		}
 	}
 
 	// Build request body

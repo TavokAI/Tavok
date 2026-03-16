@@ -148,7 +148,7 @@ export async function POST(request: NextRequest) {
   try {
     // Persist and broadcast user message
     const internalUrl = getInternalBaseUrl();
-    await fetch(`${internalUrl}/api/internal/messages`, {
+    const persistRes = await fetch(`${internalUrl}/api/internal/messages`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -163,7 +163,19 @@ export async function POST(request: NextRequest) {
         type: "STANDARD",
         sequence,
       }),
-    }).catch(() => {});
+    }).catch((err) => {
+      console.error(
+        "[v1/chat/completions] Failed to persist user message:",
+        err,
+      );
+      return null;
+    });
+    if (persistRes && !persistRes.ok) {
+      console.error(
+        "[v1/chat/completions] Message persist returned",
+        persistRes.status,
+      );
+    }
 
     await broadcastMessageNew(channelId, {
       id: userMessageId,
@@ -195,7 +207,7 @@ export async function POST(request: NextRequest) {
         where: {
           channelId,
           authorType: "AGENT",
-          authorId: { not: agent.agentId }, // Response from another agent
+          authorId: { not: agent.agentId }, // Response from a different agent in the channel
           createdAt: { gt: new Date(startTime) },
           isDeleted: false,
           OR: [{ streamingStatus: "COMPLETE" }, { streamingStatus: null }],
@@ -254,66 +266,62 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Streaming response — send as SSE chunks
+    // Streaming response — emit SSE deltas
     const encoder = new TextEncoder();
-    const words = agentResponse.split(/(\s+)/);
 
     const sseStream = new ReadableStream({
-      start(controller) {
+      async start(controller) {
         // Initial chunk with role
-        const initialChunk = {
-          id: completionId,
-          object: "chat.completion.chunk",
-          created,
-          model,
-          choices: [
-            {
-              index: 0,
-              delta: { role: "assistant", content: "" },
-              finish_reason: null,
-            },
-          ],
-        };
         controller.enqueue(
-          encoder.encode(`data: ${JSON.stringify(initialChunk)}\n\n`),
+          encoder.encode(
+            `data: ${JSON.stringify({
+              id: completionId,
+              object: "chat.completion.chunk",
+              created,
+              model,
+              choices: [
+                {
+                  index: 0,
+                  delta: { role: "assistant", content: "" },
+                  finish_reason: null,
+                },
+              ],
+            })}\n\n`,
+          ),
         );
 
-        // Content chunks
-        for (const word of words) {
-          const chunk = {
-            id: completionId,
-            object: "chat.completion.chunk",
-            created,
-            model,
-            choices: [
-              {
-                index: 0,
-                delta: { content: word },
-                finish_reason: null,
-              },
-            ],
-          };
+        // Emit the content we already have from the poll above
+        if (agentResponse) {
           controller.enqueue(
-            encoder.encode(`data: ${JSON.stringify(chunk)}\n\n`),
+            encoder.encode(
+              `data: ${JSON.stringify({
+                id: completionId,
+                object: "chat.completion.chunk",
+                created,
+                model,
+                choices: [
+                  {
+                    index: 0,
+                    delta: { content: agentResponse },
+                    finish_reason: null,
+                  },
+                ],
+              })}\n\n`,
+            ),
           );
         }
 
         // Final chunk
-        const finalChunk = {
-          id: completionId,
-          object: "chat.completion.chunk",
-          created,
-          model,
-          choices: [
-            {
-              index: 0,
-              delta: {},
-              finish_reason: "stop",
-            },
-          ],
-        };
         controller.enqueue(
-          encoder.encode(`data: ${JSON.stringify(finalChunk)}\n\n`),
+          encoder.encode(
+            `data: ${JSON.stringify({
+              id: completionId,
+              object: "chat.completion.chunk",
+              created,
+              model,
+              choices: [{ index: 0, delta: {}, finish_reason: "stop" }],
+            })}\n\n`,
+          ),
         );
         controller.enqueue(encoder.encode("data: [DONE]\n\n"));
         controller.close();

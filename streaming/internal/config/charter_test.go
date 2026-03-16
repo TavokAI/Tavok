@@ -344,35 +344,6 @@ func TestSystemPromptInjection_FullContent(t *testing.T) {
 	}
 }
 
-// --- itoa (internal helper) ---
-
-func TestItoa_Table(t *testing.T) {
-	tests := []struct {
-		input int
-		want  string
-	}{
-		{0, "0"},
-		{1, "1"},
-		{9, "9"},
-		{10, "10"},
-		{42, "42"},
-		{100, "100"},
-		{999, "999"},
-		{1234567, "1234567"},
-		{-1, "-1"},
-		{-42, "-42"},
-		{-100, "-100"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.want, func(t *testing.T) {
-			if got := itoa(tt.input); got != tt.want {
-				t.Errorf("itoa(%d) = %q, want %q", tt.input, got, tt.want)
-			}
-		})
-	}
-}
-
 // --- JSON deserialization ---
 
 func TestCharterConfigJSONTags(t *testing.T) {

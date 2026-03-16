@@ -188,7 +188,7 @@ defmodule TavokGateway.ConfigCache do
           nil ->
             # No in-flight request — start one
             task =
-              Task.async(fn ->
+              Task.Supervisor.async_nolink(TavokGateway.TaskSupervisor, fn ->
                 case WebClient.get_channel_agent(channel_id) do
                   {:ok, agent_config} ->
                     now = System.monotonic_time(:millisecond)
@@ -234,7 +234,7 @@ defmodule TavokGateway.ConfigCache do
         case Map.get(state.in_flight, key) do
           nil ->
             task =
-              Task.async(fn ->
+              Task.Supervisor.async_nolink(TavokGateway.TaskSupervisor, fn ->
                 case WebClient.get_channel_agents(channel_id) do
                   {:ok, agents} ->
                     now = System.monotonic_time(:millisecond)
@@ -279,7 +279,7 @@ defmodule TavokGateway.ConfigCache do
         case Map.get(state.in_flight, key) do
           nil ->
             task =
-              Task.async(fn ->
+              Task.Supervisor.async_nolink(TavokGateway.TaskSupervisor, fn ->
                 case WebClient.check_channel_membership(channel_id, user_id) do
                   {:ok, membership_result} ->
                     now = System.monotonic_time(:millisecond)

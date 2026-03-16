@@ -158,11 +158,16 @@ export function buildServerSearchQuery(params: ServerSearchParams): Prisma.Sql {
       m."authorId",
       m."authorType",
       m.content,
-      ts_headline(
-        'english',
-        m.content,
-        plainto_tsquery('english', ${params.query}),
-        'StartSel=<mark>, StopSel=</mark>, MaxWords=50, MinWords=20'
+      regexp_replace(
+        ts_headline(
+          'english',
+          m.content,
+          plainto_tsquery('english', ${params.query}),
+          'StartSel=<mark>, StopSel=</mark>, MaxWords=50, MinWords=20'
+        ),
+        '<(?!/?(mark)( |>))[^>]*>',
+        '',
+        'gi'
       ) AS "highlightedContent",
       m."createdAt",
       c.name AS "channelName"
