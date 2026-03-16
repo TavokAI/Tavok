@@ -234,8 +234,10 @@ defmodule TavokGatewayWeb.UserSocketTest do
       assert claims["username"] == ""
     end
 
-    test "verify_token returns error for nil input" do
-      assert {:error, _} = UserSocket.verify_token(nil)
+    test "verify_token raises on nil input" do
+      assert_raise FunctionClauseError, fn ->
+        UserSocket.verify_token(nil)
+      end
     end
 
     test "verify_token returns error for empty string" do
