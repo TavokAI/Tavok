@@ -1,6 +1,6 @@
 {
   "name": "tavok",
-  "version": "0.2.5",
+  "version": "0.3.0",
   "private": true,
   "description": "AI-native self-hostable chat platform",
   "license": "AGPL-3.0-only",

@@ -1,4 +1,4 @@
-name: Release CLI
+name: Release
 
 on:
   push:
@@ -47,6 +47,16 @@ jobs:
 
       - name: Test npm wrapper
         run: pnpm --dir packages/cli test
+
+      - name: Check Python SDK version matches tag
+        shell: bash
+        run: |
+          expected="${GITHUB_REF_NAME#v}"
+          actual="$(python3 -c "import re; print(re.search(r'version = \"(.+?)\"', open('sdk/python/pyproject.toml').read()).group(1))")"
+          test "$expected" = "$actual" || {
+            echo "sdk/python/pyproject.toml version ($actual) does not match tag ($expected)"
+            exit 1
+          }
 
       - name: Test Go CLI
         run: go test ./...
@@ -243,3 +253,36 @@ jobs:
         if: ${{ env.NODE_AUTH_TOKEN != '' }}
         run: npm publish --access public
         working-directory: packages/cli
+
+  pypi-publish:
+    name: Publish Python SDK to PyPI
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install build tools
+        run: pip install build
+
+      - name: Build package
+        run: python -m build
+        working-directory: sdk/python
+
+      - name: Skip PyPI publish when token is absent
+        if: ${{ secrets.PYPI_TOKEN == '' }}
+        run: echo "PYPI_TOKEN not configured; skipping PyPI publish."
+
+      - name: Publish to PyPI
+        if: ${{ secrets.PYPI_TOKEN != '' }}
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: sdk/python/dist/
+          password: ${{ secrets.PYPI_TOKEN }}
