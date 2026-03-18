@@ -81,7 +81,7 @@ export interface CharterState {
 interface UseChannelReturn {
   messages: MessagePayload[];
   agentTriggerHint: string | null;
-  sendMessage: (content: string) => void;
+  sendMessage: (content: string) => Promise<boolean>;
   editMessage: (messageId: string, content: string) => Promise<boolean>;
   deleteMessage: (messageId: string) => Promise<boolean>;
   loadHistory: () => void;
@@ -96,6 +96,23 @@ interface UseChannelReturn {
   charterState: CharterState | null; // TASK-0020: live charter status
   setCharterState: React.Dispatch<React.SetStateAction<CharterState | null>>; // TASK-0020: for optimistic updates
   sendCharterControl: (action: "start" | "pause" | "resume" | "end") => void; // TASK-0020
+}
+
+function getSendErrorHint(resp: unknown): string {
+  const payload =
+    resp && typeof resp === "object" ? (resp as Record<string, unknown>) : null;
+  const reason = typeof payload?.reason === "string" ? payload.reason : null;
+
+  switch (reason) {
+    case "rate_limited":
+      return "Message send failed: rate limited. You can send up to 5 messages every 10 seconds in a channel.";
+    case "content_too_long":
+      return "Message send failed: message is too long for this channel.";
+    case "empty_content":
+      return "Message send failed: message content is empty.";
+    default:
+      return "Message send failed: couldn't send your message. Please try again.";
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -847,19 +864,30 @@ export function useChannel(channelId: string | null): UseChannelReturn {
   }, [channelId, addMessages, flushStreamBuffer]);
 
   // Send a message
-  const sendMessage = useCallback((content: string) => {
+  const sendMessage = useCallback((content: string): Promise<boolean> => {
     const trimmed = content.trim();
-    if (!trimmed) return;
+    if (!trimmed) return Promise.resolve(false);
 
     if (!channelRef.current) {
       setAgentTriggerHint(
-        "Action needed: disconnected from channel gateway. Reconnecting...",
+        "Message send failed: disconnected from channel gateway. Reconnecting...",
       );
-      return;
+      return Promise.resolve(false);
     }
 
     setAgentTriggerHint(null);
-    channelRef.current.push("new_message", { content: trimmed });
+    const push = channelRef.current.push("new_message", { content: trimmed });
+
+    return new Promise((resolve) => {
+      push
+        .receive("ok", (resp: unknown) => {
+          resolve(true);
+        })
+        .receive("error", (resp: unknown) => {
+          setAgentTriggerHint(getSendErrorHint(resp));
+          resolve(false);
+        });
+    });
   }, []);
 
   // Load older messages (history)

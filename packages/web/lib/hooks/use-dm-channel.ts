@@ -40,7 +40,7 @@ interface DmPresenceUser {
 
 interface UseDmChannelReturn {
   messages: DmMessagePayload[];
-  sendMessage: (content: string) => void;
+  sendMessage: (content: string) => Promise<boolean>;
   editMessage: (messageId: string, content: string) => Promise<boolean>;
   deleteMessage: (messageId: string) => Promise<boolean>;
   loadHistory: () => void;
@@ -49,6 +49,23 @@ interface UseDmChannelReturn {
   typingUsers: DmTypingUser[];
   sendTyping: () => void;
   presenceMap: Map<string, DmPresenceUser>;
+  sendError: string | null;
+}
+
+function getDmSendErrorHint(resp: unknown): string {
+  const payload =
+    resp && typeof resp === "object" ? (resp as Record<string, unknown>) : null;
+  const reason = typeof payload?.reason === "string" ? payload.reason : null;
+  const max = typeof payload?.max === "number" ? payload.max : null;
+
+  switch (reason) {
+    case "content_too_long":
+      return `Message send failed: DM messages are limited to ${max || 4000} characters.`;
+    case "empty_content":
+      return "Message send failed: message content is empty.";
+    default:
+      return "Message send failed: couldn't send your DM. Please try again.";
+  }
 }
 
 /**
@@ -63,6 +80,7 @@ export function useDmChannel(dmId: string | null): UseDmChannelReturn {
   const [hasMoreHistory, setHasMoreHistory] = useState(true);
   const [isConnected, setIsConnected] = useState(false);
   const [typingUsers, setTypingUsers] = useState<DmTypingUser[]>([]);
+  const [sendError, setSendError] = useState<string | null>(null);
   const [presenceMap, setPresenceMap] = useState<Map<string, DmPresenceUser>>(
     new Map(),
   );
@@ -117,6 +135,7 @@ export function useDmChannel(dmId: string | null): UseDmChannelReturn {
     setHasMoreHistory(true);
     setIsConnected(false);
     setTypingUsers([]);
+    setSendError(null);
     setPresenceMap(new Map());
     messageIdsRef.current = new Set();
     lastSequenceRef.current = "0";
@@ -296,9 +315,25 @@ export function useDmChannel(dmId: string | null): UseDmChannelReturn {
   }, [dmId, addMessages]);
 
   // Send a message
-  const sendMessage = useCallback((content: string) => {
-    if (!channelRef.current || !content.trim()) return;
-    channelRef.current.push("new_message", { content: content.trim() });
+  const sendMessage = useCallback((content: string): Promise<boolean> => {
+    const trimmed = content.trim();
+    if (!channelRef.current || !trimmed) {
+      setSendError("Message send failed: disconnected from DM channel.");
+      return Promise.resolve(false);
+    }
+    setSendError(null);
+    const channel = channelRef.current;
+    return new Promise((resolve) => {
+      channel
+        .push("new_message", { content: trimmed })
+        .receive("ok", (resp: unknown) => {
+          resolve(true);
+        })
+        .receive("error", (resp: unknown) => {
+          setSendError(getDmSendErrorHint(resp));
+          resolve(false);
+        });
+    });
   }, []);
 
   // Load older messages (history)
@@ -394,5 +429,6 @@ export function useDmChannel(dmId: string | null): UseDmChannelReturn {
     typingUsers,
     sendTyping,
     presenceMap,
+    sendError,
   };
 }

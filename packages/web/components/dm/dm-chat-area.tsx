@@ -37,6 +37,7 @@ export function DmChatArea({ dmId, otherUserName }: DmChatAreaProps) {
     isConnected,
     typingUsers,
     sendTyping,
+    sendError,
   } = useDmChannel(dmId);
 
   // TASK-0022: Search state
@@ -87,6 +88,16 @@ export function DmChatArea({ dmId, otherUserName }: DmChatAreaProps) {
 
       {/* Typing indicator */}
       <DmTypingIndicator typingUsers={typingUsers} />
+
+      {sendError && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="border-t border-status-dnd/35 bg-status-dnd/10 px-4 py-2.5 text-sm font-semibold text-status-dnd"
+        >
+          {sendError}
+        </div>
+      )}
 
       {/* Message input */}
       <MessageInput

@@ -25,7 +25,7 @@ interface PendingFile {
 }
 
 interface MessageInputProps {
-  onSend: (content: string) => void;
+  onSend: (content: string) => void | Promise<boolean>;
   onTyping: () => void;
   disabled?: boolean;
   channelName?: string;
@@ -175,7 +175,8 @@ export function MessageInput({
     [uploadFile],
   );
 
-  const handleSend = useCallback(() => {
+  const handleSend = useCallback(async () => {
+    const submittedValue = value;
     let content = value.trim();
     const completedFiles = pendingFiles.filter((f) => f.progress >= 1);
     const fileRefs = completedFiles
@@ -192,15 +193,21 @@ export function MessageInput({
     }
 
     if (!content) return;
-    onSend(content);
-    setValue("");
-    setPendingFiles([]);
-    setMentionActive(false);
+    const didSend = await onSend(content);
+    if (didSend === false) return;
 
-    // Reset textarea height
-    if (textareaRef.current) {
-      textareaRef.current.style.height = "auto";
+    const shouldClearDraft = (textareaRef.current?.value ?? "") === submittedValue;
+    if (shouldClearDraft) {
+      setValue("");
+      setMentionActive(false);
+
+      // Reset textarea height only when we actually cleared the draft.
+      if (textareaRef.current) {
+        textareaRef.current.style.height = "auto";
+      }
     }
+
+    setPendingFiles([]);
   }, [value, pendingFiles, onSend]);
 
   const handleFileSelect = useCallback(
@@ -367,7 +374,7 @@ export function MessageInput({
 
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
-        handleSend();
+        void handleSend();
       }
     },
     [

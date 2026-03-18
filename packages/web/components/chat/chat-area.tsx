@@ -205,7 +205,8 @@ export function ChatArea({
   }, [members, agents]);
   const isErrorHint =
     typeof agentTriggerHint === "string" &&
-    agentTriggerHint.startsWith("Agent response failed:");
+    (agentTriggerHint.startsWith("Agent response failed:") ||
+      agentTriggerHint.startsWith("Message send failed:"));
 
   // TASK-0022: Search panel data
   const searchChannels = useMemo(

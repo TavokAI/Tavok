@@ -407,7 +407,8 @@ export function ChatPanel({ panel }: ChatPanelProps) {
   const hasActiveStream = messages.some((m) => m.streamingStatus === "ACTIVE");
   const isErrorHint =
     typeof agentTriggerHint === "string" &&
-    agentTriggerHint.startsWith("Agent response failed:");
+    (agentTriggerHint.startsWith("Agent response failed:") ||
+      agentTriggerHint.startsWith("Message send failed:"));
 
   useEffect(() => {
     setStreamState(panel.channelId, hasActiveStream);
