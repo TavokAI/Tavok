@@ -61,14 +61,16 @@ test.describe("Section 21: Final Sanity", () => {
 
     // Step 4: Run migrations from host
     try {
-      execSync(
-        `DATABASE_URL="postgresql://tavok:${process.env.POSTGRES_PASSWORD || "tavok"}@localhost:55432/tavok" npx prisma migrate deploy`,
-        {
-          cwd: projectDir,
-          timeout: 30_000,
-          encoding: "utf-8",
+      const databaseUrl = `postgresql://tavok:${process.env.POSTGRES_PASSWORD || "tavok"}@localhost:55432/tavok`;
+      execSync("npx prisma migrate deploy --schema prisma/schema.prisma", {
+        cwd: projectDir,
+        timeout: 30_000,
+        encoding: "utf-8",
+        env: {
+          ...process.env,
+          DATABASE_URL: databaseUrl,
         },
-      );
+      });
     } catch {
       // Migrations may already be applied
     }

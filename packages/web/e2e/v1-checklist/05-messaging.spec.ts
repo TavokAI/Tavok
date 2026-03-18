@@ -12,6 +12,7 @@ import {
   createTwoUserContexts,
   cleanupContexts,
   createServerViaAPI,
+  createChannelViaAPI,
   createInviteViaAPI,
   joinServerViaAPI,
 } from "./helpers";
@@ -170,6 +171,14 @@ test.describe("Section 5: Real-Time Messaging", () => {
 
   test("rapid-fire messages — all arrive in order", async ({ browser }) => {
     test.setTimeout(60_000);
+    const rapidChannelName = `rapid-${Date.now()}`;
+
+    const setupContext = await browser.newContext();
+    const setupPage = await setupContext.newPage();
+    await login(setupPage, DEMO_USER.email, DEMO_USER.password);
+    await createChannelViaAPI(setupPage, serverId, rapidChannelName);
+    await setupContext.close();
+
     const { contextA, contextB, pageA, pageB } = await createTwoUserContexts(
       browser,
       ALICE,
@@ -179,10 +188,10 @@ test.describe("Section 5: Real-Time Messaging", () => {
     try {
       await selectServer(pageA, serverName);
       await selectServer(pageB, serverName);
-      await openChannel(pageA, "general");
-      await openChannel(pageB, "general");
-      await waitForWebSocket(pageA, "general");
-      await waitForWebSocket(pageB, "general");
+      await openChannel(pageA, rapidChannelName);
+      await openChannel(pageB, rapidChannelName);
+      await waitForWebSocket(pageA, rapidChannelName);
+      await waitForWebSocket(pageB, rapidChannelName);
 
       const ts = Date.now();
       const messages: string[] = [];
@@ -191,7 +200,7 @@ test.describe("Section 5: Real-Time Messaging", () => {
       for (let i = 0; i < count; i++) {
         const msg = `Rapid-${i}-${ts}`;
         messages.push(msg);
-        const input = pageA.getByPlaceholder("Message #general");
+        const input = pageA.getByPlaceholder(`Message #${rapidChannelName}`);
         await input.fill(msg);
         await input.press("Enter");
         // Delay between messages to ensure ordering — CI needs headroom

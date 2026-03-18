@@ -8,12 +8,23 @@ import json
 import logging
 import os
 import sys
+from datetime import datetime, timezone
+from pathlib import Path
+
+ROOT_DIR = Path(__file__).resolve().parent.parent
+SDK_PYTHON_DIR = ROOT_DIR / "sdk" / "python"
+
+if str(SDK_PYTHON_DIR) not in sys.path:
+    sys.path.insert(0, str(SDK_PYTHON_DIR))
 
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(name)s %(levelname)s %(message)s",
 )
 logger = logging.getLogger("test-sdk")
+
+DEMO_USER_EMAIL = os.environ.get("SDK_TEST_USER_EMAIL", "demo@tavok.ai")
+DEMO_USER_PASSWORD = os.environ.get("SDK_TEST_USER_PASSWORD", "DemoPass123!")
 
 # Resolve server/channel IDs: env vars > seed-ids.json > hardcoded fallback
 SEED_IDS_PATH = os.path.join(os.path.dirname(__file__), "..", "prisma", ".seed-ids.json")
@@ -39,16 +50,66 @@ async def main() -> None:
 
     results: list[str] = []
 
+    async def create_test_agent_credentials(name: str) -> tuple[str, str, str, str]:
+        import httpx
+
+        async with httpx.AsyncClient(base_url="http://localhost:5555", timeout=30.0) as client:
+            csrf_res = await client.get("/api/auth/csrf")
+            csrf_res.raise_for_status()
+            csrf_token = csrf_res.json()["csrfToken"]
+
+            auth_res = await client.post(
+                "/api/auth/callback/credentials",
+                data={
+                    "email": DEMO_USER_EMAIL,
+                    "password": DEMO_USER_PASSWORD,
+                    "csrfToken": csrf_token,
+                    "json": "true",
+                },
+            )
+            auth_res.raise_for_status()
+            auth_data = auth_res.json()
+
+            if "error" in str(auth_data.get("url", "")):
+                raise RuntimeError(f"Demo user login failed: {auth_data}")
+
+            server_name = f"SDK Test Server {int(datetime.now(timezone.utc).timestamp())}"
+            server_res = await client.post(
+                "/api/servers",
+                json={"name": server_name},
+            )
+            server_body = server_res.json()
+            server_res.raise_for_status()
+            server_id = server_body["id"]
+            channel_id = server_body["defaultChannelId"]
+
+            create_res = await client.post(
+                f"/api/servers/{server_id}/agents",
+                json={
+                    "name": name,
+                    "connectionMethod": "WEBSOCKET",
+                    "capabilities": ["chat", "test"],
+                },
+            )
+            create_body = create_res.json()
+            create_res.raise_for_status()
+
+            return server_id, channel_id, create_body["id"], create_body["apiKey"]
+
     # --- Test 1: Create agent and register ---
     logger.info("=== Test 1: Agent Registration ===")
+    agent_name = f"SDK Test Agent {int(datetime.now(timezone.utc).timestamp())}"
+    server_id, channel_id, agent_id, api_key = await create_test_agent_credentials(agent_name)
     agent = Agent(
         url="ws://localhost:4001",
         api_url="http://localhost:5555",
-        name="SDK Test Agent",
+        name=agent_name,
+        agent_id=agent_id,
+        api_key=api_key,
         capabilities=["chat", "test"],
     )
 
-    await agent.start(server_id=SERVER_ID, channel_ids=[CHANNEL_ID])
+    await agent.start(server_id=server_id, channel_ids=[channel_id])
 
     assert agent.agent_id is not None, "agent_id should be set after registration"
     assert agent.api_key is not None, "api_key should be set after registration"
@@ -59,7 +120,7 @@ async def main() -> None:
 
     # --- Test 2: Send a message ---
     logger.info("=== Test 2: Send Message ===")
-    reply = await agent.send(CHANNEL_ID, "Hello from the Python SDK!")
+    reply = await agent.send(channel_id, "Hello from the Python SDK!")
     assert "id" in reply, "Reply should contain message id"
     assert "sequence" in reply, "Reply should contain sequence"
     results.append(f"PASS: Send message (id={reply['id']}, seq={reply['sequence']})")
@@ -95,17 +156,17 @@ async def main() -> None:
         api_key=saved_key,
         agent_id=saved_id,
     )
-    await agent2.start(server_id=SERVER_ID, channel_ids=[CHANNEL_ID])
+    await agent2.start(server_id=server_id, channel_ids=[channel_id])
     assert agent2.connected, "Agent should reconnect with saved key"
 
-    reply2 = await agent2.send(CHANNEL_ID, "Reconnected with saved API key!")
+    reply2 = await agent2.send(channel_id, "Reconnected with saved API key!")
     assert "id" in reply2, "Reply should contain message id after reconnect"
     results.append("PASS: Reconnect with saved API key")
 
     # --- Test 5: Stream context (start/token/complete) ---
     logger.info("=== Test 5: Stream Context ===")
     try:
-        async with agent2.stream(CHANNEL_ID) as s:
+        async with agent2.stream(channel_id) as s:
             await s.status("Thinking")
             await s.token("Streaming ")
             await s.token("from ")
