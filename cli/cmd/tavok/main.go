@@ -179,11 +179,9 @@ func runInit(args []string) {
 
 	// Derive username from email
 	username := "admin"
-	if atIdx := len(*email) - len(*email); atIdx >= 0 {
-		parts := splitEmail(*email)
-		if parts != "" {
-			username = parts
-		}
+	parts := splitEmail(*email)
+	if parts != "" {
+		username = parts
 	}
 
 	result, err := bootstrap.CallBootstrap(baseURL, secrets.AdminToken, bootstrap.BootstrapRequest{
@@ -375,6 +373,7 @@ func cleanEnvForCompose() []string {
 	// Every var referenced in docker-compose.yml via ${VAR} syntax.
 	// If shell has these, they override .env — which breaks retry after failure.
 	strip := map[string]bool{
+		"COMPOSE_PROJECT_NAME":     true,
 		"POSTGRES_USER":           true,
 		"POSTGRES_PASSWORD":       true,
 		"POSTGRES_DB":             true,
