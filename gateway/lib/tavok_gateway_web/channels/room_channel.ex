@@ -282,6 +282,13 @@ defmodule TavokGatewayWeb.RoomChannel do
     {:noreply, socket}
   end
 
+  # Deferred broadcasts — sent after phx_reply to guarantee reply-before-broadcast ordering
+  @impl true
+  def handle_info({:deferred_broadcast, event, payload}, socket) do
+    Broadcast.broadcast_pre_serialized!(socket, event, payload)
+    {:noreply, socket}
+  end
+
   # Handle Task completion/failure — we don't need the result
   @impl true
   def handle_info({ref, _result}, socket) when is_reference(ref) do
@@ -852,7 +859,7 @@ defmodule TavokGatewayWeb.RoomChannel do
         end
       end)
 
-      # Broadcast stream_complete to all clients
+      # Defer broadcast so the phx_reply reaches the sender before the broadcast
       complete_payload = %{
         messageId: message_id,
         finalContent: final_content,
@@ -862,7 +869,7 @@ defmodule TavokGatewayWeb.RoomChannel do
       complete_payload =
         if metadata, do: Map.put(complete_payload, :metadata, metadata), else: complete_payload
 
-      Broadcast.broadcast_pre_serialized!(socket, "stream_complete", complete_payload)
+      send(self(), {:deferred_broadcast, "stream_complete", complete_payload})
 
       {:reply, {:ok, %{messageId: message_id}}, socket}
     else
@@ -898,12 +905,12 @@ defmodule TavokGatewayWeb.RoomChannel do
       end
     end)
 
-    # Broadcast stream_error to all clients
-    Broadcast.broadcast_pre_serialized!(socket, "stream_error", %{
+    # Defer broadcast so the phx_reply reaches the sender before the broadcast
+    send(self(), {:deferred_broadcast, "stream_error", %{
       messageId: message_id,
       error: error_msg,
       partialContent: partial_content
-    })
+    }})
 
     {:reply, {:ok, %{messageId: message_id}}, socket}
   end

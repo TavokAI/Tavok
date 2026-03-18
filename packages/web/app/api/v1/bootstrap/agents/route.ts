@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import {
   createAgent,
   buildConnectionInfo,
+  AgentNameConflictError,
   VALID_CONNECTION_METHODS,
   type ConnectionMethodValue,
 } from "@/lib/agent-factory";
@@ -105,6 +106,9 @@ export async function POST(request: NextRequest) {
       { status: 201 },
     );
   } catch (error) {
+    if (error instanceof AgentNameConflictError) {
+      return NextResponse.json({ error: error.message }, { status: 409 });
+    }
     console.error(
       "[v1/bootstrap/agents] Bootstrap agent creation failed:",
       error,

@@ -45,7 +45,7 @@ Open http://localhost:5555. Create an account. Create a server. Done.
 
 ### What just happened
 
-1. `setup.sh` generated `.env` with random secrets for PostgreSQL, Redis, JWT, encryption, and session auth
+1. `setup.sh` generated `.env` with random secrets for PostgreSQL, Redis, JWT, encryption, session auth, and `TAVOK_ADMIN_TOKEN` (used for agent registration via `POST /api/v1/bootstrap/agents`)
 2. `docker compose up -d` pulled pre-built images and started 5 containers:
 
 | Container | Service | Port | Purpose |
@@ -85,10 +85,11 @@ git clone https://github.com/TavokAI/Tavok.git
 cd Tavok
 cp .env.example .env
 # Edit .env — replace every CHANGE-ME value:
-#   openssl rand -base64 32   (NEXTAUTH_SECRET, JWT_SECRET, INTERNAL_API_SECRET, REDIS_PASSWORD)
+#   openssl rand -base64 32   (NEXTAUTH_SECRET, JWT_SECRET, INTERNAL_API_SECRET, REDIS_PASSWORD, TAVOK_ADMIN_TOKEN)
 #   openssl rand -base64 64   (SECRET_KEY_BASE)
 #   openssl rand -hex 32      (ENCRYPTION_KEY)
 # Set DOMAIN, NEXTAUTH_URL, NEXT_PUBLIC_GATEWAY_URL for your domain
+# TAVOK_ADMIN_TOKEN is required for agent registration (POST /api/v1/bootstrap/agents)
 ```
 
 ### Then: DNS + Start

@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo, useCallback } from "react";
 import Image from "next/image";
 import { useRouter, usePathname } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { useChatContext } from "@/components/providers/chat-provider";
 import { useWorkspaceContext } from "@/components/providers/workspace-provider";
 import { CreateServerModal } from "@/components/modals/create-server-modal";
@@ -16,6 +17,8 @@ import {
   Server as ServerIcon,
   MessageSquare,
   Settings2,
+  Search as SearchIcon,
+  X,
 } from "lucide-react";
 import { UserProfileButton } from "@/components/user/user-profile-button";
 import { ServerSettingsOverlay } from "@/components/server-settings/server-settings-overlay";
@@ -23,6 +26,8 @@ import { ServerSettingsOverlay } from "@/components/server-settings/server-setti
 export function LeftPanel() {
   const router = useRouter();
   const pathname = usePathname();
+  const { data: session } = useSession();
+  const currentUserId = session?.user?.id;
   const {
     servers,
     currentServerId,
@@ -32,6 +37,8 @@ export function LeftPanel() {
     hasPermission,
     refreshServers,
     unreadMap,
+    members,
+    serverDataById,
   } = useChatContext();
   const { openPanel, panels, activeStreams } = useWorkspaceContext();
   const [activeTab, setActiveTab] = useState<
@@ -40,8 +47,13 @@ export function LeftPanel() {
   const [showCreateServer, setShowCreateServer] = useState(false);
   const [showCreateChannel, setShowCreateChannel] = useState(false);
   const [showServerSettings, setShowServerSettings] = useState(false);
+  const [showNewDm, setShowNewDm] = useState(false);
 
-  const { conversations: dmConversations, isLoading: dmsLoading } = useDmList();
+  const {
+    conversations: dmConversations,
+    isLoading: dmsLoading,
+    startDm,
+  } = useDmList();
   const activeDmId = pathname.match(/\/dms\/([^/]+)/)?.[1] || null;
   const openChannelIds = new Set(
     panels.filter((p) => !p.isClosed).map((p) => p.channelId),
@@ -152,7 +164,31 @@ export function LeftPanel() {
                 <span className="text-[10px] font-semibold tracking-[0.14em] text-text-dim">
                   DIRECT MESSAGES
                 </span>
+                <button
+                  onClick={() => setShowNewDm((v) => !v)}
+                  className="rounded p-0.5 text-text-dim hover:text-text-primary hover:bg-white/[0.06] transition-colors"
+                  title="New Direct Message"
+                >
+                  {showNewDm ? (
+                    <X className="h-3.5 w-3.5" />
+                  ) : (
+                    <Plus className="h-3.5 w-3.5" />
+                  )}
+                </button>
               </div>
+
+              {showNewDm && (
+                <NewDmPicker
+                  members={members}
+                  serverDataById={serverDataById}
+                  currentUserId={currentUserId}
+                  onSelect={async (userId) => {
+                    setShowNewDm(false);
+                    const dmId = await startDm(userId);
+                    if (dmId) router.push(`/dms/${dmId}`);
+                  }}
+                />
+              )}
 
               {dmsLoading ? (
                 <div className="px-2.5 text-[11px] text-text-dim">
@@ -323,5 +359,96 @@ export function LeftPanel() {
         />
       )}
     </>
+  );
+}
+
+function NewDmPicker({
+  members,
+  serverDataById,
+  currentUserId,
+  onSelect,
+}: {
+  members: { userId: string; displayName: string; avatarUrl?: string | null }[];
+  serverDataById: Record<
+    string,
+    { members: { userId: string; displayName: string }[] }
+  >;
+  currentUserId?: string;
+  onSelect: (userId: string) => void;
+}) {
+  const [search, setSearch] = useState("");
+  const [isStarting, setIsStarting] = useState(false);
+
+  const allMembers = useMemo(() => {
+    const seen = new Map<string, { userId: string; displayName: string }>();
+    for (const m of members) {
+      seen.set(m.userId, { userId: m.userId, displayName: m.displayName });
+    }
+    for (const data of Object.values(serverDataById)) {
+      for (const m of data.members) {
+        if (!seen.has(m.userId)) {
+          seen.set(m.userId, { userId: m.userId, displayName: m.displayName });
+        }
+      }
+    }
+    return [...seen.values()];
+  }, [members, serverDataById]);
+
+  const filtered = useMemo(() => {
+    const q = search.toLowerCase();
+    return allMembers
+      .filter((m) => m.userId !== currentUserId)
+      .filter((m) => !q || m.displayName.toLowerCase().includes(q));
+  }, [allMembers, currentUserId, search]);
+
+  const handleSelect = useCallback(
+    async (userId: string) => {
+      if (isStarting) return;
+      setIsStarting(true);
+      try {
+        onSelect(userId);
+      } finally {
+        setIsStarting(false);
+      }
+    },
+    [isStarting, onSelect],
+  );
+
+  return (
+    <div className="mx-1 mb-2 rounded-md border border-white/[0.06] bg-background-primary/80 p-1.5">
+      <div className="relative mb-1.5">
+        <SearchIcon className="absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2 text-text-dim" />
+        <input
+          autoFocus
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search members..."
+          className="w-full rounded bg-background-floating py-1.5 pl-7 pr-2 text-[11px] text-text-primary placeholder:text-text-dim/60 outline-none"
+        />
+      </div>
+      <div className="max-h-[180px] overflow-y-auto">
+        {filtered.length === 0 ? (
+          <div className="px-2 py-2 text-center text-[11px] text-text-dim">
+            {allMembers.length === 0
+              ? "Join a server to see available members"
+              : "No members found"}
+          </div>
+        ) : (
+          filtered.map((m) => (
+            <button
+              key={m.userId}
+              onClick={() => handleSelect(m.userId)}
+              disabled={isStarting}
+              className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-[12px] text-text-muted transition hover:bg-white/[0.04] hover:text-text-primary disabled:opacity-50"
+            >
+              <div className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-background-floating text-[10px] font-bold text-text-secondary">
+                {m.displayName.charAt(0).toUpperCase()}
+              </div>
+              <span className="truncate">{m.displayName}</span>
+            </button>
+          ))
+        )}
+      </div>
+    </div>
   );
 }
