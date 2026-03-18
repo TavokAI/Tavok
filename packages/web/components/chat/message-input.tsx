@@ -196,7 +196,8 @@ export function MessageInput({
     const didSend = await onSend(content);
     if (didSend === false) return;
 
-    const shouldClearDraft = (textareaRef.current?.value ?? "") === submittedValue;
+    const shouldClearDraft =
+      (textareaRef.current?.value ?? "") === submittedValue;
     if (shouldClearDraft) {
       setValue("");
       setMentionActive(false);
