@@ -195,6 +195,7 @@ describe("createAgent", () => {
     mockAgentCreate.mockRejectedValue(
       new Prisma.PrismaClientKnownRequestError("Unique constraint failed", {
         code: "P2002",
+        clientVersion: "0.0.0",
       }),
     );
 
