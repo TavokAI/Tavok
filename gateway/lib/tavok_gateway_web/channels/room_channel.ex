@@ -906,11 +906,15 @@ defmodule TavokGatewayWeb.RoomChannel do
     end)
 
     # Defer broadcast so the phx_reply reaches the sender before the broadcast
-    send(self(), {:deferred_broadcast, "stream_error", %{
-      messageId: message_id,
-      error: error_msg,
-      partialContent: partial_content
-    }})
+    send(
+      self(),
+      {:deferred_broadcast, "stream_error",
+       %{
+         messageId: message_id,
+         error: error_msg,
+         partialContent: partial_content
+       }}
+    )
 
     {:reply, {:ok, %{messageId: message_id}}, socket}
   end
