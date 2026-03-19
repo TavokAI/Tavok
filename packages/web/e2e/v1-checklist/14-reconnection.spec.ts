@@ -60,7 +60,8 @@ test.describe("Section 14: Reconnection & Resilience", () => {
     await waitForWebSocket(page, "general");
 
     // Previous message should be loaded from history
-    await expect(page.getByText(msg)).toBeVisible({ timeout: 10_000 });
+    // Use .first() because the left panel may also show the message text
+    await expect(page.getByText(msg).first()).toBeVisible({ timeout: 10_000 });
   });
 
   test("send message after page refresh — message appears", async ({
@@ -82,14 +83,15 @@ test.describe("Section 14: Reconnection & Resilience", () => {
     await waitForWebSocket(page, "general");
 
     // Wait for history to load (seed message proves channel join + history fetch completed)
-    await expect(page.getByText(seed)).toBeVisible({ timeout: 15_000 });
+    // Use .first() because the left panel may also show the message text
+    await expect(page.getByText(seed).first()).toBeVisible({ timeout: 15_000 });
 
     // Send new message after reconnection
     const msg = uniqueMsg("Post-refresh");
     await sendMessage(page, "general", msg);
 
     // Message should appear
-    await expect(page.getByText(msg)).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText(msg).first()).toBeVisible({ timeout: 15_000 });
   });
 
   test("two users — Bob reloads, Alice sends, Bob sees new message", async ({
@@ -120,7 +122,7 @@ test.describe("Section 14: Reconnection & Resilience", () => {
       await sendMessage(pageA, "general", msg);
 
       // Bob should see it via live WebSocket (not just history)
-      await expect(pageB.getByText(msg)).toBeVisible({ timeout: 15_000 });
+      await expect(pageB.getByText(msg).first()).toBeVisible({ timeout: 15_000 });
     } finally {
       await cleanupContexts(contextA, contextB);
     }

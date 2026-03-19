@@ -86,7 +86,8 @@ test.describe("Section 19: Edge Cases", () => {
     const followUp = `Follow-up-${ts}`;
     await input.fill(followUp);
     await input.press("Enter");
-    await expect(page.getByText(followUp)).toBeVisible({ timeout: 10_000 });
+    // Use .first() because the left panel may also show the message text
+    await expect(page.getByText(followUp).first()).toBeVisible({ timeout: 10_000 });
   });
 
   test("emoji in server name — works", async ({ page }) => {
