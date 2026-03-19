@@ -122,7 +122,9 @@ test.describe("Section 14: Reconnection & Resilience", () => {
       await sendMessage(pageA, "general", msg);
 
       // Bob should see it via live WebSocket (not just history)
-      await expect(pageB.getByText(msg).first()).toBeVisible({ timeout: 15_000 });
+      await expect(pageB.getByText(msg).first()).toBeVisible({
+        timeout: 15_000,
+      });
     } finally {
       await cleanupContexts(contextA, contextB);
     }
