@@ -81,21 +81,23 @@ fi
 echo "Checking network connectivity..."
 NETWORK_OK=true
 NETWORK_WARNINGS=""
-# GHCR is required (pre-built images). Package mirrors only needed for --build.
+GHCR_REACHABLE=true
 for host in ghcr.io; do
   if ! curl -sf --connect-timeout 5 --max-time 10 "https://$host" -o /dev/null 2>/dev/null; then
+    GHCR_REACHABLE=false
     NETWORK_OK=false
-    echo "" >&2
-    echo "ERROR: Cannot reach ghcr.io (GitHub Container Registry)." >&2
-    echo "'docker compose up -d' pulls pre-built images and needs registry access." >&2
-    echo "" >&2
-    echo "Check your internet connection and DNS settings." >&2
-    echo "If using Docker with iptables disabled, see:" >&2
-    echo "  https://github.com/TavokAI/Tavok/blob/main/docs/INSTALL.md#docker-containers-cant-reach-the-internet" >&2
-    exit 1
+    echo ""
+    echo "  ⚠ Cannot reach ghcr.io (GitHub Container Registry)."
+    echo "    Pre-built images won't be available."
+    echo "    You can still build from source: docker compose up --build -d"
+    echo ""
+    echo "    If this is a networking issue, see:"
+    echo "    https://github.com/TavokAI/Tavok/blob/main/docs/INSTALL.md#docker-containers-cant-reach-the-internet"
   fi
 done
-echo "  ✓ Container registry reachable (ghcr.io)"
+if [ "$GHCR_REACHABLE" = true ]; then
+  echo "  ✓ Container registry reachable (ghcr.io)"
+fi
 
 # Optional: warn if package mirrors are unreachable (only matters for --build)
 for host in dl-cdn.alpinelinux.org registry.npmjs.org hex.pm proxy.golang.org; do
@@ -149,6 +151,7 @@ SECRET_KEY_BASE=$(generate_secret 64)
 ENCRYPTION_KEY=$(generate_hex 32)
 POSTGRES_PASSWORD=$(generate_secret 16)
 REDIS_PASSWORD=$(generate_secret 32)
+TAVOK_ADMIN_TOKEN=$(generate_secret 32)
 
 # --- Determine domain ---
 if [ -n "$DOMAIN_ARG" ]; then
@@ -214,6 +217,9 @@ INTERNAL_API_SECRET=${INTERNAL_API_SECRET}
 SECRET_KEY_BASE=${SECRET_KEY_BASE}
 ENCRYPTION_KEY=${ENCRYPTION_KEY}
 
+# Admin token for agent registration (POST /api/v1/bootstrap/agents)
+TAVOK_ADMIN_TOKEN=${TAVOK_ADMIN_TOKEN}
+
 # ============================================================
 # SERVICE PORTS
 # ============================================================
@@ -232,18 +238,33 @@ EOF
 echo ""
 echo "✓ .env file created with secure secrets."
 echo ""
-if [ "$DOMAIN" != "localhost" ]; then
-  echo "Next steps:"
-  echo "  1. Point DNS for ${DOMAIN} to this server's IP"
-  echo "  2. Run: docker compose --profile production up -d"
-  echo "     (pulls pre-built images from ghcr.io — no build needed)"
-  echo "  3. Open https://${DOMAIN}"
-  echo ""
-  echo "Caddy will automatically obtain an HTTPS certificate."
+if [ "$GHCR_REACHABLE" = true ]; then
+  if [ "$DOMAIN" != "localhost" ]; then
+    echo "Next steps:"
+    echo "  1. Point DNS for ${DOMAIN} to this server's IP"
+    echo "  2. Run: docker compose --profile production up -d"
+    echo "     (pulls pre-built images from ghcr.io — no build needed)"
+    echo "  3. Open https://${DOMAIN}"
+    echo ""
+    echo "Caddy will automatically obtain an HTTPS certificate."
+  else
+    echo "Next steps:"
+    echo "  1. Run: docker compose up -d"
+    echo "     (pulls pre-built images from ghcr.io — no build needed)"
+    echo "  2. Open http://localhost:5555"
+  fi
 else
-  echo "Next steps:"
-  echo "  1. Run: docker compose up -d"
-  echo "     (pulls pre-built images from ghcr.io — no build needed)"
-  echo "  2. Open http://localhost:5555"
+  if [ "$DOMAIN" != "localhost" ]; then
+    echo "Next steps (building from source — ghcr.io was unreachable):"
+    echo "  1. Point DNS for ${DOMAIN} to this server's IP"
+    echo "  2. Run: docker compose --profile production up --build -d"
+    echo "  3. Open https://${DOMAIN}"
+    echo ""
+    echo "Caddy will automatically obtain an HTTPS certificate."
+  else
+    echo "Next steps (building from source — ghcr.io was unreachable):"
+    echo "  1. Run: docker compose up --build -d"
+    echo "  2. Open http://localhost:5555"
+  fi
 fi
 echo ""

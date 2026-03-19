@@ -116,11 +116,13 @@ export function parseSearchFilters(searchParams: URLSearchParams): {
 export function buildServerSearchQuery(params: ServerSearchParams): Prisma.Sql {
   const offset = ((params.page || 1) - 1) * PAGE_SIZE;
 
-  // Build dynamic WHERE conditions
+  const ilikePattern = `%${params.query}%`;
+
+  // Build dynamic WHERE conditions — FTS with ILIKE fallback for short/stemmed-away terms
   const conditions: Prisma.Sql[] = [
     Prisma.sql`c."serverId" = ${params.serverId}`,
     Prisma.sql`m."isDeleted" = false`,
-    Prisma.sql`to_tsvector('english', m.content) @@ plainto_tsquery('english', ${params.query})`,
+    Prisma.sql`(to_tsvector('english', m.content) @@ plainto_tsquery('english', ${params.query}) OR m.content ILIKE ${ilikePattern})`,
   ];
 
   if (params.channelId) {
@@ -194,10 +196,12 @@ export function buildDmSearchQuery(params: DmSearchParams): Prisma.Sql {
     return Prisma.sql`SELECT NULL WHERE false`;
   }
 
+  const ilikePattern = `%${params.query}%`;
+
   const conditions: Prisma.Sql[] = [
     Prisma.sql`dm."dmId" = ANY(${params.participantDmIds})`,
     Prisma.sql`dm."isDeleted" = false`,
-    Prisma.sql`to_tsvector('english', dm.content) @@ plainto_tsquery('english', ${params.query})`,
+    Prisma.sql`(to_tsvector('english', dm.content) @@ plainto_tsquery('english', ${params.query}) OR dm.content ILIKE ${ilikePattern})`,
   ];
 
   if (params.dmId) {

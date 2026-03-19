@@ -1,8 +1,16 @@
 import { generateId } from "@/lib/ulid";
 import crypto from "crypto";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { getInternalBaseUrl } from "@/lib/internal-auth";
 import type { TriggerMode, ConnectionMethod } from "@tavok/shared/agent";
+
+export class AgentNameConflictError extends Error {
+  constructor(name: string) {
+    super(`Agent with name "${name}" already exists in this server`);
+    this.name = "AgentNameConflictError";
+  }
+}
 
 /**
  * Shared agent creation logic — used by both:
@@ -69,55 +77,68 @@ export async function createAgent(
       ? crypto.randomBytes(32).toString("hex")
       : undefined;
 
-  const result = await prisma.$transaction(async (tx) => {
-    const agent = await tx.agent.create({
-      data: {
-        id: agentId,
-        name: opts.name,
-        serverId: opts.serverId,
-        llmProvider: "custom",
-        llmModel: "custom",
-        apiEndpoint: "",
-        apiKeyEncrypted: "",
-        systemPrompt: opts.systemPrompt || "",
-        temperature: 0.7,
-        maxTokens: 4096,
-        isActive: true,
-        triggerMode: opts.triggerMode || "MENTION",
-        connectionMethod: opts.connectionMethod,
-      },
-    });
-
-    await tx.agentRegistration.create({
-      data: {
-        id: registrationId,
-        agentId: agent.id,
-        apiKeyHash,
-        capabilities: Array.isArray(opts.capabilities) ? opts.capabilities : [],
-        webhookUrl: opts.webhookUrl,
-        connectionMethod: opts.connectionMethod,
-        webhookSecret,
-      },
-    });
-
-    // Auto-assign agent to all channels in the server so Gateway can trigger it
-    const channels = await tx.channel.findMany({
-      where: { serverId: opts.serverId },
-      select: { id: true },
-    });
-
-    if (channels.length > 0) {
-      await tx.channelAgent.createMany({
-        data: channels.map((ch) => ({
-          id: generateId(),
-          channelId: ch.id,
-          agentId: agent.id,
-        })),
+  let result: { agent: { id: string; name: string } };
+  try {
+    result = await prisma.$transaction(async (tx) => {
+      const agent = await tx.agent.create({
+        data: {
+          id: agentId,
+          name: opts.name,
+          serverId: opts.serverId,
+          llmProvider: "custom",
+          llmModel: "custom",
+          apiEndpoint: "",
+          apiKeyEncrypted: "",
+          systemPrompt: opts.systemPrompt || "",
+          temperature: 0.7,
+          maxTokens: 4096,
+          isActive: true,
+          triggerMode: opts.triggerMode || "MENTION",
+          connectionMethod: opts.connectionMethod,
+        },
       });
-    }
 
-    return { agent };
-  });
+      await tx.agentRegistration.create({
+        data: {
+          id: registrationId,
+          agentId: agent.id,
+          apiKeyHash,
+          capabilities: Array.isArray(opts.capabilities)
+            ? opts.capabilities
+            : [],
+          webhookUrl: opts.webhookUrl,
+          connectionMethod: opts.connectionMethod,
+          webhookSecret,
+        },
+      });
+
+      // Auto-assign agent to all channels in the server so Gateway can trigger it
+      const channels = await tx.channel.findMany({
+        where: { serverId: opts.serverId },
+        select: { id: true },
+      });
+
+      if (channels.length > 0) {
+        await tx.channelAgent.createMany({
+          data: channels.map((ch) => ({
+            id: generateId(),
+            channelId: ch.id,
+            agentId: agent.id,
+          })),
+        });
+      }
+
+      return { agent };
+    });
+  } catch (error) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2002"
+    ) {
+      throw new AgentNameConflictError(opts.name);
+    }
+    throw error;
+  }
 
   return {
     agent: { id: result.agent.id, name: result.agent.name },

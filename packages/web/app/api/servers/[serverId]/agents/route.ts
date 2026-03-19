@@ -6,9 +6,11 @@ import { encrypt } from "@/lib/encryption";
 import { generateId } from "@/lib/ulid";
 import { checkMemberPermission } from "@/lib/check-member-permission";
 import { Permissions } from "@/lib/permissions";
+import { Prisma } from "@prisma/client";
 import {
   createAgent,
   buildConnectionInfo,
+  AgentNameConflictError,
   VALID_CONNECTION_METHODS,
   type ConnectionMethodValue,
 } from "@/lib/agent-factory";
@@ -68,8 +70,20 @@ export async function GET(
     orderBy: { createdAt: "asc" },
   });
 
+  // Deduplicate by name — keep the most recently created agent per name
+  const seen = new Map<string, (typeof agents)[number]>();
+  for (const agent of agents) {
+    const existing = seen.get(agent.name);
+    if (!existing || agent.createdAt > existing.createdAt) {
+      seen.set(agent.name, agent);
+    }
+  }
+  const dedupedAgents = [...seen.values()].sort(
+    (a, b) => a.createdAt.getTime() - b.createdAt.getTime(),
+  );
+
   // Transform: flatten agentRegistration fields for the client
-  const result = agents.map((agent) => ({
+  const result = dedupedAgents.map((agent) => ({
     id: agent.id,
     name: agent.name,
     avatarUrl: agent.avatarUrl,
@@ -166,23 +180,41 @@ export async function POST(
   const apiKeyEncrypted = encrypt(apiKey);
 
   const agentId = generateId();
-  const agent = await prisma.agent.create({
-    data: {
-      id: agentId,
-      name,
-      serverId,
-      llmProvider,
-      llmModel,
-      apiEndpoint,
-      apiKeyEncrypted,
-      systemPrompt,
-      temperature,
-      maxTokens,
-      isActive: true,
-      triggerMode,
-      thinkingSteps: thinkingSteps ? JSON.stringify(thinkingSteps) : undefined,
-    },
-  });
+  let agent;
+  try {
+    agent = await prisma.agent.create({
+      data: {
+        id: agentId,
+        name,
+        serverId,
+        llmProvider,
+        llmModel,
+        apiEndpoint,
+        apiKeyEncrypted,
+        systemPrompt,
+        temperature,
+        maxTokens,
+        isActive: true,
+        triggerMode,
+        thinkingSteps: thinkingSteps
+          ? JSON.stringify(thinkingSteps)
+          : undefined,
+      },
+    });
+  } catch (error) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2002"
+    ) {
+      return NextResponse.json(
+        {
+          error: `Agent with name "${name}" already exists in this server`,
+        },
+        { status: 409 },
+      );
+    }
+    throw error;
+  }
 
   // Auto-assign BYOK agent to all channels in the server so Gateway can trigger it
   const channels = await prisma.channel.findMany({
@@ -260,6 +292,9 @@ async function createNonBYOKAgent(
       { status: 201 },
     );
   } catch (error) {
+    if (error instanceof AgentNameConflictError) {
+      return NextResponse.json({ error: error.message }, { status: 409 });
+    }
     console.error("[servers/agents] Non-BYOK agent creation failed:", error);
     return NextResponse.json(
       { error: "Agent creation failed" },

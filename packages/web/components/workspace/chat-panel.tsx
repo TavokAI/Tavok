@@ -36,6 +36,7 @@ export function ChatPanel({ panel }: ChatPanelProps) {
   const pathname = usePathname();
   const {
     panels,
+    openPanel,
     focusPanel,
     closePanel,
     minimizePanel,
@@ -340,10 +341,27 @@ export function ChatPanel({ panel }: ChatPanelProps) {
 
   const handleJumpToMessage = useCallback(
     (channelId: string, messageId: string) => {
+      if (channelId !== panel.channelId) {
+        const targetChannel = searchChannels.find((ch) => ch.id === channelId);
+        if (targetChannel) {
+          openPanel({
+            channelId,
+            channelName: targetChannel.name,
+            serverId: panel.serverId,
+            serverName: panelServerName || "",
+          });
+        }
+      }
       setScrollToMessageId(messageId);
       setIsSearchOpen(false);
     },
-    [],
+    [
+      panel.channelId,
+      panel.serverId,
+      panelServerName,
+      searchChannels,
+      openPanel,
+    ],
   );
 
   // TASK-0020: Fetch initial charter state on channel load

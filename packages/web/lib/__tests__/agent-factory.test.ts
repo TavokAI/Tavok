@@ -1,5 +1,25 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
+// Mock @prisma/client — agent-factory.ts imports { Prisma } for unique constraint handling
+vi.mock("@prisma/client", () => {
+  class PrismaClientKnownRequestError extends Error {
+    code: string;
+    clientVersion: string;
+    constructor(
+      message: string,
+      { code, clientVersion }: { code: string; clientVersion?: string },
+    ) {
+      super(message);
+      this.code = code;
+      this.clientVersion = clientVersion || "0.0.0";
+      this.name = "PrismaClientKnownRequestError";
+    }
+  }
+  return {
+    Prisma: { PrismaClientKnownRequestError },
+  };
+});
+
 // Mock prisma transaction
 const mockAgentCreate = vi.fn();
 const mockRegistrationCreate = vi.fn();
@@ -33,7 +53,11 @@ vi.mock("@/lib/internal-auth", () => ({
   getInternalBaseUrl: vi.fn(() => "http://localhost:3000"),
 }));
 
-import { createAgent, buildConnectionInfo } from "../agent-factory";
+import {
+  createAgent,
+  buildConnectionInfo,
+  AgentNameConflictError,
+} from "../agent-factory";
 
 describe("createAgent", () => {
   beforeEach(() => {
@@ -164,6 +188,24 @@ describe("createAgent", () => {
 
     const regData = mockRegistrationCreate.mock.calls[0][0].data;
     expect(regData.capabilities).toEqual(["chat", "stream"]);
+  });
+
+  it("throws AgentNameConflictError on duplicate name", async () => {
+    const { Prisma } = await import("@prisma/client");
+    mockAgentCreate.mockRejectedValue(
+      new Prisma.PrismaClientKnownRequestError("Unique constraint failed", {
+        code: "P2002",
+        clientVersion: "0.0.0",
+      }),
+    );
+
+    await expect(
+      createAgent({
+        name: "DuplicateBot",
+        serverId: "server-1",
+        connectionMethod: "WEBSOCKET",
+      }),
+    ).rejects.toThrow("already exists");
   });
 
   it("returns connectionMethod in result", async () => {
