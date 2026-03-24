@@ -78,7 +78,7 @@ export async function sendMessage(
   const input = page.getByPlaceholder(`Message #${channelName}`);
   await input.fill(text);
   await input.press("Enter");
-  await expect(page.getByText(text)).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByText(text).first()).toBeVisible({ timeout: 10_000 });
 }
 
 /** Generate a unique message string with timestamp. */

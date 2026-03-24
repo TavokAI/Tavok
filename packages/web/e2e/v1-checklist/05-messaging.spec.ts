@@ -126,7 +126,7 @@ test.describe("Section 5: Real-Time Messaging", () => {
     await openChannel(page, "general");
 
     // Message should still be there
-    await expect(page.getByText(msg)).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText(msg).first()).toBeVisible({ timeout: 10_000 });
   });
 
   test("messages in correct chronological order", async ({ page }) => {
