@@ -141,9 +141,7 @@ defmodule TavokGatewayWeb.RoomChannel do
             if Enum.any?(agents, fn a -> Map.get(a, "id") == agent_id end) do
               {:ok}
             else
-              Logger.warning(
-                "Agent #{agent_id} not in ChannelAgent for channel #{channel_id}"
-              )
+              Logger.warning("Agent #{agent_id} not in ChannelAgent for channel #{channel_id}")
               {:error, :agent_not_assigned}
             end
 
