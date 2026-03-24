@@ -78,7 +78,9 @@ test.describe("Section 12: Direct Messages", () => {
         await dmInput.press("Enter");
 
         // Verify Alice sees her message
-        await expect(pageA.getByText(msg)).toBeVisible({ timeout: 10_000 });
+        await expect(pageA.getByText(msg).first()).toBeVisible({
+          timeout: 10_000,
+        });
 
         // Bob opens DMs and should see the conversation
         await pageB.getByRole("tab", { name: /DM/i }).click();
@@ -98,7 +100,7 @@ test.describe("Section 12: Direct Messages", () => {
           await pageB.waitForTimeout(2_000);
 
           // Bob should see Alice's message
-          await expect(pageB.getByText(msg)).toBeVisible({
+          await expect(pageB.getByText(msg).first()).toBeVisible({
             timeout: 15_000,
           });
 
@@ -111,7 +113,7 @@ test.describe("Section 12: Direct Messages", () => {
           await bobInput.press("Enter");
 
           // Alice should see the reply
-          await expect(pageA.getByText(replyMsg)).toBeVisible({
+          await expect(pageA.getByText(replyMsg).first()).toBeVisible({
             timeout: 15_000,
           });
         }
