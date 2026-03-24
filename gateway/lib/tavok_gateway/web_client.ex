@@ -649,7 +649,10 @@ defmodule TavokGateway.WebClient do
         {:ok, response_body}
 
       {:ok, %Req.Response{status: status, body: response_body}} ->
-        Logger.error("validate_checkpoint_resume failed: status=#{status} body=#{inspect(response_body)}")
+        Logger.error(
+          "validate_checkpoint_resume failed: status=#{status} body=#{inspect(response_body)}"
+        )
+
         {:error, {:http_error, status, response_body}}
 
       {:error, reason} ->

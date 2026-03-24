@@ -431,13 +431,26 @@ defmodule TavokGatewayWeb.RoomChannel do
 
   # TASK-0021: Resume stream from a checkpoint (triggered by user clicking "Resume from checkpoint" in UI)
   @impl true
-  def handle_in("stream_resume", %{"messageId" => original_message_id, "checkpointIndex" => checkpoint_index, "agentId" => agent_id}, socket)
+  def handle_in(
+        "stream_resume",
+        %{
+          "messageId" => original_message_id,
+          "checkpointIndex" => checkpoint_index,
+          "agentId" => agent_id
+        },
+        socket
+      )
       when is_binary(original_message_id) and is_integer(checkpoint_index) and is_binary(agent_id) do
     channel_id = socket.assigns.channel_id
 
     # Validate the checkpoint via Next.js internal API
     Task.Supervisor.async_nolink(TavokGateway.TaskSupervisor, fn ->
-      case WebClient.validate_checkpoint_resume(channel_id, original_message_id, checkpoint_index, agent_id) do
+      case WebClient.validate_checkpoint_resume(
+             channel_id,
+             original_message_id,
+             checkpoint_index,
+             agent_id
+           ) do
         {:ok, resume_data} ->
           # Get agent config for the selected agent
           case WebClient.get_agent_config(agent_id) do
@@ -498,7 +511,9 @@ defmodule TavokGatewayWeb.RoomChannel do
 
                   Redix.command(:redix, ["PUBLISH", "hive:stream:request", stream_request])
 
-                  Logger.info("Stream resume published: channel=#{channel_id} message=#{message_id} agent=#{agent_id} checkpoint=#{checkpoint_index}")
+                  Logger.info(
+                    "Stream resume published: channel=#{channel_id} message=#{message_id} agent=#{agent_id} checkpoint=#{checkpoint_index}"
+                  )
 
                 {:error, reason} ->
                   Logger.error("Stream resume sequence failed: #{inspect(reason)}")
