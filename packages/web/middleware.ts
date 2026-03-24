@@ -82,7 +82,6 @@ export async function middleware(request: NextRequest) {
       request: { headers: requestHeaders },
     });
     response.headers.set("x-request-id", requestId);
-    setSecurityHeaders(response);
     return response;
   }
 
@@ -95,31 +94,11 @@ export async function middleware(request: NextRequest) {
     request: { headers: requestHeaders },
   });
   response.headers.set("x-request-id", requestId);
-  setSecurityHeaders(response);
   return response;
 }
 
-/**
- * Set security headers on every response.
- * CSP allows inline styles (needed for Tailwind) and self-hosted scripts.
- */
-function setSecurityHeaders(response: NextResponse): void {
-  response.headers.set(
-    "Content-Security-Policy",
-    [
-      "default-src 'self'",
-      "script-src 'self' 'unsafe-inline'",
-      "style-src 'self' 'unsafe-inline'",
-      "img-src 'self' data: blob:",
-      "font-src 'self' data:",
-      "connect-src 'self' wss: ws:",
-      "frame-ancestors 'none'",
-    ].join("; "),
-  );
-  response.headers.set("X-Content-Type-Options", "nosniff");
-  response.headers.set("X-Frame-Options", "DENY");
-  response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
-}
+// Security headers (CSP, X-Frame-Options, etc.) are set in next.config.js
+// via the headers() config, which is the reliable approach in Next.js 15.
 
 export const config = {
   matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
