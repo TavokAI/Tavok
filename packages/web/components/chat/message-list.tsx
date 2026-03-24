@@ -249,9 +249,9 @@ export function MessageList({
     const latestMessage = messages[messages.length - 1];
     const isLatestOwnUserMessage = Boolean(
       latestMessage &&
-        latestMessage.authorType === "USER" &&
-        currentUserId &&
-        latestMessage.authorId === currentUserId,
+      latestMessage.authorType === "USER" &&
+      currentUserId &&
+      latestMessage.authorId === currentUserId,
     );
 
     // Track incoming user messages for pinning
@@ -311,19 +311,19 @@ export function MessageList({
       ];
       const isLatestAgentStream = Boolean(
         latestMessage &&
-          latestMessage.authorType === "AGENT" &&
-          latestMessage.type === "STREAMING",
+        latestMessage.authorType === "AGENT" &&
+        latestMessage.type === "STREAMING",
       );
       const isLatestAgentTyped = Boolean(
         latestMessage &&
-          latestMessage.authorType === "AGENT" &&
-          typedAgentTypes.includes(latestMessage.type),
+        latestMessage.authorType === "AGENT" &&
+        typedAgentTypes.includes(latestMessage.type),
       );
       const isLatestIncomingUserMessage = Boolean(
         latestMessage &&
-          latestMessage.authorType === "USER" &&
-          currentUserId &&
-          latestMessage.authorId !== currentUserId,
+        latestMessage.authorType === "USER" &&
+        currentUserId &&
+        latestMessage.authorId !== currentUserId,
       );
 
       const shouldScroll =
@@ -347,9 +347,7 @@ export function MessageList({
   useEffect(() => {
     if (!scrollToMessageId) return;
 
-    const targetIndex = messages.findIndex(
-      (m) => m.id === scrollToMessageId,
-    );
+    const targetIndex = messages.findIndex((m) => m.id === scrollToMessageId);
     if (targetIndex >= 0 && virtuosoRef.current) {
       virtuosoRef.current.scrollToIndex({
         index: targetIndex,
@@ -472,10 +470,7 @@ export function MessageList({
             hasMoreHistory ? (
               <div className="space-y-3 px-4 py-3">
                 {[1, 2, 3].map((i) => (
-                  <div
-                    key={i}
-                    className="flex items-start gap-3 animate-pulse"
-                  >
+                  <div key={i} className="flex items-start gap-3 animate-pulse">
                     <div className="h-8 w-8 flex-shrink-0 rounded-full bg-background-tertiary/80" />
                     <div className="flex-1 space-y-1.5">
                       <div className="h-3 w-24 rounded bg-background-tertiary/80" />
