@@ -302,7 +302,7 @@ model AgentRegistration {
   capabilities    Json     @default("[]") // ["text", "code", "web_search", "tool_use"]
   healthUrl       String?  // endpoint for health checks
   webhookUrl      String?  // endpoint for inbound events
-  maxTokensSec    Int      @default(100) // rate limit: tokens per second
+  maxTokensSec    Int      @default(100) // rate limit: max API requests/sec (misnamed — counts requests, not tokens; rename planned in DATA-002)
   lastHealthCheck DateTime?
   lastHealthOk    Boolean  @default(true)
   createdAt       DateTime @default(now())

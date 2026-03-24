@@ -2,7 +2,7 @@
   "name": "tavok",
   "version": "0.3.0",
   "description": "Tavok bootstrap CLI",
-  "license": "AGPL-3.0-only",
+  "license": "MIT",
   "bin": {
     "tavok": "./bin/tavok.js"
   },

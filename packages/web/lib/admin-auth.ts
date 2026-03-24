@@ -13,7 +13,7 @@ import crypto from "crypto";
  */
 export function authenticateAdminToken(request: Request): boolean {
   const expectedToken = process.env.TAVOK_ADMIN_TOKEN;
-  if (!expectedToken) {
+  if (!expectedToken || expectedToken === "CHANGE-ME") {
     return false;
   }
 

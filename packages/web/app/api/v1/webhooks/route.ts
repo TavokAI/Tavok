@@ -6,6 +6,8 @@ import crypto from "crypto";
 import { authenticateAgentRequest } from "@/lib/agent-auth";
 import { getInternalBaseUrl } from "@/lib/internal-auth";
 import { verifyAgentChannelAccess } from "@/lib/agent-channel-acl";
+import { checkAgentRateLimit } from "@/lib/rate-limit";
+import { logAgentAction } from "@/lib/agent-audit";
 
 /** Zod schema for webhook creation POST body. */
 const webhookCreateSchema = z
@@ -51,6 +53,21 @@ export async function POST(request: NextRequest) {
 
   const { channelId, name, avatarUrl } = body;
 
+  // Rate limit webhook creation per agent (uses default agent rate limiter)
+  const rateCheck = checkAgentRateLimit(agent.agentId);
+  if (!rateCheck.allowed) {
+    logAgentAction({
+      agentId: agent.agentId,
+      serverId: agent.serverId,
+      action: "rate_limited",
+      metadata: { route: "webhook_create" },
+    });
+    return NextResponse.json(
+      { error: "Rate limit exceeded" },
+      { status: 429 },
+    );
+  }
+
   const channelAccess = await verifyAgentChannelAccess(agent, channelId);
   if (!channelAccess.ok) {
     return NextResponse.json(
@@ -76,6 +93,14 @@ export async function POST(request: NextRequest) {
     });
 
     const webUrl = getInternalBaseUrl();
+
+    logAgentAction({
+      agentId: agent.agentId,
+      serverId: agent.serverId,
+      action: "webhook_create",
+      channelId,
+      metadata: { webhookId: webhook.id, name: webhook.name },
+    });
 
     return NextResponse.json(
       {
@@ -188,6 +213,13 @@ export async function DELETE(request: NextRequest) {
     }
 
     await prisma.inboundWebhook.delete({ where: { id: webhookId } });
+
+    logAgentAction({
+      agentId: agent.agentId,
+      serverId: agent.serverId,
+      action: "webhook_delete",
+      metadata: { webhookId },
+    });
 
     return NextResponse.json({ success: true });
   } catch (error) {

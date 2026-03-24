@@ -106,6 +106,10 @@ export const webhookLimiter = new RateLimiter({ max: 60, windowSec: 60 });
  * Default: 30 requests per 10s per agent (message send + stream token).
  * Each agent can override via AgentRegistration.maxTokensSec which
  * is checked at the route level using checkAgentRateLimit().
+ *
+ * NOTE: Despite the schema field name "maxTokensSec", this limiter counts
+ * requests per second, NOT generated tokens. The field should be renamed
+ * to "maxRequestsPerSec" in a future migration (DATA-002).
  */
 export const agentLimiter = new RateLimiter({ max: 30, windowSec: 10 });
 

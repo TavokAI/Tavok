@@ -96,12 +96,22 @@ export function parseSearchFilters(searchParams: URLSearchParams): {
   const pageStr = searchParams.get("page");
   const page = pageStr ? Math.max(1, parseInt(pageStr, 10) || 1) : 1;
 
+  // Validate date filters (S9: reject malformed dates before they reach SQL)
+  const after = searchParams.get("after") || undefined;
+  const before = searchParams.get("before") || undefined;
+  if (after && isNaN(new Date(after).getTime())) {
+    throw new Error("Invalid 'after' date filter");
+  }
+  if (before && isNaN(new Date(before).getTime())) {
+    throw new Error("Invalid 'before' date filter");
+  }
+
   return {
     query,
     channelId: searchParams.get("channelId") || undefined,
     userId: searchParams.get("userId") || undefined,
-    after: searchParams.get("after") || undefined,
-    before: searchParams.get("before") || undefined,
+    after,
+    before,
     hasFile: hasParts.includes("file"),
     hasLink: hasParts.includes("link"),
     hasMention: hasParts.includes("mention"),
@@ -222,11 +232,16 @@ export function buildDmSearchQuery(params: DmSearchParams): Prisma.Sql {
       dm."dmId",
       dm."authorId",
       dm.content,
-      ts_headline(
-        'english',
-        dm.content,
-        plainto_tsquery('english', ${params.query}),
-        'StartSel=<mark>, StopSel=</mark>, MaxWords=50, MinWords=20'
+      regexp_replace(
+        ts_headline(
+          'english',
+          dm.content,
+          plainto_tsquery('english', ${params.query}),
+          'StartSel=<mark>, StopSel=</mark>, MaxWords=50, MinWords=20'
+        ),
+        '<(?!/?(mark)( |>))[^>]*>',
+        '',
+        'gi'
       ) AS "highlightedContent",
       dm."createdAt"
     FROM "DirectMessage" dm

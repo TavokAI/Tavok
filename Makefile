@@ -42,7 +42,7 @@ lint-fix: ## Auto-fix lint and formatting issues
 # ============================================================
 
 dev: ## Start all services in development mode (with hot reload)
-	docker compose -f docker compose.yml -f docker compose.dev.yml up --build
+	docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
 
 up: ## Start all services (pulls pre-built images, detached)
 	docker compose up -d
@@ -111,7 +111,7 @@ test-all: ## Run all tests (unit + E2E + SDK)
 # ============================================================
 
 demo: ## Start demo agents (requires TAVOK_SERVER_ID and TAVOK_CHANNEL_ID)
-	docker compose -f docker compose.demo.yml up --build
+	docker compose -f docker-compose.demo.yml up --build
 
 # ============================================================
 # REGRESSION HARNESS
@@ -179,10 +179,10 @@ status: ## Show Docker container status
 # ============================================================
 
 monitoring-up: ## Start Prometheus + Grafana (Grafana at localhost:3001)
-	docker compose -f docker compose.yml -f docker compose.monitoring.yml up -d prometheus grafana
+	docker compose -f docker-compose.yml -f docker-compose.monitoring.yml up -d prometheus grafana
 
 monitoring-down: ## Stop monitoring stack
-	docker compose -f docker compose.yml -f docker compose.monitoring.yml stop prometheus grafana
+	docker compose -f docker-compose.yml -f docker-compose.monitoring.yml stop prometheus grafana
 
 # ============================================================
 # CLEANUP

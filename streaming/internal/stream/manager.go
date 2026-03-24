@@ -178,6 +178,17 @@ func (m *Manager) Start(ctx context.Context) error {
 				// Spawn a goroutine for this stream within the concurrency cap.
 				go func(req streamRequest) {
 					defer m.releaseSlot()
+					defer func() {
+						if r := recover(); r != nil {
+							m.logger.Error("Stream handler panicked",
+								"channelId", req.ChannelID,
+								"messageId", req.MessageID,
+								"agentId", req.AgentID,
+								"panic", r,
+							)
+							m.publishError(ctx, req, "", fmt.Sprintf("internal error: stream handler panicked: %v", r), 0, time.Now())
+						}
+					}()
 					m.handleStream(ctx, req)
 				}(req)
 			} else {

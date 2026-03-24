@@ -7,9 +7,12 @@ scrape_configs:
     metrics_path: /api/metrics
     static_configs:
       - targets: ["web:5555"]
-    # Pass internal secret for auth
+    # Pass internal secret for metrics endpoint auth.
+    # WARNING: Prometheus does NOT support ${VAR} shell expansion in YAML.
+    # For production, generate this file via envsubst or replace the value below:
+    #   envsubst < monitoring/prometheus/prometheus.yml.tmpl > monitoring/prometheus/prometheus.yml
     headers:
-      x-internal-secret: "${INTERNAL_API_SECRET:-dev-internal-secret}"
+      x-internal-secret: "dev-internal-secret"
 
   - job_name: "tavok-gateway"
     metrics_path: /api/metrics

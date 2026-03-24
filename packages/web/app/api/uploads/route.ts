@@ -21,6 +21,40 @@ const ALLOWED_TYPES = [
   "application/zip",
 ];
 
+/**
+ * Magic byte signatures for server-side file type verification.
+ * Prevents clients from spoofing Content-Type headers to upload executables.
+ */
+const MAGIC_BYTES: Record<string, { offset: number; bytes: number[] }[]> = {
+  "image/jpeg": [{ offset: 0, bytes: [0xff, 0xd8, 0xff] }],
+  "image/png": [{ offset: 0, bytes: [0x89, 0x50, 0x4e, 0x47] }],
+  "image/gif": [{ offset: 0, bytes: [0x47, 0x49, 0x46, 0x38] }],
+  "image/webp": [{ offset: 8, bytes: [0x57, 0x45, 0x42, 0x50] }],
+  "application/pdf": [{ offset: 0, bytes: [0x25, 0x50, 0x44, 0x46] }],
+  "application/zip": [{ offset: 0, bytes: [0x50, 0x4b, 0x03, 0x04] }],
+};
+
+function verifyMagicBytes(
+  buffer: Buffer,
+  claimedType: string,
+): boolean {
+  const signatures = MAGIC_BYTES[claimedType];
+  if (!signatures) {
+    // Text types (text/plain, text/markdown, application/json) don't have
+    // reliable magic bytes — allow them but reject null bytes as a basic check
+    if (
+      claimedType.startsWith("text/") ||
+      claimedType === "application/json"
+    ) {
+      return !buffer.subarray(0, 512).includes(0x00);
+    }
+    return true;
+  }
+  return signatures.some((sig) =>
+    sig.bytes.every((b, i) => buffer[sig.offset + i] === b),
+  );
+}
+
 export const runtime = "nodejs";
 
 /**
@@ -56,6 +90,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Verify file content matches claimed MIME type via magic bytes
+    const previewBuffer = Buffer.from(await file.arrayBuffer());
+    if (!verifyMagicBytes(previewBuffer, file.type)) {
+      return NextResponse.json(
+        { error: "File content does not match declared type" },
+        { status: 400 },
+      );
+    }
+
     const fileId = generateId();
     const sanitized = file.name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 200);
     const safeName = sanitized || "file";
@@ -67,12 +110,11 @@ export async function POST(request: NextRequest) {
 
     const storagePath = `${subdir}/${fileId}_${safeName}`;
     const fullPath = join(UPLOADS_DIR, storagePath);
-    const buffer = Buffer.from(await file.arrayBuffer());
-    await writeFile(fullPath, buffer);
+    await writeFile(fullPath, previewBuffer);
 
     // Extract image dimensions if applicable (TASK-0025)
     const dimensions = file.type.startsWith("image/")
-      ? getImageDimensions(buffer, file.type)
+      ? getImageDimensions(previewBuffer, file.type)
       : null;
 
     const attachment = await prisma.attachment.create({

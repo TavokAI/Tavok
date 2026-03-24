@@ -2,6 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { serializeSequence } from "@/lib/api-safety";
 import { validateInternalSecret } from "@/lib/internal-auth";
+import {
+  computeMemberPermissions,
+  hasPermission,
+  Permissions,
+  serializePermissions,
+} from "@/lib/permissions";
 
 /**
  * GET /api/internal/channels/{channelId}
@@ -78,9 +84,26 @@ export async function GET(
             serverId: channel.serverId,
           },
         },
+        include: {
+          roles: { select: { permissions: true } },
+          server: { select: { ownerId: true } },
+        },
       });
 
       response.isMember = !!member;
+
+      if (member) {
+        const effectivePermissions = computeMemberPermissions(
+          userId,
+          member.server.ownerId,
+          member.roles,
+        );
+        response.canSendMessages = hasPermission(
+          effectivePermissions,
+          Permissions.SEND_MESSAGES,
+        );
+        response.permissions = serializePermissions(effectivePermissions);
+      }
     }
 
     return NextResponse.json(response);

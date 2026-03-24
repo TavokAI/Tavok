@@ -106,9 +106,8 @@ defmodule TavokGatewayWeb.RoomChannel do
   defp authorize_join(channel_id, socket) do
     case socket.assigns[:author_type] do
       "AGENT" ->
-        # Agents can join any channel in their server (DEC-0040)
-        # The agent's server_id was set during WebSocket connect auth
-        authorize_agent_join(channel_id, socket.assigns[:server_id])
+        # Agents must be assigned to the channel via ChannelAgent (DEC-0065/0066)
+        authorize_agent_join(channel_id, socket)
 
       _ ->
         # Humans use membership check (existing flow)
@@ -129,12 +128,29 @@ defmodule TavokGatewayWeb.RoomChannel do
     end
   end
 
-  defp authorize_agent_join(channel_id, agent_server_id) do
+  defp authorize_agent_join(channel_id, socket) do
+    agent_server_id = socket.assigns[:server_id]
+    agent_id = socket.assigns.user_id
+
     # Verify the channel belongs to the agent's server (DEC-0040)
-    # Uses WebClient directly — agent joins are infrequent (once per connection)
     case WebClient.get_channel_info(channel_id) do
       {:ok, %{"serverId" => server_id}} when server_id == agent_server_id ->
-        {:ok}
+        # Enforce ChannelAgent ACL — match REST/SSE enforcement (DEC-0065/0066)
+        case ConfigCache.get_channel_agents(channel_id) do
+          {:ok, agents} when is_list(agents) and length(agents) > 0 ->
+            if Enum.any?(agents, fn a -> Map.get(a, "id") == agent_id end) do
+              {:ok}
+            else
+              Logger.warning(
+                "Agent #{agent_id} not in ChannelAgent for channel #{channel_id}"
+              )
+              {:error, :agent_not_assigned}
+            end
+
+          # No ChannelAgent entries — fall back to server membership (backward compat)
+          _ ->
+            {:ok}
+        end
 
       {:ok, %{"serverId" => _other_server}} ->
         {:error, :agent_wrong_server}
@@ -316,7 +332,25 @@ defmodule TavokGatewayWeb.RoomChannel do
       true ->
         channel_id = socket.assigns.channel_id
 
-        # 0. Per-channel rate limit check (DEC-0035)
+        # 0. SEND_MESSAGES permission check (BREAK-0012 fix)
+        # Agents bypass — authorized via ChannelAgent ACL at join time
+        send_allowed =
+          if socket.assigns[:author_type] == "AGENT" do
+            true
+          else
+            case ConfigCache.get_channel_membership(channel_id, socket.assigns.user_id) do
+              {:ok, %{"canSendMessages" => true}} -> true
+              {:ok, %{"canSendMessages" => false}} -> false
+              # Legacy cached entries without canSendMessages — allow (backwards compat)
+              {:ok, %{"isMember" => true}} -> true
+              _ -> false
+            end
+          end
+
+        if not send_allowed do
+          {:reply, {:error, %{reason: "missing_permission", permission: "SEND_MESSAGES"}}, socket}
+        else
+        # 0a. Per-channel rate limit check (DEC-0035)
         case RateLimiter.check_and_increment(channel_id) do
           {:error, :rate_limited} ->
             {:reply, {:error, %{reason: "rate_limited"}}, socket}
@@ -387,6 +421,7 @@ defmodule TavokGatewayWeb.RoomChannel do
                     {:reply, {:error, %{reason: "sequence_failed"}}, socket}
                 end
             end
+        end
         end
     end
   end

@@ -8,6 +8,7 @@ import {
   VALID_CONNECTION_METHODS,
   type ConnectionMethodValue,
 } from "@/lib/agent-factory";
+import { RateLimiter, getClientIp } from "@/lib/rate-limit";
 
 /**
  * POST /api/v1/bootstrap/agents — CLI-initiated agent creation
@@ -25,7 +26,21 @@ import {
  *
  * Returns the raw API key (shown once, never stored).
  */
+
+/** Rate limit agent creation: 10 per 60s per IP */
+const bootstrapLimiter = new RateLimiter({ max: 10, windowSec: 60 });
+
 export async function POST(request: NextRequest) {
+  // Rate limit before any auth check to prevent brute-force
+  const ip = getClientIp(request);
+  const rateCheck = bootstrapLimiter.check(ip);
+  if (!rateCheck.allowed) {
+    return NextResponse.json(
+      { error: "Rate limit exceeded" },
+      { status: 429 },
+    );
+  }
+
   // Admin token auth (same as bootstrap endpoint)
   if (!authenticateAdminToken(request)) {
     return NextResponse.json(

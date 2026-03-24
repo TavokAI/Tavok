@@ -52,6 +52,31 @@ vi.mock("fs/promises", () => ({
 import { POST } from "@/app/api/uploads/route";
 
 /**
+ * Magic byte prefixes for file types that require server-side verification.
+ * Tests must use these to create valid test files.
+ */
+const MAGIC_PREFIXES: Record<string, number[]> = {
+  "image/jpeg": [0xff, 0xd8, 0xff, 0xe0],
+  "image/png": [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a],
+  "image/gif": [0x47, 0x49, 0x46, 0x38, 0x39, 0x61],
+  "image/webp": [0x52, 0x49, 0x46, 0x46, 0x00, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50],
+  "application/pdf": [0x25, 0x50, 0x44, 0x46, 0x2d],
+  "application/zip": [0x50, 0x4b, 0x03, 0x04],
+};
+
+/** Create a buffer with valid magic bytes for the given MIME type. */
+function makeValidContent(mimeType: string, sizeBytes: number): Buffer {
+  const prefix = MAGIC_PREFIXES[mimeType];
+  if (prefix) {
+    const buf = Buffer.alloc(Math.max(sizeBytes, prefix.length), 0x41);
+    for (let i = 0; i < prefix.length; i++) buf[i] = prefix[i];
+    return buf;
+  }
+  // Text types: fill with printable ASCII
+  return Buffer.alloc(sizeBytes, 0x41);
+}
+
+/**
  * Build a fake NextRequest with multipart form data containing one file.
  */
 function makeUploadRequest(
@@ -60,7 +85,7 @@ function makeUploadRequest(
   sizeBytes: number,
   content?: Buffer,
 ) {
-  const buf = content ?? Buffer.alloc(sizeBytes, 0x41); // fill with 'A'
+  const buf = content ?? makeValidContent(mimeType, sizeBytes);
   const fileBytes = new Uint8Array(buf);
   const file = new File([fileBytes], fileName, { type: mimeType });
 
