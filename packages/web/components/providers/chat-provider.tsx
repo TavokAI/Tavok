@@ -6,6 +6,7 @@ import {
   useState,
   useEffect,
   useCallback,
+  useMemo,
   type ReactNode,
 } from "react";
 import { usePathname, useRouter } from "next/navigation";
@@ -479,35 +480,60 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     refreshPermissions();
   }, [refreshChannels, refreshMembers, refreshAgents, refreshPermissions]);
 
+  const contextValue = useMemo<ChatContextValue>(
+    () => ({
+      servers,
+      serversLoaded,
+      currentServerId: serverId,
+      currentChannelId: channelId,
+      currentServerName,
+      currentServerOwnerId,
+      channels,
+      members,
+      agents,
+      serverDataById,
+      refreshServers,
+      refreshChannels,
+      refreshMembers,
+      refreshAgents,
+      ensureServerScopedData,
+      refreshServerScopedData,
+      userPermissions,
+      isOwner,
+      hasPermission,
+      unreadMap,
+      markAsRead,
+      refreshUnread,
+      serverUnreadMap,
+    }),
+    [
+      servers,
+      serversLoaded,
+      serverId,
+      channelId,
+      currentServerName,
+      currentServerOwnerId,
+      channels,
+      members,
+      agents,
+      serverDataById,
+      refreshServers,
+      refreshChannels,
+      refreshMembers,
+      refreshAgents,
+      ensureServerScopedData,
+      refreshServerScopedData,
+      userPermissions,
+      isOwner,
+      hasPermission,
+      unreadMap,
+      markAsRead,
+      refreshUnread,
+      serverUnreadMap,
+    ],
+  );
+
   return (
-    <ChatContext.Provider
-      value={{
-        servers,
-        serversLoaded,
-        currentServerId: serverId,
-        currentChannelId: channelId,
-        currentServerName,
-        currentServerOwnerId,
-        channels,
-        members,
-        agents,
-        serverDataById,
-        refreshServers,
-        refreshChannels,
-        refreshMembers,
-        refreshAgents,
-        ensureServerScopedData,
-        refreshServerScopedData,
-        userPermissions,
-        isOwner,
-        hasPermission,
-        unreadMap,
-        markAsRead,
-        refreshUnread,
-        serverUnreadMap,
-      }}
-    >
-      {children}
-    </ChatContext.Provider>
+    <ChatContext.Provider value={contextValue}>{children}</ChatContext.Provider>
   );
 }

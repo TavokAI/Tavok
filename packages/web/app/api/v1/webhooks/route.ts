@@ -62,10 +62,7 @@ export async function POST(request: NextRequest) {
       action: "rate_limited",
       metadata: { route: "webhook_create" },
     });
-    return NextResponse.json(
-      { error: "Rate limit exceeded" },
-      { status: 429 },
-    );
+    return NextResponse.json({ error: "Rate limit exceeded" }, { status: 429 });
   }
 
   const channelAccess = await verifyAgentChannelAccess(agent, channelId);

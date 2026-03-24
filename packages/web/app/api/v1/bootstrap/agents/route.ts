@@ -35,10 +35,7 @@ export async function POST(request: NextRequest) {
   const ip = getClientIp(request);
   const rateCheck = bootstrapLimiter.check(ip);
   if (!rateCheck.allowed) {
-    return NextResponse.json(
-      { error: "Rate limit exceeded" },
-      { status: 429 },
-    );
+    return NextResponse.json({ error: "Rate limit exceeded" }, { status: 429 });
   }
 
   // Admin token auth (same as bootstrap endpoint)

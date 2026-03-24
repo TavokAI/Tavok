@@ -34,18 +34,12 @@ const MAGIC_BYTES: Record<string, { offset: number; bytes: number[] }[]> = {
   "application/zip": [{ offset: 0, bytes: [0x50, 0x4b, 0x03, 0x04] }],
 };
 
-function verifyMagicBytes(
-  buffer: Buffer,
-  claimedType: string,
-): boolean {
+function verifyMagicBytes(buffer: Buffer, claimedType: string): boolean {
   const signatures = MAGIC_BYTES[claimedType];
   if (!signatures) {
     // Text types (text/plain, text/markdown, application/json) don't have
     // reliable magic bytes — allow them but reject null bytes as a basic check
-    if (
-      claimedType.startsWith("text/") ||
-      claimedType === "application/json"
-    ) {
+    if (claimedType.startsWith("text/") || claimedType === "application/json") {
       return !buffer.subarray(0, 512).includes(0x00);
     }
     return true;

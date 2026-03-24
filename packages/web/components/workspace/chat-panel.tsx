@@ -26,6 +26,7 @@ import {
   Search,
 } from "lucide-react";
 import { SearchPanel } from "@/components/search/search-panel";
+import { ErrorBoundary } from "@/components/ui/error-boundary";
 
 interface ChatPanelProps {
   panel: PanelState;
@@ -75,7 +76,7 @@ export function ChatPanel({ panel }: ChatPanelProps) {
     charterState,
     setCharterState,
     sendCharterControl,
-  } = useChannel(panel.channelId);
+  } = useChannel(panel.isMinimized || panel.isClosed ? null : panel.channelId);
 
   const handleDeleteRequest = useCallback(
     (messageId: string) => {
@@ -590,25 +591,27 @@ export function ChatPanel({ panel }: ChatPanelProps) {
             }
           />
         )}
-        <MessageList
-          messages={messages}
-          hasMoreHistory={hasMoreHistory}
-          onLoadHistory={loadHistory}
-          onReactionsChange={updateReactions}
-          currentUserId={currentUserId}
-          canManageMessages={canManageMessages}
-          onEditMessage={editMessage}
-          onDeleteMessage={handleDeleteRequest}
-          activeStreamCount={activeStreamCount}
-          hasAgents={
-            !!(
-              channelData?.defaultAgentId ||
-              (channelData?.agentIds && channelData.agentIds.length > 0)
-            )
-          }
-          scrollToMessageId={scrollToMessageId}
-          onScrollToMessageComplete={() => setScrollToMessageId(null)}
-        />
+        <ErrorBoundary label="Message List">
+          <MessageList
+            messages={messages}
+            hasMoreHistory={hasMoreHistory}
+            onLoadHistory={loadHistory}
+            onReactionsChange={updateReactions}
+            currentUserId={currentUserId}
+            canManageMessages={canManageMessages}
+            onEditMessage={editMessage}
+            onDeleteMessage={handleDeleteRequest}
+            activeStreamCount={activeStreamCount}
+            hasAgents={
+              !!(
+                channelData?.defaultAgentId ||
+                (channelData?.agentIds && channelData.agentIds.length > 0)
+              )
+            }
+            scrollToMessageId={scrollToMessageId}
+            onScrollToMessageComplete={() => setScrollToMessageId(null)}
+          />
+        </ErrorBoundary>
         <TypingIndicator typingUsers={typingUsers} />
         {agentTriggerHint && (
           <div

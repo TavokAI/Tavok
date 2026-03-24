@@ -168,6 +168,8 @@ model Message {
   @@index([channelId, id])
   // Reconnection sync: find messages after a given sequence number
   @@index([channelId, sequence])
+  // StreamWatchdog and internal APIs query by streaming status
+  @@index([streamingStatus])
 }
 
 model Reaction {
@@ -289,6 +291,8 @@ model Agent {
 
   @@unique([serverId, name])
   @@index([serverId])
+  // Agent API key auth filters by isActive
+  @@index([isActive])
 }
 
 // Agent connectivity registration (DEC-0040, DEC-0062)
