@@ -73,6 +73,16 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      - name: Scan image with Trivy
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ matrix.image }}:${{ steps.meta.outputs.version }}
+          format: "table"
+          exit-code: "0"
+          severity: "CRITICAL,HIGH"
+        # Non-blocking (exit-code 0) — reports vulnerabilities without failing the release.
+        # Change exit-code to "1" once baseline is triaged.
+
   # Ensure all packages are publicly pullable (GHCR org defaults to private).
   # Runs once after all images are pushed, not per-matrix job.
   #

@@ -62,6 +62,38 @@ jobs:
       - name: Go vet
         run: cd streaming && go vet ./...
 
+  security:
+    name: Dependency Audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "pnpm"
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+          cache-dependency-path: streaming/go.sum
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: npm audit (web)
+        run: cd packages/web && pnpm audit --audit-level=high || true
+        # Non-blocking for now — logs warnings but doesn't fail the build.
+        # Change || true to strict failure once existing advisories are triaged.
+
+      - name: Go module verify
+        run: cd streaming && go mod verify
+
   test-web:
     name: Web (Vitest)
     needs: lint
