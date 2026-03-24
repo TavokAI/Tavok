@@ -35,6 +35,7 @@ export function DmChatArea({ dmId, otherUserName }: DmChatAreaProps) {
     loadHistory,
     hasMoreHistory,
     isConnected,
+    hasJoinedOnce,
     typingUsers,
     sendTyping,
     sendError,
@@ -96,6 +97,21 @@ export function DmChatArea({ dmId, otherUserName }: DmChatAreaProps) {
           className="border-t border-status-dnd/35 bg-status-dnd/10 px-4 py-2.5 text-sm font-semibold text-status-dnd"
         >
           {sendError}
+        </div>
+      )}
+
+      {/* Connection status indicator (F5) */}
+      {!isConnected && (
+        <div
+          className={
+            hasJoinedOnce
+              ? "border-t border-white/8 px-4 py-1.5 text-[10px] font-semibold tracking-[0.16em] text-status-dnd"
+              : "border-t border-white/8 px-4 py-1.5 text-[10px] font-semibold tracking-[0.16em] text-brand"
+          }
+        >
+          {hasJoinedOnce
+            ? "DISCONNECTED FROM DM GATEWAY"
+            : "CONNECTING TO DM GATEWAY..."}
         </div>
       )}
 

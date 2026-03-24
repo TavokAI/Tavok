@@ -46,6 +46,7 @@ interface UseDmChannelReturn {
   loadHistory: () => void;
   hasMoreHistory: boolean;
   isConnected: boolean;
+  hasJoinedOnce: boolean;
   typingUsers: DmTypingUser[];
   sendTyping: () => void;
   presenceMap: Map<string, DmPresenceUser>;
@@ -79,6 +80,7 @@ export function useDmChannel(dmId: string | null): UseDmChannelReturn {
   const [messages, setMessages] = useState<DmMessagePayload[]>([]);
   const [hasMoreHistory, setHasMoreHistory] = useState(true);
   const [isConnected, setIsConnected] = useState(false);
+  const [hasJoinedOnce, setHasJoinedOnce] = useState(false);
   const [typingUsers, setTypingUsers] = useState<DmTypingUser[]>([]);
   const [sendError, setSendError] = useState<string | null>(null);
   const [presenceMap, setPresenceMap] = useState<Map<string, DmPresenceUser>>(
@@ -275,6 +277,7 @@ export function useDmChannel(dmId: string | null): UseDmChannelReturn {
         .receive("ok", () => {
           if (!mounted) return;
           setIsConnected(true);
+          setHasJoinedOnce(true);
           channelRef.current = channel;
 
           // Load initial history
@@ -426,6 +429,7 @@ export function useDmChannel(dmId: string | null): UseDmChannelReturn {
     loadHistory,
     hasMoreHistory,
     isConnected,
+    hasJoinedOnce,
     typingUsers,
     sendTyping,
     presenceMap,

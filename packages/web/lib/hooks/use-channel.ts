@@ -149,6 +149,8 @@ interface HandlerDeps {
   >;
   streamLastTokenRef: React.MutableRefObject<Map<string, number>>;
   streamBufferRef: React.MutableRefObject<Map<string, string>>;
+  streamNextIndexRef: React.MutableRefObject<Map<string, number>>;
+  streamOooBufferRef: React.MutableRefObject<Map<string, Map<number, string>>>;
   typingTimersRef: React.MutableRefObject<Map<string, NodeJS.Timeout>>;
   lastSequenceRef: React.MutableRefObject<string>;
   messageIdsRef: React.MutableRefObject<Set<string>>;
@@ -409,11 +411,41 @@ function registerStreamingHandlers(channel: Channel, deps: HandlerDeps) {
     if (!deps.mounted()) return;
     const payload = raw as { messageId: string; token: string; index: number };
     deps.streamLastTokenRef.current.set(payload.messageId, Date.now());
-    const existing = deps.streamBufferRef.current.get(payload.messageId) || "";
-    deps.streamBufferRef.current.set(
-      payload.messageId,
-      existing + payload.token,
-    );
+
+    // F6: Token ordering — buffer out-of-order tokens and flush in sequence
+    const nextIdx =
+      deps.streamNextIndexRef.current.get(payload.messageId) ?? 0;
+
+    if (payload.index === nextIdx) {
+      // In-order: append directly plus any consecutive buffered tokens
+      let text = payload.token;
+      let cursor = nextIdx + 1;
+      const ooo = deps.streamOooBufferRef.current.get(payload.messageId);
+      if (ooo) {
+        while (ooo.has(cursor)) {
+          text += ooo.get(cursor)!;
+          ooo.delete(cursor);
+          cursor++;
+        }
+        if (ooo.size === 0) {
+          deps.streamOooBufferRef.current.delete(payload.messageId);
+        }
+      }
+      deps.streamNextIndexRef.current.set(payload.messageId, cursor);
+      const existing =
+        deps.streamBufferRef.current.get(payload.messageId) || "";
+      deps.streamBufferRef.current.set(payload.messageId, existing + text);
+    } else if (payload.index > nextIdx) {
+      // Out-of-order: stash for later
+      let ooo = deps.streamOooBufferRef.current.get(payload.messageId);
+      if (!ooo) {
+        ooo = new Map();
+        deps.streamOooBufferRef.current.set(payload.messageId, ooo);
+      }
+      ooo.set(payload.index, payload.token);
+    }
+    // Duplicate (index < nextIdx) — ignore
+
     deps.flushStreamBuffer();
   });
 
@@ -427,6 +459,8 @@ function registerStreamingHandlers(channel: Channel, deps: HandlerDeps) {
     };
     deps.pendingStreamMetaRef.current.delete(payload.messageId);
     deps.streamLastTokenRef.current.delete(payload.messageId);
+    deps.streamNextIndexRef.current.delete(payload.messageId);
+    deps.streamOooBufferRef.current.delete(payload.messageId);
     deps.setMessages((prev) =>
       prev.map((m) => applyStreamComplete(m, payload)),
     );
@@ -441,6 +475,8 @@ function registerStreamingHandlers(channel: Channel, deps: HandlerDeps) {
       partialContent: string | null;
     };
     deps.streamLastTokenRef.current.delete(payload.messageId);
+    deps.streamNextIndexRef.current.delete(payload.messageId);
+    deps.streamOooBufferRef.current.delete(payload.messageId);
     deps.setMessages((prev) => {
       const hasMatch = prev.some((m) => m.id === payload.messageId);
       const streamMeta = deps.pendingStreamMetaRef.current.get(
@@ -640,6 +676,11 @@ export function useChannel(channelId: string | null): UseChannelReturn {
 
   // Streaming: accumulate tokens and flush via rAF for smooth 60fps rendering
   const streamBufferRef = useRef<Map<string, string>>(new Map());
+  // F6: Token ordering — track next expected index and out-of-order buffer per message
+  const streamNextIndexRef = useRef<Map<string, number>>(new Map());
+  const streamOooBufferRef = useRef<Map<string, Map<number, string>>>(
+    new Map(),
+  );
   const rafRef = useRef<number | null>(null);
 
   // Add messages with deduplication
@@ -714,6 +755,8 @@ export function useChannel(channelId: string | null): UseChannelReturn {
     setPresenceMap(new Map());
     messageIdsRef.current = new Set();
     pendingStreamMetaRef.current = new Map();
+    streamNextIndexRef.current = new Map();
+    streamOooBufferRef.current = new Map();
     lastSequenceRef.current = "0";
     loadingHistoryRef.current = false;
     if (agentHintTimerRef.current) {
@@ -779,6 +822,8 @@ export function useChannel(channelId: string | null): UseChannelReturn {
         pendingStreamMetaRef,
         streamLastTokenRef,
         streamBufferRef,
+        streamNextIndexRef,
+        streamOooBufferRef,
         typingTimersRef,
         lastSequenceRef,
         messageIdsRef,
@@ -857,6 +902,8 @@ export function useChannel(channelId: string | null): UseChannelReturn {
       // BUG-006: Clear stream timeout interval
       clearInterval(streamTimeoutInterval);
       streamLastTokenRef.current.clear();
+      streamNextIndexRef.current.clear();
+      streamOooBufferRef.current.clear();
       if (agentHintTimerRef.current) {
         clearTimeout(agentHintTimerRef.current);
         agentHintTimerRef.current = null;
