@@ -5,7 +5,7 @@ import { useSession } from "next-auth/react";
 import { useDmChannel } from "@/lib/hooks/use-dm-channel";
 import type { DmMessagePayload } from "@/lib/hooks/use-dm-channel";
 import { MessageInput } from "@/components/chat/message-input";
-import { MarkdownContent } from "@/components/chat/markdown-content";
+import { MarkdownContentLazy as MarkdownContent } from "@/components/chat/lazy-markdown-content";
 import { EditMessageInput } from "@/components/chat/edit-message-input";
 import { DeleteMessageModal } from "@/components/modals/delete-message-modal";
 import { SearchPanel } from "@/components/search/search-panel";

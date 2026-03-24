@@ -1,6 +1,14 @@
 "use client";
 
-import { useRef, useEffect, useCallback, useMemo, useState } from "react";
+import {
+  useRef,
+  useEffect,
+  useCallback,
+  useMemo,
+  useState,
+  type ReactElement,
+} from "react";
+import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
 import type { MessagePayload, ReactionData } from "@/lib/hooks/use-channel";
 import { MessageItem } from "./message-item";
 import { StreamingMessage } from "./streaming-message";
@@ -137,6 +145,14 @@ interface MessageListProps {
   onScrollToMessageComplete?: () => void;
 }
 
+/**
+ * F4: Virtualized message list using react-virtuoso.
+ *
+ * Only renders messages visible in the viewport (plus overscan buffer),
+ * so channels with thousands of messages stay performant.
+ * Preserves all existing behavior: auto-follow, history loading,
+ * search jump, unread divider, active stream indicator.
+ */
 export function MessageList({
   messages,
   hasMoreHistory,
@@ -153,16 +169,18 @@ export function MessageList({
   scrollToMessageId,
   onScrollToMessageComplete,
 }: MessageListProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
+  const virtuosoRef = useRef<VirtuosoHandle>(null);
   const isAtBottomRef = useRef(true);
-  const prevMessageCountRef = useRef(0);
   const seenMessageIdsRef = useRef<Set<string>>(new Set());
   const hasSeededSeenMessageIdsRef = useRef(false);
+  const prevMessageCountRef = useRef(0);
   const prioritizedIncomingUserMessageIdRef = useRef<string | null>(null);
+
   // TASK-0022: Highlighted message for search jump
   const [highlightedMessageId, setHighlightedMessageId] = useState<
     string | null
   >(null);
+
   const latestOwnUserMessageId = useMemo(() => {
     if (!currentUserId) return null;
     for (let i = messages.length - 1; i >= 0; i -= 1) {
@@ -180,7 +198,6 @@ export function MessageList({
     for (let i = 0; i < messages.length; i++) {
       try {
         if (BigInt(messages[i].sequence) > lrs) {
-          // If dividerIndex is 0 (all messages unread), don't show
           return i > 0 ? i : -1;
         }
       } catch {
@@ -190,25 +207,27 @@ export function MessageList({
     return -1;
   }, [messages, lastReadSeq]);
 
-  // Detect if user is near bottom
-  const handleScroll = useCallback(() => {
-    const el = containerRef.current;
-    if (!el) return;
+  // Determine whether Virtuoso should auto-follow new output
+  const followOutput = useCallback(
+    (isAtBottom: boolean): boolean | "smooth" | "auto" => {
+      // If user pinned an incoming message, don't auto-follow to bottom
+      if (prioritizedIncomingUserMessageIdRef.current) {
+        return false;
+      }
+      // Follow when at bottom or when there's an active stream
+      const hasActiveStream = messages.some(
+        (m) => m.streamingStatus === "ACTIVE",
+      );
+      if (isAtBottom || hasActiveStream) {
+        return "smooth";
+      }
+      return false;
+    },
+    [messages],
+  );
 
-    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
-    isAtBottomRef.current = distanceFromBottom < 50;
-
-    // Load more history when scrolled to top
-    if (el.scrollTop < 100 && hasMoreHistory) {
-      onLoadHistory();
-    }
-  }, [hasMoreHistory, onLoadHistory]);
-
-  // Auto-scroll to bottom on new messages or streaming content updates
+  // Track new messages and manage pinned incoming user message
   useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-
     const newlyAddedMessages: MessagePayload[] = [];
     if (!hasSeededSeenMessageIdsRef.current) {
       if (messages.length > 0) {
@@ -227,43 +246,15 @@ export function MessageList({
     const isNewMessage = messages.length > prevMessageCountRef.current;
     prevMessageCountRef.current = messages.length;
 
-    // Scroll on new message or if there's an active streaming message
-    const hasActiveStream = messages.some(
-      (m) => m.streamingStatus === "ACTIVE",
-    );
     const latestMessage = messages[messages.length - 1];
-    const typedAgentTypes = [
-      "TOOL_CALL",
-      "TOOL_RESULT",
-      "CODE_BLOCK",
-      "ARTIFACT",
-      "STATUS",
-    ];
-    const isLatestAgentStream = Boolean(
-      latestMessage &&
-      latestMessage.authorType === "AGENT" &&
-      latestMessage.type === "STREAMING",
-    );
-    const isLatestAgentTyped = Boolean(
-      latestMessage &&
-      latestMessage.authorType === "AGENT" &&
-      typedAgentTypes.includes(latestMessage.type),
-    );
-    const isLatestUserMessage = Boolean(
-      latestMessage && latestMessage.authorType === "USER",
-    );
     const isLatestOwnUserMessage = Boolean(
       latestMessage &&
-      latestMessage.authorType === "USER" &&
-      currentUserId &&
-      latestMessage.authorId === currentUserId,
+        latestMessage.authorType === "USER" &&
+        currentUserId &&
+        latestMessage.authorId === currentUserId,
     );
-    const isLatestIncomingUserMessage = Boolean(
-      latestMessage &&
-      latestMessage.authorType === "USER" &&
-      currentUserId &&
-      latestMessage.authorId !== currentUserId,
-    );
+
+    // Track incoming user messages for pinning
     const incomingUserCandidate = newlyAddedMessages.findLast(
       (m) =>
         Boolean(currentUserId) &&
@@ -280,89 +271,92 @@ export function MessageList({
       incomingUserCandidateAgeMs < 30_000
         ? incomingUserCandidate
         : null;
-    const hasNewIncomingUserMessage = Boolean(newIncomingUserMessage);
+
     if (newIncomingUserMessage) {
       prioritizedIncomingUserMessageIdRef.current = newIncomingUserMessage.id;
     }
-    const prevMessage = messages[messages.length - 2];
-    const latestUserGrouped = Boolean(
-      isLatestUserMessage &&
-      prevMessage &&
-      prevMessage.authorId === latestMessage?.authorId &&
-      prevMessage.authorType === latestMessage?.authorType &&
-      !prevMessage.isDeleted &&
-      !latestMessage?.isDeleted &&
-      new Date(latestMessage!.createdAt).getTime() -
-        new Date(prevMessage.createdAt).getTime() <
-        5 * 60 * 1000,
-    );
-    const shouldFollowNewAgentStreamOutcome =
-      isNewMessage && isLatestAgentStream;
-    const shouldFollowOwnSentMessage = isNewMessage && isLatestOwnUserMessage;
-    const shouldFollowIncomingUserMessage =
-      hasNewIncomingUserMessage ||
-      (isNewMessage && isLatestIncomingUserMessage);
-    const shouldFollowTypedAgentMessage = isNewMessage && isLatestAgentTyped;
-    const prioritizedIncomingUserMessageId =
-      prioritizedIncomingUserMessageIdRef.current;
-    if (
-      prioritizedIncomingUserMessageId &&
-      !messages.some((m) => m.id === prioritizedIncomingUserMessageId)
-    ) {
+
+    // Clear pinned message if it no longer exists
+    const pinnedId = prioritizedIncomingUserMessageIdRef.current;
+    if (pinnedId && !messages.some((m) => m.id === pinnedId)) {
       prioritizedIncomingUserMessageIdRef.current = null;
     }
+
+    // Own message clears the pin
     if (isNewMessage && isLatestOwnUserMessage) {
       prioritizedIncomingUserMessageIdRef.current = null;
     }
-    const shouldPinIncomingUserMessage = Boolean(
-      prioritizedIncomingUserMessageIdRef.current,
-    );
-    const shouldFollowActiveStream =
-      hasActiveStream && !shouldPinIncomingUserMessage;
-    const willScroll =
-      (isNewMessage && isAtBottomRef.current) ||
-      shouldFollowActiveStream ||
-      shouldFollowNewAgentStreamOutcome ||
-      shouldFollowOwnSentMessage ||
-      shouldFollowIncomingUserMessage ||
-      shouldFollowTypedAgentMessage;
 
-    if (willScroll) {
-      const pinnedId = prioritizedIncomingUserMessageIdRef.current;
-      if (pinnedId) {
-        const pinnedRow = el.querySelector<HTMLElement>(
-          `[data-message-id="${pinnedId}"]`,
-        );
-        pinnedRow?.scrollIntoView({ block: "nearest" });
-      } else {
-        el.scrollTop = el.scrollHeight;
+    // For pinned incoming messages, scroll to that message instead of bottom
+    if (prioritizedIncomingUserMessageIdRef.current && virtuosoRef.current) {
+      const pinnedIndex = messages.findIndex(
+        (m) => m.id === prioritizedIncomingUserMessageIdRef.current,
+      );
+      if (pinnedIndex >= 0) {
+        virtuosoRef.current.scrollToIndex({
+          index: pinnedIndex,
+          align: "end",
+        });
+      }
+    }
+
+    // Force scroll to bottom for new agent streams and own messages
+    if (isNewMessage && virtuosoRef.current) {
+      const typedAgentTypes = [
+        "TOOL_CALL",
+        "TOOL_RESULT",
+        "CODE_BLOCK",
+        "ARTIFACT",
+        "STATUS",
+      ];
+      const isLatestAgentStream = Boolean(
+        latestMessage &&
+          latestMessage.authorType === "AGENT" &&
+          latestMessage.type === "STREAMING",
+      );
+      const isLatestAgentTyped = Boolean(
+        latestMessage &&
+          latestMessage.authorType === "AGENT" &&
+          typedAgentTypes.includes(latestMessage.type),
+      );
+      const isLatestIncomingUserMessage = Boolean(
+        latestMessage &&
+          latestMessage.authorType === "USER" &&
+          currentUserId &&
+          latestMessage.authorId !== currentUserId,
+      );
+
+      const shouldScroll =
+        isLatestOwnUserMessage ||
+        isLatestAgentStream ||
+        isLatestAgentTyped ||
+        isLatestIncomingUserMessage ||
+        isAtBottomRef.current;
+
+      if (shouldScroll && !prioritizedIncomingUserMessageIdRef.current) {
+        virtuosoRef.current.scrollToIndex({
+          index: messages.length - 1,
+          align: "end",
+          behavior: "smooth",
+        });
       }
     }
   }, [messages, currentUserId]);
 
-  // Scroll to bottom on initial load
-  useEffect(() => {
-    const el = containerRef.current;
-    if (el && messages.length > 0) {
-      el.scrollTop = el.scrollHeight;
-    }
-    // Only run on first messages load
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [messages.length > 0]);
-
   // TASK-0022: Scroll to and highlight a specific message (search jump)
   useEffect(() => {
     if (!scrollToMessageId) return;
-    const el = containerRef.current;
-    if (!el) return;
 
-    const target = el.querySelector<HTMLElement>(
-      `[data-message-id="${scrollToMessageId}"]`,
+    const targetIndex = messages.findIndex(
+      (m) => m.id === scrollToMessageId,
     );
-    if (target) {
-      target.scrollIntoView({ behavior: "smooth", block: "center" });
+    if (targetIndex >= 0 && virtuosoRef.current) {
+      virtuosoRef.current.scrollToIndex({
+        index: targetIndex,
+        align: "center",
+        behavior: "smooth",
+      });
       setHighlightedMessageId(scrollToMessageId);
-      // Clear highlight after animation
       const timeout = setTimeout(() => {
         setHighlightedMessageId(null);
       }, 2000);
@@ -370,76 +364,25 @@ export function MessageList({
       return () => clearTimeout(timeout);
     }
     onScrollToMessageComplete?.();
-  }, [scrollToMessageId, onScrollToMessageComplete]);
+  }, [scrollToMessageId, messages, onScrollToMessageComplete]);
 
-  return (
-    <div
-      ref={containerRef}
-      onScroll={handleScroll}
-      className="flex-1 overflow-y-auto px-1 pb-4 pt-3"
-    >
-      {/* Loading indicator at top */}
-      {hasMoreHistory && messages.length > 0 && (
-        <div className="space-y-3 px-4 py-3">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="flex items-start gap-3 animate-pulse">
-              <div className="h-8 w-8 flex-shrink-0 rounded-full bg-background-tertiary/80" />
-              <div className="flex-1 space-y-1.5">
-                <div className="h-3 w-24 rounded bg-background-tertiary/80" />
-                <div
-                  className="h-3 rounded bg-background-tertiary/80"
-                  style={{ width: `${60 + i * 10}%` }}
-                />
-              </div>
-            </div>
-          ))}
-          <div className="flex justify-center">
-            <span className="text-[10px] font-mono tracking-[0.16em] text-text-dim">
-              LOADING HISTORY
-            </span>
-          </div>
-        </div>
-      )}
+  // Track at-bottom state
+  const handleAtBottomChange = useCallback((atBottom: boolean) => {
+    isAtBottomRef.current = atBottom;
+  }, []);
 
-      {/* Empty state — agent-aware messaging */}
-      {messages.length === 0 && (
-        <div className="flex h-full items-center justify-center px-4 py-10">
-          <div className="chrome-card rounded-lg px-8 py-10 text-center">
-            {hasAgents ? (
-              <>
-                <p className="font-display text-xl font-semibold text-white">
-                  Agents are ready
-                </p>
-                <p className="mt-2 text-sm text-text-muted">
-                  Send a message to get started!
-                </p>
-              </>
-            ) : (
-              <>
-                <p className="font-display text-xl font-semibold text-white">
-                  No messages yet
-                </p>
-                <p className="mt-2 text-sm text-text-muted">
-                  Be the first to send a message!
-                </p>
-              </>
-            )}
-          </div>
-        </div>
-      )}
+  // Load history when scrolling to the top
+  const handleStartReached = useCallback(() => {
+    if (hasMoreHistory) {
+      onLoadHistory();
+    }
+  }, [hasMoreHistory, onLoadHistory]);
 
-      {/* TASK-0012: Active streams indicator for multi-agent channels */}
-      {activeStreamCount > 1 && (
-        <div className="sticky top-0 z-10 flex justify-center py-2">
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-accent-cyan/[0.06] px-3 py-1 text-[10px] font-medium text-accent-cyan">
-            <span className="w-1.5 h-1.5 rounded-full bg-accent-cyan animate-pulse" />
-            {activeStreamCount} agents responding
-          </span>
-        </div>
-      )}
-
-      {/* TASK-0016: Compute divider position — the index of the FIRST unread message */}
-      {messages.map((message, index) => (
+  // Render each message item
+  const itemContent = useCallback(
+    (index: number): ReactElement => {
+      const message = messages[index];
+      return (
         <MessageRow
           key={message.id}
           message={message}
@@ -454,7 +397,104 @@ export function MessageList({
           onResumeStream={onResumeStream}
           isHighlighted={message.id === highlightedMessageId}
         />
-      ))}
+      );
+    },
+    [
+      messages,
+      dividerIndex,
+      currentUserId,
+      latestOwnUserMessageId,
+      onReactionsChange,
+      canManageMessages,
+      onEditMessage,
+      onDeleteMessage,
+      onResumeStream,
+      highlightedMessageId,
+    ],
+  );
+
+  // Empty state
+  if (messages.length === 0) {
+    return (
+      <div className="flex h-full flex-1 items-center justify-center px-4 py-10">
+        <div className="chrome-card rounded-lg px-8 py-10 text-center">
+          {hasAgents ? (
+            <>
+              <p className="font-display text-xl font-semibold text-white">
+                Agents are ready
+              </p>
+              <p className="mt-2 text-sm text-text-muted">
+                Send a message to get started!
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="font-display text-xl font-semibold text-white">
+                No messages yet
+              </p>
+              <p className="mt-2 text-sm text-text-muted">
+                Be the first to send a message!
+              </p>
+            </>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex-1 overflow-hidden relative">
+      {/* TASK-0012: Active streams indicator for multi-agent channels */}
+      {activeStreamCount > 1 && (
+        <div className="absolute top-0 left-0 right-0 z-10 flex justify-center py-2 pointer-events-none">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-accent-cyan/[0.06] px-3 py-1 text-[10px] font-medium text-accent-cyan pointer-events-auto">
+            <span className="w-1.5 h-1.5 rounded-full bg-accent-cyan animate-pulse" />
+            {activeStreamCount} agents responding
+          </span>
+        </div>
+      )}
+
+      <Virtuoso
+        ref={virtuosoRef}
+        data={messages}
+        totalCount={messages.length}
+        initialTopMostItemIndex={messages.length - 1}
+        followOutput={followOutput}
+        atBottomStateChange={handleAtBottomChange}
+        atBottomThreshold={50}
+        startReached={handleStartReached}
+        overscan={600}
+        increaseViewportBy={{ top: 400, bottom: 200 }}
+        itemContent={itemContent}
+        className="px-1 pb-4 pt-3"
+        components={{
+          Header: () =>
+            hasMoreHistory ? (
+              <div className="space-y-3 px-4 py-3">
+                {[1, 2, 3].map((i) => (
+                  <div
+                    key={i}
+                    className="flex items-start gap-3 animate-pulse"
+                  >
+                    <div className="h-8 w-8 flex-shrink-0 rounded-full bg-background-tertiary/80" />
+                    <div className="flex-1 space-y-1.5">
+                      <div className="h-3 w-24 rounded bg-background-tertiary/80" />
+                      <div
+                        className="h-3 rounded bg-background-tertiary/80"
+                        style={{ width: `${60 + i * 10}%` }}
+                      />
+                    </div>
+                  </div>
+                ))}
+                <div className="flex justify-center">
+                  <span className="text-[10px] font-mono tracking-[0.16em] text-text-dim">
+                    LOADING HISTORY
+                  </span>
+                </div>
+              </div>
+            ) : null,
+        }}
+      />
     </div>
   );
 }

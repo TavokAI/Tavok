@@ -4,7 +4,7 @@ import { useState, useMemo, useCallback } from "react";
 import Image from "next/image";
 import { useChatContext } from "@/components/providers/chat-provider";
 import type { MessagePayload, ReactionData } from "@/lib/hooks/use-channel";
-import { MarkdownContent } from "./markdown-content";
+import { MarkdownContentLazy as MarkdownContent } from "./lazy-markdown-content";
 import { ReactionBar } from "./reaction-bar";
 import { FileAttachment, parseFileReferences } from "./file-attachment";
 import { MessageActions } from "./message-actions";

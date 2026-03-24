@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { DmChatArea } from "@/components/dm/dm-chat-area";
+import { ChatPanelSkeleton } from "@/components/ui/message-skeleton";
 import { getDmListFromResponse } from "@/lib/dm-api";
 
 interface DmListItem {
@@ -53,11 +54,7 @@ export default function DmPage() {
   }, [dmId]);
 
   if (loading) {
-    return (
-      <div className="flex h-full items-center justify-center bg-background-primary">
-        <div className="text-text-dim text-sm font-mono">Loading...</div>
-      </div>
-    );
+    return <ChatPanelSkeleton />;
   }
 
   if (error) {
