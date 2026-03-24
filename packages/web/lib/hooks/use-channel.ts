@@ -413,8 +413,7 @@ function registerStreamingHandlers(channel: Channel, deps: HandlerDeps) {
     deps.streamLastTokenRef.current.set(payload.messageId, Date.now());
 
     // F6: Token ordering — buffer out-of-order tokens and flush in sequence
-    const nextIdx =
-      deps.streamNextIndexRef.current.get(payload.messageId) ?? 0;
+    const nextIdx = deps.streamNextIndexRef.current.get(payload.messageId) ?? 0;
 
     if (payload.index === nextIdx) {
       // In-order: append directly plus any consecutive buffered tokens
