@@ -137,6 +137,7 @@ test.describe("Section 24: User Profile & Settings", () => {
     const newPw = page.locator("#newPassword");
     const confirmPw = page.locator("#confirmPassword");
 
+    await currentPw.scrollIntoViewIfNeeded();
     await currentPw.fill(DEMO_USER.password);
     await newPw.fill("NewPassword123!");
     await confirmPw.fill("DifferentPassword123!");

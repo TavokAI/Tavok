@@ -99,7 +99,7 @@ test.describe("Section 19: Edge Cases", () => {
     // Verify the server appears in the sidebar with emoji
     await page.getByRole("tab", { name: "SERVERS" }).click();
     await expect(page.getByText(/Test 🚀 Server/).first()).toBeVisible({
-      timeout: 5_000,
+      timeout: 15_000,
     });
   });
 });

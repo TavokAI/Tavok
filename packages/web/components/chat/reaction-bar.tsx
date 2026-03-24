@@ -193,7 +193,7 @@ export function ReactionBar({
               ref={pickerRef}
               role="listbox"
               aria-label="Choose a reaction"
-              className="absolute bottom-full left-0 z-50 mb-1 rounded-lg border border-background-tertiary bg-background-floating p-2 shadow-xl"
+              className="absolute bottom-full left-0 z-50 mb-1 w-[188px] rounded-lg border border-background-tertiary bg-background-floating p-2 shadow-xl"
             >
               <div className="grid grid-cols-5 gap-1">
                 {EMOJI_PRESETS.map((emoji, index) => (

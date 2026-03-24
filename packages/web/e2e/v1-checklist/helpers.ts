@@ -128,8 +128,8 @@ export async function createServerViaUI(
   // Step 2: Keep defaults, submit
   await page.getByRole("button", { name: "Create Server" }).click();
 
-  // Wait for navigation to the new server
-  await page.waitForTimeout(2000);
+  // Wait for navigation to the new server (URL changes to /servers/...)
+  await page.waitForURL(/\/servers\//, { timeout: 10_000 });
 }
 
 /**
