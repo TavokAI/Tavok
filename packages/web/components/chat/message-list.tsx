@@ -25,6 +25,7 @@ function MessageRow({
   canManageMessages,
   onEditMessage,
   onDeleteMessage,
+  onResumeStream,
   isHighlighted,
 }: {
   message: MessagePayload;
@@ -36,6 +37,11 @@ function MessageRow({
   canManageMessages?: boolean;
   onEditMessage?: (messageId: string, content: string) => Promise<boolean>;
   onDeleteMessage?: (messageId: string) => void;
+  onResumeStream?: (
+    messageId: string,
+    checkpointIndex: number,
+    agentId: string,
+  ) => void;
   isHighlighted?: boolean;
 }) {
   let isGrouped =
@@ -77,6 +83,7 @@ function MessageRow({
         message={message}
         isGrouped={isGrouped}
         onReactionsChange={onReactionsChange}
+        onResumeStream={onResumeStream}
         currentUserId={currentUserId}
         canManageMessages={canManageMessages}
         onDelete={onDeleteMessage}
@@ -118,6 +125,12 @@ interface MessageListProps {
   activeStreamCount?: number;
   /** Whether the channel has agents assigned (for empty state messaging) */
   hasAgents?: boolean;
+  /** TASK-0021: resume stream from checkpoint */
+  onResumeStream?: (
+    messageId: string,
+    checkpointIndex: number,
+    agentId: string,
+  ) => void;
   /** TASK-0022: scroll to and highlight this message */
   scrollToMessageId?: string | null;
   /** TASK-0022: callback when scroll-to animation completes */
@@ -133,6 +146,7 @@ export function MessageList({
   canManageMessages,
   onEditMessage,
   onDeleteMessage,
+  onResumeStream,
   lastReadSeq,
   activeStreamCount = 0,
   hasAgents = false,
@@ -437,6 +451,7 @@ export function MessageList({
           canManageMessages={canManageMessages}
           onEditMessage={onEditMessage}
           onDeleteMessage={onDeleteMessage}
+          onResumeStream={onResumeStream}
           isHighlighted={message.id === highlightedMessageId}
         />
       ))}

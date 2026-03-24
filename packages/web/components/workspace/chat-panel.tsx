@@ -76,6 +76,7 @@ export function ChatPanel({ panel }: ChatPanelProps) {
     charterState,
     setCharterState,
     sendCharterControl,
+    sendResumeStream,
   } = useChannel(panel.isMinimized || panel.isClosed ? null : panel.channelId);
 
   const handleDeleteRequest = useCallback(
@@ -608,6 +609,7 @@ export function ChatPanel({ panel }: ChatPanelProps) {
                 (channelData?.agentIds && channelData.agentIds.length > 0)
               )
             }
+            onResumeStream={sendResumeStream}
             scrollToMessageId={scrollToMessageId}
             onScrollToMessageComplete={() => setScrollToMessageId(null)}
           />

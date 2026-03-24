@@ -96,6 +96,11 @@ interface UseChannelReturn {
   charterState: CharterState | null; // TASK-0020: live charter status
   setCharterState: React.Dispatch<React.SetStateAction<CharterState | null>>; // TASK-0020: for optimistic updates
   sendCharterControl: (action: "start" | "pause" | "resume" | "end") => void; // TASK-0020
+  sendResumeStream: (
+    messageId: string,
+    checkpointIndex: number,
+    agentId: string,
+  ) => void; // TASK-0021: checkpoint resume
 }
 
 function getSendErrorHint(resp: unknown): string {
@@ -983,6 +988,19 @@ export function useChannel(channelId: string | null): UseChannelReturn {
     [],
   );
 
+  // TASK-0021: Resume stream from checkpoint via WebSocket
+  const sendResumeStream = useCallback(
+    (messageId: string, checkpointIndex: number, agentId: string) => {
+      if (!channelRef.current) return;
+      channelRef.current.push("stream_resume", {
+        messageId,
+        checkpointIndex,
+        agentId,
+      });
+    },
+    [],
+  );
+
   return {
     messages,
     agentTriggerHint,
@@ -1001,5 +1019,6 @@ export function useChannel(channelId: string | null): UseChannelReturn {
     charterState,
     setCharterState,
     sendCharterControl,
+    sendResumeStream,
   };
 }

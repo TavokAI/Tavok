@@ -429,6 +429,98 @@ defmodule TavokGatewayWeb.RoomChannel do
     {:reply, {:error, %{reason: "invalid_payload", event: "new_message"}}, socket}
   end
 
+  # TASK-0021: Resume stream from a checkpoint (triggered by user clicking "Resume from checkpoint" in UI)
+  @impl true
+  def handle_in("stream_resume", %{"messageId" => original_message_id, "checkpointIndex" => checkpoint_index, "agentId" => agent_id}, socket)
+      when is_binary(original_message_id) and is_integer(checkpoint_index) and is_binary(agent_id) do
+    channel_id = socket.assigns.channel_id
+
+    # Validate the checkpoint via Next.js internal API
+    Task.Supervisor.async_nolink(TavokGateway.TaskSupervisor, fn ->
+      case WebClient.validate_checkpoint_resume(channel_id, original_message_id, checkpoint_index, agent_id) do
+        {:ok, resume_data} ->
+          # Get agent config for the selected agent
+          case WebClient.get_agent_config(agent_id) do
+            {:ok, agent_config} ->
+              agent_name = Map.get(agent_config, "name", "Agent")
+              agent_avatar_url = Map.get(agent_config, "avatarUrl")
+              partial_content = Map.get(resume_data, "partialContent", "")
+
+              # Generate new message ID and sequence for the resumed stream
+              message_id = Ulid.generate()
+
+              case next_sequence(channel_id) do
+                {:ok, sequence} ->
+                  seq_str = Integer.to_string(sequence)
+
+                  # Broadcast stream_start for the new resumed stream
+                  Broadcast.endpoint_broadcast!("room:#{channel_id}", "stream_start", %{
+                    messageId: message_id,
+                    agentId: agent_id,
+                    agentName: agent_name,
+                    agentAvatarUrl: agent_avatar_url,
+                    sequence: seq_str,
+                    resumedFrom: original_message_id,
+                    checkpointIndex: checkpoint_index
+                  })
+
+                  StreamWatchdog.register_stream(channel_id, message_id)
+
+                  placeholder = %{
+                    id: message_id,
+                    channelId: channel_id,
+                    authorId: agent_id,
+                    authorType: "AGENT",
+                    content: partial_content,
+                    type: "STREAMING",
+                    streamingStatus: "ACTIVE",
+                    sequence: seq_str
+                  }
+
+                  MessagePersistence.persist_async(placeholder, message_id, channel_id)
+
+                  # Publish stream request to Go Proxy with checkpoint context
+                  stream_request =
+                    Jason.encode!(%{
+                      channelId: channel_id,
+                      messageId: message_id,
+                      agentId: agent_id,
+                      triggerMessageId: original_message_id,
+                      contextMessages: [],
+                      requestId: Ulid.generate(),
+                      traceparent: "",
+                      resumeFromCheckpoint: %{
+                        originalMessageId: original_message_id,
+                        checkpointIndex: checkpoint_index,
+                        partialContent: partial_content
+                      }
+                    })
+
+                  Redix.command(:redix, ["PUBLISH", "hive:stream:request", stream_request])
+
+                  Logger.info("Stream resume published: channel=#{channel_id} message=#{message_id} agent=#{agent_id} checkpoint=#{checkpoint_index}")
+
+                {:error, reason} ->
+                  Logger.error("Stream resume sequence failed: #{inspect(reason)}")
+              end
+
+            {:error, reason} ->
+              Logger.error("Stream resume agent config failed: #{inspect(reason)}")
+          end
+
+        {:error, reason} ->
+          Logger.error("Stream resume validation failed: #{inspect(reason)}")
+      end
+    end)
+
+    {:reply, :ok, socket}
+  end
+
+  @impl true
+  def handle_in("stream_resume", _payload, socket) do
+    {:reply, {:error, %{reason: "invalid_payload", event: "stream_resume"}}, socket}
+  end
+
   @impl true
   def handle_in("typing", _payload, socket) do
     # Server-side typing throttle: cap at 1 broadcast per @typing_throttle_ms per user.

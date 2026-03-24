@@ -627,4 +627,57 @@ defmodule TavokGateway.WebClient do
         {:error, reason}
     end
   end
+
+  @doc """
+  Validate a checkpoint resume request via POST /api/internal/stream/resume.
+  Returns {:ok, resume_data} or {:error, reason}. (TASK-0021)
+  """
+  def validate_checkpoint_resume(channel_id, original_message_id, checkpoint_index, agent_id) do
+    url = "#{web_url()}/api/internal/stream/resume"
+
+    case Req.post(url,
+           json: %{
+             channelId: channel_id,
+             originalMessageId: original_message_id,
+             checkpointIndex: checkpoint_index,
+             agentId: agent_id
+           },
+           headers: req_headers(),
+           receive_timeout: 10_000
+         ) do
+      {:ok, %Req.Response{status: 200, body: response_body}} ->
+        {:ok, response_body}
+
+      {:ok, %Req.Response{status: status, body: response_body}} ->
+        Logger.error("validate_checkpoint_resume failed: status=#{status} body=#{inspect(response_body)}")
+        {:error, {:http_error, status, response_body}}
+
+      {:error, reason} ->
+        Logger.error("validate_checkpoint_resume request failed: #{inspect(reason)}")
+        {:error, reason}
+    end
+  end
+
+  @doc """
+  Get agent config by agent ID. Returns {:ok, agent_config} or {:error, reason}. (TASK-0021)
+  """
+  def get_agent_config(agent_id) do
+    url = "#{web_url()}/api/internal/agents/#{agent_id}"
+
+    case Req.get(url,
+           headers: req_headers(),
+           receive_timeout: 10_000
+         ) do
+      {:ok, %Req.Response{status: 200, body: response_body}} ->
+        {:ok, response_body}
+
+      {:ok, %Req.Response{status: status, body: response_body}} ->
+        Logger.error("get_agent_config failed: status=#{status} body=#{inspect(response_body)}")
+        {:error, {:http_error, status, response_body}}
+
+      {:error, reason} ->
+        Logger.error("get_agent_config request failed: #{inspect(reason)}")
+        {:error, reason}
+    end
+  end
 end
