@@ -1,5 +1,9 @@
-// Protocol types — matches docs/PROTOCOL.md exactly
-// Every WebSocket event and Redis pub/sub message shape is defined here.
+// Protocol types — WebSocket and Redis pub/sub event shapes.
+// NOTE: This is a partial subset of docs/PROTOCOL.md. The full protocol
+// includes additional message types (TOOL_CALL, TOOL_RESULT, CODE_BLOCK,
+// ARTIFACT, STATUS) and metadata fields (thinkingTimeline, tokenHistory,
+// checkpoints) that are not yet represented here. See PROTOCOL.md for
+// the authoritative contract.
 
 import type { MessagePayload, StreamStatus } from "./message";
 

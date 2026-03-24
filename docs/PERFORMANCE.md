@@ -30,7 +30,7 @@ Break-testing (TASK-0007) validated the streaming pipeline under normal conditio
 
 Infrastructure failure scenarios (F-02, F-05, F-06) exposed and resolved terminal state convergence issues. See `docs/KNOWN-ISSUES.md` for details.
 
-Formal load testing (concurrent connections, concurrent streams) is scheduled for V1.
+Formal load testing (concurrent connections, concurrent streams) has not yet been conducted. k6 scripts exist in `tests/load/` but are not yet integrated into CI.
 
 ---
 

@@ -7,6 +7,14 @@ import { RateLimiter } from "@/lib/rate-limit";
 const loginLimiter = new RateLimiter({ max: 30, windowSec: 60 });
 
 const publicRoutes = ["/login", "/register"];
+
+// DESIGN NOTE (API-001): These prefixes bypass the middleware session check
+// intentionally. Each route under these prefixes handles its own auth:
+//   /api/auth     — NextAuth callbacks (auth is the purpose)
+//   /api/health   — Unauthenticated health check for load balancers
+//   /api/internal — Service-to-service calls authenticated via x-internal-secret
+//   /api/v1       — Agent API calls authenticated via Bearer sk-tvk-... API keys
+// Every new route under these prefixes MUST implement route-level auth.
 const publicPrefixes = ["/api/auth", "/api/health", "/api/internal", "/api/v1"];
 
 function isPublicRoute(pathname: string): boolean {

@@ -1,4 +1,6 @@
-// Message types — matches Prisma Message model and PROTOCOL.md payloads
+// Message types — subset of Prisma Message model and PROTOCOL.md payloads.
+// NOTE: PROTOCOL.md and Prisma define additional types (TOOL_CALL, TOOL_RESULT,
+// CODE_BLOCK, ARTIFACT, STATUS) not yet represented here.
 
 export type MessageType = "STANDARD" | "STREAMING" | "SYSTEM";
 export type StreamStatus = "ACTIVE" | "COMPLETE" | "ERROR";

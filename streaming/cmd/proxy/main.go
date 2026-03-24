@@ -33,6 +33,10 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
+// version is set at build time via -ldflags "-X main.version=0.3.0"
+// Defaults to "dev" for local development.
+var version = "dev"
+
 func main() {
 	// Structured JSON logging from day 1
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
@@ -125,7 +129,7 @@ func main() {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"service":       "streaming",
-			"version":       "0.1.0",
+			"version":       version,
 			"activeStreams": manager.ActiveCount(),
 		})
 	})

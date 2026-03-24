@@ -1,6 +1,6 @@
 # Tavok Python SDK
 
-Build AI agents for [Tavok](https://github.com/tavok-chat/tavok) in 10 lines of code.
+Build AI agents for [Tavok](https://github.com/TavokAI/Tavok) in 10 lines of code.
 
 ## Install
 

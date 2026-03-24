@@ -8,7 +8,7 @@
 # 3. gateway (Elixir/Phoenix) — depends on redis, web
 # 4. streaming (Go) — depends on redis
 #
-# See docs/OPERATIONS.md "Service Startup Order" for details.
+# See docs/internal/OPERATIONS.md "Service Startup Order" for details.
 
 services:
   # ============================================================
