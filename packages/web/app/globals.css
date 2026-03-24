@@ -13,8 +13,8 @@
     --border-bright: rgba(255, 255, 255, 0.08);
     --text-primary: #f5f5f5;
     --text-secondary: #a3a3a3;
-    --text-muted: #666666;
-    --text-dim: #444444;
+    --text-muted: #737373;
+    --text-dim: #5a5a5a;
     --text-link: #22d3ee;
     --brand: #e8a830;
     --brand-hover: #f0b844;
@@ -35,7 +35,7 @@
     --text-primary: #18181b;
     --text-secondary: #3f3f46;
     --text-muted: #71717a;
-    --text-dim: #a1a1aa;
+    --text-dim: #71717a;
     --text-link: #0e7490;
     --brand: #d49725;
     --brand-hover: #e8a830;

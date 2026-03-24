@@ -518,6 +518,11 @@ export function MessageInput({
             onSelect={handleSelect}
             onPaste={handlePaste}
             disabled={disabled}
+            aria-label={
+              channelName
+                ? `Type a message in #${channelName}`
+                : "Type a message"
+            }
             placeholder={
               channelName ? `Message #${channelName}` : "Type here..."
             }

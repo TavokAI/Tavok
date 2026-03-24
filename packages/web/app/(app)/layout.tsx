@@ -19,9 +19,19 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             gap: "2px",
           }}
         >
+          {/* F2: Skip navigation link for keyboard/screen reader users */}
+          <a
+            href="#main-content"
+            className="sr-only focus:not-sr-only focus:absolute focus:z-[100] focus:rounded focus:bg-brand focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-background-primary"
+          >
+            Skip to content
+          </a>
           <TopBar />
           <LeftPanel />
-          <main className="workspace-floor relative overflow-hidden">
+          <main
+            id="main-content"
+            className="workspace-floor relative overflow-hidden"
+          >
             {children}
           </main>
           <RightPanel />

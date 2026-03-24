@@ -17,7 +17,7 @@ export function BottomBar() {
   }, [panels]);
 
   return (
-    <div className="chrome-panel col-span-3 flex items-center justify-between px-4 text-[10px] font-medium text-text-dim">
+    <footer className="chrome-panel col-span-3 flex items-center justify-between px-4 text-[10px] font-medium text-text-dim">
       <div className="flex items-center gap-5">
         <div className="flex items-center gap-1.5">
           <div className="h-1.5 w-1.5 rounded-full bg-accent-green shadow-[0_0_6px_rgba(34,197,94,0.4)]" />
@@ -43,6 +43,6 @@ export function BottomBar() {
         </div>
         <div className="text-[9px] tracking-[0.1em] text-text-dim">v1.0.0</div>
       </div>
-    </div>
+    </footer>
   );
 }

@@ -106,7 +106,10 @@ export function RightPanel() {
   }, [agentList]);
 
   return (
-    <div className="chrome-panel flex h-full flex-col overflow-hidden">
+    <aside
+      aria-label="Members and details"
+      className="chrome-panel flex h-full flex-col overflow-hidden"
+    >
       <div className="flex-1 space-y-1 overflow-y-auto p-2">
         <div className="rounded-md p-3">
           <div className="mb-3 flex items-center justify-between">
@@ -237,6 +240,6 @@ export function RightPanel() {
         isOpen={showManageAgents}
         onClose={() => setShowManageAgents(false)}
       />
-    </div>
+    </aside>
   );
 }

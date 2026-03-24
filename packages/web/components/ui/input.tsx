@@ -7,6 +7,8 @@ interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
 
 export const Input = forwardRef<HTMLInputElement, InputProps>(
   ({ label, error, id, className = "", ...props }, ref) => {
+    const errorId = error && id ? `${id}-error` : undefined;
+
     return (
       <div>
         {label && (
@@ -20,10 +22,16 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
         <input
           id={id}
           ref={ref}
+          aria-invalid={!!error}
+          aria-describedby={errorId}
           className={`w-full rounded bg-background-tertiary px-3 py-2 text-text-primary outline-none ring-1 ring-transparent transition focus:ring-brand ${className}`}
           {...props}
         />
-        {error && <p className="mt-1 text-xs text-status-dnd">{error}</p>}
+        {error && (
+          <p id={errorId} role="alert" className="mt-1 text-xs text-status-dnd">
+            {error}
+          </p>
+        )}
       </div>
     );
   },

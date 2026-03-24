@@ -8,7 +8,7 @@ export function TopBar() {
   const { activeStreams } = useWorkspaceContext();
 
   return (
-    <div className="chrome-panel col-span-3 flex items-center justify-between px-4 text-sm">
+    <header className="chrome-panel col-span-3 flex items-center justify-between px-4 text-sm">
       <div className="flex items-center gap-3">
         <span className="font-display text-base font-bold tracking-[0.18em] text-brand">
           TAVOK
@@ -27,6 +27,6 @@ export function TopBar() {
           </div>
         )}
       </div>
-    </div>
+    </header>
   );
 }

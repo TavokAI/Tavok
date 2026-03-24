@@ -181,6 +181,9 @@ export function MessageList({
     string | null
   >(null);
 
+  // F2: sr-only announcement for new messages (screen readers)
+  const [newMessageAnnouncement, setNewMessageAnnouncement] = useState("");
+
   const latestOwnUserMessageId = useMemo(() => {
     if (!currentUserId) return null;
     for (let i = messages.length - 1; i >= 0; i -= 1) {
@@ -274,6 +277,12 @@ export function MessageList({
 
     if (newIncomingUserMessage) {
       prioritizedIncomingUserMessageIdRef.current = newIncomingUserMessage.id;
+    }
+
+    // F2: Announce new messages for screen readers (only when not at bottom)
+    if (newlyAddedMessages.length > 0 && !isAtBottomRef.current) {
+      const latest = newlyAddedMessages[newlyAddedMessages.length - 1];
+      setNewMessageAnnouncement(`New message from ${latest.authorName}`);
     }
 
     // Clear pinned message if it no longer exists
@@ -442,6 +451,11 @@ export function MessageList({
 
   return (
     <div className="flex-1 overflow-hidden relative">
+      {/* F2: sr-only live region for new message announcements */}
+      <div aria-live="polite" className="sr-only">
+        {newMessageAnnouncement}
+      </div>
+
       {/* TASK-0012: Active streams indicator for multi-agent channels */}
       {activeStreamCount > 1 && (
         <div className="absolute top-0 left-0 right-0 z-10 flex justify-center py-2 pointer-events-none">

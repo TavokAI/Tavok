@@ -66,14 +66,24 @@ export function MentionAutocomplete({
 
   if (!visible || filtered.length === 0) return null;
 
+  const activeDescendantId = filtered[selectedIndex]
+    ? `mention-option-${filtered[selectedIndex].type}-${filtered[selectedIndex].id}`
+    : undefined;
+
   return (
     <div
       ref={listRef}
+      role="listbox"
+      aria-label="Mention suggestions"
+      aria-activedescendant={activeDescendantId}
       className="absolute bottom-full left-0 right-0 mb-1 max-h-48 overflow-y-auto rounded-lg border border-background-tertiary bg-background-floating shadow-xl z-50"
     >
       {filtered.map((option, index) => (
         <button
           key={`${option.type}-${option.id}`}
+          id={`mention-option-${option.type}-${option.id}`}
+          role="option"
+          aria-selected={index === selectedIndex}
           onMouseDown={(e) => {
             e.preventDefault();
             onSelect(option);

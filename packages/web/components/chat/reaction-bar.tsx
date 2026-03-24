@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import type { ReactionData } from "@/lib/hooks/use-channel";
 
@@ -23,8 +23,39 @@ export function ReactionBar({
   const { data: session } = useSession();
   const [showPicker, setShowPicker] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [pickerIndex, setPickerIndex] = useState(0);
+  const pickerRef = useRef<HTMLDivElement>(null);
 
   const currentUserId = session?.user?.id;
+
+  // F2: Keyboard navigation for emoji picker
+  useEffect(() => {
+    if (!showPicker) return;
+
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        setShowPicker(false);
+        return;
+      }
+      if (e.key === "ArrowRight") {
+        e.preventDefault();
+        setPickerIndex((prev) => (prev + 1) % EMOJI_PRESETS.length);
+      }
+      if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        setPickerIndex(
+          (prev) => (prev - 1 + EMOJI_PRESETS.length) % EMOJI_PRESETS.length,
+        );
+      }
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        toggleReaction(EMOJI_PRESETS[pickerIndex]);
+      }
+    }
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [showPicker, pickerIndex]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const toggleReaction = useCallback(
     async (emoji: string) => {
@@ -112,6 +143,7 @@ export function ReactionBar({
           <button
             key={reaction.emoji}
             onClick={() => toggleReaction(reaction.emoji)}
+            aria-label={`${reaction.emoji} ${reaction.count} reaction${reaction.count !== 1 ? "s" : ""}${hasReacted ? ", you reacted" : ""}`}
             className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs transition ${
               hasReacted
                 ? "bg-brand/20 text-text-primary ring-1 ring-brand"
@@ -126,9 +158,13 @@ export function ReactionBar({
 
       <div className="relative">
         <button
-          onClick={() => setShowPicker((prev) => !prev)}
+          onClick={() => {
+            setShowPicker((prev) => !prev);
+            setPickerIndex(0);
+          }}
+          aria-label="Add reaction"
+          aria-expanded={showPicker}
           className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-background-tertiary text-text-muted opacity-0 transition hover:bg-background-primary hover:text-text-primary group-hover:opacity-100"
-          title="Add reaction"
         >
           <svg
             width="14"
@@ -137,6 +173,7 @@ export function ReactionBar({
             fill="none"
             stroke="currentColor"
             strokeWidth="2"
+            aria-hidden="true"
           >
             <circle cx="12" cy="12" r="10" />
             <path d="M8 14s1.5 2 4 2 4-2 4-2" />
@@ -150,14 +187,27 @@ export function ReactionBar({
             <div
               className="fixed inset-0 z-40"
               onClick={() => setShowPicker(false)}
+              aria-hidden="true"
             />
-            <div className="absolute bottom-full left-0 z-50 mb-1 rounded-lg border border-background-tertiary bg-background-floating p-2 shadow-xl">
+            <div
+              ref={pickerRef}
+              role="listbox"
+              aria-label="Choose a reaction"
+              className="absolute bottom-full left-0 z-50 mb-1 rounded-lg border border-background-tertiary bg-background-floating p-2 shadow-xl"
+            >
               <div className="grid grid-cols-5 gap-1">
-                {EMOJI_PRESETS.map((emoji) => (
+                {EMOJI_PRESETS.map((emoji, index) => (
                   <button
                     key={emoji}
+                    role="option"
+                    aria-selected={index === pickerIndex}
+                    aria-label={emoji}
                     onClick={() => toggleReaction(emoji)}
-                    className="flex h-8 w-8 items-center justify-center rounded text-base transition hover:bg-background-primary"
+                    className={`flex h-8 w-8 items-center justify-center rounded text-base transition ${
+                      index === pickerIndex
+                        ? "bg-brand/20 ring-1 ring-brand"
+                        : "hover:bg-background-primary"
+                    }`}
                   >
                     {emoji}
                   </button>

@@ -121,9 +121,21 @@ export function StreamingMessage({
               {message.thinkingPhase}
             </span>
           )}
-          <div className="text-[12.5px] text-text-secondary leading-[1.65]">
+          {/* F2: sr-only status announcement for screen readers */}
+          <span className="sr-only" role="status" aria-live="polite">
+            {isActive && `Agent ${message.authorName} is responding`}
+            {isComplete && `Agent ${message.authorName} finished responding`}
+            {isError && `Agent ${message.authorName} encountered an error`}
+          </span>
+          <div
+            className="text-[12.5px] text-text-secondary leading-[1.65]"
+            aria-live="polite"
+            aria-busy={isActive}
+          >
             <MarkdownContent content={text} mentionNames={mentionNames} />
-            {isActive && <span className="streaming-cursor" />}
+            {isActive && (
+              <span className="streaming-cursor" aria-hidden="true" />
+            )}
             {message.editedAt && (
               <span className="text-[10px] text-text-muted font-mono ml-1">
                 (edited)
@@ -141,7 +153,7 @@ export function StreamingMessage({
             />
           ))}
           {isError && (
-            <p className="text-xs text-status-dnd mt-1 font-mono">
+            <p className="text-xs text-status-dnd mt-1 font-mono" role="alert">
               [SYSTEM: Stream ended with an error]
             </p>
           )}
@@ -166,7 +178,7 @@ export function StreamingMessage({
               <button
                 onClick={() => setShowRewind(true)}
                 className="mt-1 text-[10px] px-1.5 py-0.5 rounded bg-background-tertiary text-text-muted hover:text-accent hover:bg-accent/10 transition flex items-center gap-1"
-                title="Rewind stream"
+                aria-label="Rewind stream"
               >
                 <svg
                   width="10"
@@ -175,6 +187,7 @@ export function StreamingMessage({
                   fill="none"
                   stroke="currentColor"
                   strokeWidth="2"
+                  aria-hidden="true"
                 >
                   <polygon points="19,20 9,12 19,4" />
                   <line x1="5" y1="19" x2="5" y2="5" />
@@ -295,9 +308,19 @@ export function StreamingMessage({
             <span className="text-[10px] text-text-dim">(edited)</span>
           )}
         </div>
-        <div className="text-[12.5px] text-text-secondary leading-[1.65]">
+        {/* F2: sr-only status announcement for screen readers */}
+        <span className="sr-only" role="status" aria-live="polite">
+          {isActive && `Agent ${message.authorName} is responding`}
+          {isComplete && `Agent ${message.authorName} finished responding`}
+          {isError && `Agent ${message.authorName} encountered an error`}
+        </span>
+        <div
+          className="text-[12.5px] text-text-secondary leading-[1.65]"
+          aria-live="polite"
+          aria-busy={isActive}
+        >
           <MarkdownContent content={text} mentionNames={mentionNames} />
-          {isActive && <span className="streaming-cursor" />}
+          {isActive && <span className="streaming-cursor" aria-hidden="true" />}
         </div>
         {files.map((file) => (
           <FileAttachment
@@ -310,7 +333,7 @@ export function StreamingMessage({
           />
         ))}
         {isError && (
-          <p className="text-xs text-status-dnd mt-1 font-mono">
+          <p className="text-xs text-status-dnd mt-1 font-mono" role="alert">
             [SYSTEM: Stream ended with an error]
           </p>
         )}
@@ -335,7 +358,7 @@ export function StreamingMessage({
             <button
               onClick={() => setShowRewind(true)}
               className="mt-1 text-[10px] px-1.5 py-0.5 rounded bg-background-tertiary text-text-muted hover:text-accent hover:bg-accent/10 transition flex items-center gap-1"
-              title="Rewind stream"
+              aria-label="Rewind stream"
             >
               <svg
                 width="10"
@@ -344,6 +367,7 @@ export function StreamingMessage({
                 fill="none"
                 stroke="currentColor"
                 strokeWidth="2"
+                aria-hidden="true"
               >
                 <polygon points="19,20 9,12 19,4" />
                 <line x1="5" y1="19" x2="5" y2="5" />

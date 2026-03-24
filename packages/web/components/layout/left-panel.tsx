@@ -61,7 +61,10 @@ export function LeftPanel() {
 
   return (
     <>
-      <div className="chrome-panel flex h-full flex-col overflow-hidden">
+      <nav
+        aria-label="Sidebar navigation"
+        className="chrome-panel flex h-full flex-col overflow-hidden"
+      >
         <div className="px-3 pb-2 pt-3">
           <div
             role="tablist"
@@ -334,7 +337,7 @@ export function LeftPanel() {
         </div>
 
         <UserProfileButton />
-      </div>
+      </nav>
 
       <CreateServerModal
         isOpen={showCreateServer}
