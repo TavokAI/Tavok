@@ -350,78 +350,78 @@ defmodule TavokGatewayWeb.RoomChannel do
         if not send_allowed do
           {:reply, {:error, %{reason: "missing_permission", permission: "SEND_MESSAGES"}}, socket}
         else
-        # 0a. Per-channel rate limit check (DEC-0035)
-        case RateLimiter.check_and_increment(channel_id) do
-          {:error, :rate_limited} ->
-            {:reply, {:error, %{reason: "rate_limited"}}, socket}
+          # 0a. Per-channel rate limit check (DEC-0035)
+          case RateLimiter.check_and_increment(channel_id) do
+            {:error, :rate_limited} ->
+              {:reply, {:error, %{reason: "rate_limited"}}, socket}
 
-          :ok ->
-            user_id = socket.assigns.user_id
+            :ok ->
+              user_id = socket.assigns.user_id
 
-            # 0b. Per-user rate limit check (BUG-005)
-            case RateLimiter.check_user_rate(channel_id, user_id) do
-              {:error, :rate_limited} ->
-                {:reply, {:error, %{reason: "rate_limited"}}, socket}
+              # 0b. Per-user rate limit check (BUG-005)
+              case RateLimiter.check_user_rate(channel_id, user_id) do
+                {:error, :rate_limited} ->
+                  {:reply, {:error, %{reason: "rate_limited"}}, socket}
 
-              :ok ->
-                display_name = socket.assigns.display_name
+                :ok ->
+                  display_name = socket.assigns.display_name
 
-                # 1. Generate ULID for the message
-                message_id = Ulid.generate()
+                  # 1. Generate ULID for the message
+                  message_id = Ulid.generate()
 
-                # 2. Get next sequence number with Redis-backed monotonic recovery
-                case next_sequence(channel_id) do
-                  {:ok, sequence} ->
-                    seq_str = Integer.to_string(sequence)
+                  # 2. Get next sequence number with Redis-backed monotonic recovery
+                  case next_sequence(channel_id) do
+                    {:ok, sequence} ->
+                      seq_str = Integer.to_string(sequence)
 
-                    # 3. Broadcast immediately — payload built from in-memory data only
-                    author_type = socket.assigns[:author_type] || "USER"
+                      # 3. Broadcast immediately — payload built from in-memory data only
+                      author_type = socket.assigns[:author_type] || "USER"
 
-                    message_payload = %{
-                      id: message_id,
-                      channelId: channel_id,
-                      authorId: user_id,
-                      authorType: author_type,
-                      authorName: display_name,
-                      authorAvatarUrl: nil,
-                      content: content,
-                      type: "STANDARD",
-                      streamingStatus: nil,
-                      sequence: seq_str,
-                      createdAt: DateTime.utc_now() |> DateTime.to_iso8601()
-                    }
+                      message_payload = %{
+                        id: message_id,
+                        channelId: channel_id,
+                        authorId: user_id,
+                        authorType: author_type,
+                        authorName: display_name,
+                        authorAvatarUrl: nil,
+                        content: content,
+                        type: "STANDARD",
+                        streamingStatus: nil,
+                        sequence: seq_str,
+                        createdAt: DateTime.utc_now() |> DateTime.to_iso8601()
+                      }
 
-                    Broadcast.broadcast_pre_serialized!(socket, "message_new", message_payload)
+                      Broadcast.broadcast_pre_serialized!(socket, "message_new", message_payload)
 
-                    # 3b. Buffer for reconnection sync gap (DEC-0051)
-                    MessageBuffer.buffer_message(channel_id, message_payload)
+                      # 3b. Buffer for reconnection sync gap (DEC-0051)
+                      MessageBuffer.buffer_message(channel_id, message_payload)
 
-                    # 4. Check for agent trigger (async — don't delay the reply)
-                    send(self(), {:check_agent_trigger, message_id, content})
+                      # 4. Check for agent trigger (async — don't delay the reply)
+                      send(self(), {:check_agent_trigger, message_id, content})
 
-                    # 5. Persist in background — never blocks the channel process
-                    persist_body = %{
-                      id: message_id,
-                      channelId: channel_id,
-                      authorId: user_id,
-                      authorType: author_type,
-                      content: content,
-                      type: "STANDARD",
-                      streamingStatus: nil,
-                      sequence: seq_str
-                    }
+                      # 5. Persist in background — never blocks the channel process
+                      persist_body = %{
+                        id: message_id,
+                        channelId: channel_id,
+                        authorId: user_id,
+                        authorType: author_type,
+                        content: content,
+                        type: "STANDARD",
+                        streamingStatus: nil,
+                        sequence: seq_str
+                      }
 
-                    MessagePersistence.persist_async(persist_body, message_id, channel_id)
+                      MessagePersistence.persist_async(persist_body, message_id, channel_id)
 
-                    # 6. Reply to sender immediately
-                    {:reply, {:ok, %{id: message_id, sequence: seq_str}}, socket}
+                      # 6. Reply to sender immediately
+                      {:reply, {:ok, %{id: message_id, sequence: seq_str}}, socket}
 
-                  {:error, reason} ->
-                    Logger.error("Redis INCR failed: #{inspect(reason)}")
-                    {:reply, {:error, %{reason: "sequence_failed"}}, socket}
-                end
-            end
-        end
+                    {:error, reason} ->
+                      Logger.error("Redis INCR failed: #{inspect(reason)}")
+                      {:reply, {:error, %{reason: "sequence_failed"}}, socket}
+                  end
+              end
+          end
         end
     end
   end
