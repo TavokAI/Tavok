@@ -59,11 +59,16 @@ services:
   # ============================================================
 
   web:
-    image: ghcr.io/tavokai/tavok-web:latest
+    image: ghcr.io/tavokai/tavok-web:0.3.0
     build:
       context: .
       dockerfile: packages/web/Dockerfile
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+          cpus: "2.0"
     ports:
       # BIND_ADDRESS defaults to 127.0.0.1 (localhost only — safe default).
       # Set to 0.0.0.0 in .env for production domains where Caddy handles ingress.
@@ -96,11 +101,16 @@ services:
       - tavok-net
 
   gateway:
-    image: ghcr.io/tavokai/tavok-gateway:latest
+    image: ghcr.io/tavokai/tavok-gateway:0.3.0
     build:
       context: ./gateway
       dockerfile: Dockerfile
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+          cpus: "1.0"
     ports:
       - "${BIND_ADDRESS:-127.0.0.1}:4001:4001"
     environment:
@@ -127,11 +137,16 @@ services:
       - tavok-net
 
   streaming:
-    image: ghcr.io/tavokai/tavok-streaming:latest
+    image: ghcr.io/tavokai/tavok-streaming:0.3.0
     build:
       context: ./streaming
       dockerfile: Dockerfile
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+          cpus: "1.0"
     extra_hosts:
       # Allow the Go proxy to reach the host machine (for BYOK agents
       # whose LLM endpoint points at host.docker.internal, e.g. local
