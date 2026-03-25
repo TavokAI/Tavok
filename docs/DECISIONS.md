@@ -1446,3 +1446,17 @@ Replace "orchestration/orchestrator" with "stream management/stream manager" in 
 **Changes**: `auth.ts`, `middleware.ts`, `env.ts` (schema + deprecation warning), `docker-compose.yml`, `.env.example`.
 
 **Consequences**: One secret for Web + Gateway. Existing deployments must remove `NEXTAUTH_SECRET` from their .env (deprecation warning guides them). No functional change — the secret value is the same.
+
+---
+
+## DEC-0070 — Configurable completions endpoint timeout
+
+**Date**: 2026-03-25
+**Status**: Accepted
+**Relates to**: A10 architecture decision
+
+**Context**: The `/api/v1/chat/completions` endpoint polls for an agent response with a hardcoded 30-second timeout. Self-hosted LLM deployments (Ollama on modest hardware, large context windows) routinely exceed 30s for first-token latency. No way to tune without code changes.
+
+**Decision**: Add `COMPLETIONS_TIMEOUT_MS` optional env var (default 30000, range 5000–300000). Per-request timeout was considered but rejected due to DOS surface.
+
+**Consequences**: Operators can tune timeout per deployment. Default behavior unchanged. Validated at startup via Zod schema.

@@ -193,7 +193,7 @@ export async function POST(request: NextRequest) {
 
     // Wait for agent response by polling messages
     const startTime = Date.now();
-    const timeout = 30000; // 30s timeout
+    const timeout = Number(process.env.COMPLETIONS_TIMEOUT_MS) || 30000;
 
     // Poll for agent response
     let agentResponse: string | null = null;

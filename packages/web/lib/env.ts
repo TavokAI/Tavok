@@ -29,6 +29,15 @@ const serverEnvSchema = z.object({
       "ENCRYPTION_KEY must be 64 hex characters (32 bytes)",
     ),
 
+  // Completions timeout (DEC-0070)
+  COMPLETIONS_TIMEOUT_MS: z.coerce
+    .number()
+    .int()
+    .min(5000)
+    .max(300000)
+    .default(30000)
+    .optional(),
+
   // Node environment
   NODE_ENV: z
     .enum(["development", "production", "test"])
