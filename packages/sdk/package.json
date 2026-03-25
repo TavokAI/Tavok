@@ -1,0 +1,54 @@
+{
+  "name": "@tavok/sdk",
+  "version": "0.3.0",
+  "description": "Tavok TypeScript SDK — build AI agents for Tavok in minutes",
+  "license": "MIT",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "tavok-sdk": "./bin/tavok-sdk.js"
+  },
+  "files": [
+    "dist/",
+    "bin/"
+  ],
+  "exports": {
+    ".": {
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "ws": "^8.17.0",
+    "@inquirer/prompts": "^7.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/ws": "^8.5.0",
+    "typescript": "^5.4.0",
+    "vitest": "^4.0.18"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "keywords": [
+    "tavok",
+    "agent",
+    "chat",
+    "streaming",
+    "ai",
+    "websocket",
+    "sdk"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/TavokAI/Tavok.git",
+    "directory": "packages/sdk"
+  },
+  "homepage": "https://github.com/TavokAI/Tavok/tree/main/packages/sdk"
+}
