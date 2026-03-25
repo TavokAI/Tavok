@@ -254,10 +254,17 @@ func runInit(args []string) {
 		}
 	}
 
-	// Write agent credentials if any were created
+	// Write agent credentials and scaffold starter files
 	if len(createdAgents) > 0 {
 		if err := agents.WriteAgentCredentials(dir, createdAgents); err != nil {
 			fmt.Fprintf(os.Stderr, "WARNING: could not write .tavok-agents.json: %v\n", err)
+		}
+
+		// Scaffold a starter agent.py for the first agent
+		if filename, err := agents.ScaffoldAgentFile(dir, createdAgents[0]); err != nil {
+			fmt.Fprintf(os.Stderr, "WARNING: could not scaffold agent file: %v\n", err)
+		} else if filename != "" {
+			fmt.Printf("\n  Created %s — edit and run: pip install tavok-sdk && python %s\n", filename, filename)
 		}
 	}
 
