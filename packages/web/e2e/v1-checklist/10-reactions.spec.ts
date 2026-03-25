@@ -50,7 +50,7 @@ async function openEmojiPicker(
   await msgContainer.hover();
 
   const addReactionButton = msgContainer.locator(
-    'button[title="Add reaction"]',
+    'button[aria-label="Add reaction"]',
   );
   await addReactionButton.click({ force: true, timeout: 5_000 });
   await expect(page.locator(".grid.grid-cols-5")).toBeVisible({

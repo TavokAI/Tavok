@@ -74,7 +74,7 @@ test.describe("Section 8: @Mentions", () => {
     // Wait for at least one user button to appear near the input
     await expect(
       page
-        .getByRole("button", { name: /Alice Chen|Bob Martinez|Demo User/i })
+        .getByRole("option", { name: /Alice Chen|Bob Martinez|Demo User/i })
         .first(),
     ).toBeVisible({ timeout: 5_000 });
   });
@@ -86,11 +86,11 @@ test.describe("Section 8: @Mentions", () => {
     await page.waitForTimeout(1_000);
 
     // Should show users and agents in the dropdown buttons
-    await expect(page.getByRole("button", { name: /Alice Chen/i })).toBeVisible(
+    await expect(page.getByRole("option", { name: /Alice Chen/i })).toBeVisible(
       { timeout: 5_000 },
     );
     await expect(
-      page.getByRole("button", { name: /Bob Martinez/i }),
+      page.getByRole("option", { name: /Bob Martinez/i }),
     ).toBeVisible({ timeout: 5_000 });
   });
 
@@ -104,7 +104,7 @@ test.describe("Section 8: @Mentions", () => {
     await input.pressSequentially("ali", { delay: 150 });
 
     // Wait for Alice to appear in the dropdown
-    const aliceOption = page.getByRole("button", { name: /Alice Chen/i });
+    const aliceOption = page.getByRole("option", { name: /Alice Chen/i });
     await expect(aliceOption).toBeVisible({ timeout: 5_000 });
 
     // Select Alice — the component uses onMouseDown with preventDefault

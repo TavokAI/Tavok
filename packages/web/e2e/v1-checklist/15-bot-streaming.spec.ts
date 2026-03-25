@@ -259,7 +259,9 @@ test.describe("Section 15: Agent Streaming", () => {
         await inputA.press("Enter");
 
         // Both users should see the original message
-        await expect(pageB.getByText(msg)).toBeVisible({ timeout: 15_000 });
+        await expect(pageB.getByText(msg, { exact: true })).toBeVisible({
+          timeout: 15_000,
+        });
 
         // Both users should see the echoed agent response
         const echoText = `[echo] ${msg}`;

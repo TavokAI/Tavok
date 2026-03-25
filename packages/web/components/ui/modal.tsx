@@ -102,7 +102,6 @@ export function Modal({
       onClick={(e) => {
         if (e.target === overlayRef.current) onClose();
       }}
-      aria-hidden="true"
     >
       {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions */}
       <div
