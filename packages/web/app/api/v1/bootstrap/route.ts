@@ -7,7 +7,7 @@ import { generateId } from "@/lib/ulid";
 import { DEFAULT_PERMISSIONS } from "@/lib/permissions";
 import { authenticateAdminToken } from "@/lib/admin-auth";
 import { RateLimiter, getClientIp } from "@/lib/rate-limit";
-import { getInternalBaseUrl } from "@/lib/internal-auth";
+import { getPublicBaseUrl } from "@/lib/internal-auth";
 
 /**
  * POST /api/v1/bootstrap — First-run setup endpoint.
@@ -145,7 +145,7 @@ export async function POST(request: Request) {
 
     const gatewayUrl =
       process.env.NEXT_PUBLIC_GATEWAY_URL || "ws://localhost:4001/socket";
-    const webUrl = getInternalBaseUrl();
+    const webUrl = getPublicBaseUrl();
 
     return NextResponse.json(
       {

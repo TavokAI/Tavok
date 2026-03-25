@@ -51,6 +51,7 @@ vi.mock("@/lib/ulid", () => {
 // Mock internal-auth
 vi.mock("@/lib/internal-auth", () => ({
   getInternalBaseUrl: vi.fn(() => "http://localhost:3000"),
+  getPublicBaseUrl: vi.fn(() => "http://localhost:3000"),
 }));
 
 import {

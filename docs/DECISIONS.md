@@ -1474,3 +1474,24 @@ Replace "orchestration/orchestrator" with "stream management/stream manager" in 
 **Decision**: Add an explicit empty-content check at the top of `run_byok_trigger`. If `String.trim(trigger_content) == ""`, log a warning and return without allocating a sequence. This is a defense-in-depth measure, not a fix for an existing bug.
 
 **Consequences**: Prevents burned sequence numbers from future regressions. No impact on current behavior since the outer check already filters empty content.
+
+---
+
+## DEC-0072 — Split internal vs public base URL functions
+
+**Date**: 2026-03-25
+**Status**: Accepted
+**Relates to**: A1 architecture decision
+
+**Context**: `getInternalBaseUrl()` in `internal-auth.ts` served two purposes: (1) building URLs for Web→Web self-calls (internal API), and (2) building URLs returned to SDK agents and users (public-facing). In production behind a reverse proxy (Caddy), the internal URL is `http://localhost:5555` while the public URL is `https://tavok.example.com`. Using the public URL for self-calls routes through the proxy unnecessarily and can fail if DNS/TLS isn't available inside the container.
+
+**Decision**: Split into two functions:
+- `getInternalBaseUrl()` → always `http://localhost:{PORT}` — for self-calls within the container
+- `getPublicBaseUrl()` → `NEXTAUTH_URL` — for URLs returned to external clients
+
+All 10+ callers audited and assigned the correct function.
+
+**Internal callers** (use `getInternalBaseUrl`): `internal-api-client.ts`, `completions/route.ts`
+**Public callers** (use `getPublicBaseUrl`): `agent-factory.ts`, `bootstrap/route.ts`, `webhooks/route.ts`, `webhooks/[token]/route.ts`, `agents/[id]/messages/route.ts`, `invites/route.ts`
+
+**Consequences**: Internal self-calls never leave the container. SDK agents get correct public URLs. No new env vars needed.

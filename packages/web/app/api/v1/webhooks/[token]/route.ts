@@ -9,7 +9,7 @@ import {
   fetchChannelSequence,
 } from "@/lib/gateway-client";
 import { webhookLimiter } from "@/lib/rate-limit";
-import { getInternalBaseUrl } from "@/lib/internal-auth";
+import { getPublicBaseUrl } from "@/lib/internal-auth";
 import { persistMessage } from "@/lib/internal-api-client";
 
 /** Valid typed message types for webhook payloads. */
@@ -192,7 +192,7 @@ export async function POST(
         sequence,
       });
 
-      const webUrl = getInternalBaseUrl();
+      const webUrl = getPublicBaseUrl();
 
       return NextResponse.json(
         {

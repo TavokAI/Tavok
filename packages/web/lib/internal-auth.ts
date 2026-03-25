@@ -48,9 +48,17 @@ export function unauthorizedResponse(): NextResponse {
 }
 
 /**
- * Returns the internal base URL for self-calls (Web → Web internal API).
- * Reads from NEXTAUTH_URL env var with localhost fallback.
+ * Returns the internal base URL for self-calls within the container (Web → Web).
+ * Always uses localhost — never routes through the reverse proxy. (DEC-0072)
  */
 export function getInternalBaseUrl(): string {
+  return `http://localhost:${process.env.PORT || "5555"}`;
+}
+
+/**
+ * Returns the public base URL visible to external clients and SDK agents.
+ * This is the URL users/agents use to reach the Tavok instance. (DEC-0072)
+ */
+export function getPublicBaseUrl(): string {
   return process.env.NEXTAUTH_URL || "http://localhost:5555";
 }

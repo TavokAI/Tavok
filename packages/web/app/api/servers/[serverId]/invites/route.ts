@@ -6,7 +6,7 @@ import { generateId } from "@/lib/ulid";
 import { generateInviteCode } from "@/lib/invite-code";
 import { checkMemberPermission } from "@/lib/check-member-permission";
 import { Permissions } from "@/lib/permissions";
-import { getInternalBaseUrl } from "@/lib/internal-auth";
+import { getPublicBaseUrl } from "@/lib/internal-auth";
 
 /**
  * GET /api/servers/[serverId]/invites — List active invites for a server
@@ -157,7 +157,7 @@ export async function POST(
       invite: {
         id: invite.id,
         code: invite.code,
-        url: `${getInternalBaseUrl()}/invite/${invite.code}`,
+        url: `${getPublicBaseUrl()}/invite/${invite.code}`,
         maxUses: invite.maxUses,
         uses: invite.uses,
         expiresAt: invite.expiresAt?.toISOString() || null,

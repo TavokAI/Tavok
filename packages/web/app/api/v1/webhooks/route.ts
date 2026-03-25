@@ -4,7 +4,7 @@ import { prisma } from "@/lib/db";
 import { generateId } from "@/lib/ulid";
 import crypto from "crypto";
 import { authenticateAgentRequest } from "@/lib/agent-auth";
-import { getInternalBaseUrl } from "@/lib/internal-auth";
+import { getPublicBaseUrl } from "@/lib/internal-auth";
 import { verifyAgentChannelAccess } from "@/lib/agent-channel-acl";
 import { checkAgentRateLimit } from "@/lib/rate-limit";
 import { logAgentAction } from "@/lib/agent-audit";
@@ -89,7 +89,7 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    const webUrl = getInternalBaseUrl();
+    const webUrl = getPublicBaseUrl();
 
     logAgentAction({
       agentId: agent.agentId,

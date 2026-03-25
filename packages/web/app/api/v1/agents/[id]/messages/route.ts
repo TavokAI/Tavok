@@ -7,7 +7,7 @@ import {
   broadcastStreamStart,
   fetchChannelSequence,
 } from "@/lib/gateway-client";
-import { getInternalBaseUrl } from "@/lib/internal-auth";
+import { getPublicBaseUrl } from "@/lib/internal-auth";
 import { persistMessage } from "@/lib/internal-api-client";
 import { checkAgentRateLimit } from "@/lib/rate-limit";
 import { logAgentAction } from "@/lib/agent-audit";
@@ -254,7 +254,7 @@ export async function POST(
         sequence,
       });
 
-      const webUrl = getInternalBaseUrl();
+      const webUrl = getPublicBaseUrl();
 
       return NextResponse.json(
         {

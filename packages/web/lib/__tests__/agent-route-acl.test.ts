@@ -244,6 +244,7 @@ vi.mock("@/lib/gateway-client", () => ({
 }));
 vi.mock("@/lib/internal-auth", () => ({
   getInternalBaseUrl: vi.fn(() => "http://localhost"),
+  getPublicBaseUrl: vi.fn(() => "http://localhost"),
 }));
 vi.mock("@/lib/internal-api-client", () => ({
   persistMessage: vi.fn(),

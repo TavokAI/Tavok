@@ -2,7 +2,7 @@ import { generateId } from "@/lib/ulid";
 import crypto from "crypto";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
-import { getInternalBaseUrl } from "@/lib/internal-auth";
+import { getPublicBaseUrl } from "@/lib/internal-auth";
 import type { TriggerMode, ConnectionMethod } from "@tavok/shared/agent";
 
 export class AgentNameConflictError extends Error {
@@ -161,7 +161,7 @@ export function buildConnectionInfo(
 ): Record<string, string | undefined> {
   const gatewayUrl =
     process.env.NEXT_PUBLIC_GATEWAY_URL || "ws://localhost:4001/socket";
-  const webUrl = getInternalBaseUrl();
+  const webUrl = getPublicBaseUrl();
 
   const info: Record<string, string | undefined> = {};
 
