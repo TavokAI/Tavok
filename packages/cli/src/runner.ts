@@ -1,5 +1,6 @@
-import { createWriteStream, existsSync } from "node:fs";
-import { chmod, mkdir, rename, unlink } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { createReadStream, createWriteStream, existsSync } from "node:fs";
+import { chmod, mkdir, readFile, rename, unlink } from "node:fs/promises";
 import https from "node:https";
 import os from "node:os";
 import path from "node:path";
@@ -43,6 +44,50 @@ export function getCacheBinaryPath(
   return path.join(cacheRoot, trimVersionPrefix(version), target.binaryName);
 }
 
+export function getChecksumsUrl(
+  version: string,
+  env: EnvLike = process.env,
+): string {
+  return `${getReleaseBaseUrl(version, env)}/checksums.txt`;
+}
+
+export async function computeFileHash(filePath: string): Promise<string> {
+  const hash = createHash("sha256");
+  await pipeline(createReadStream(filePath), hash);
+  return hash.digest("hex");
+}
+
+export function parseChecksums(
+  content: string,
+): Map<string, string> {
+  const checksums = new Map<string, string>();
+  for (const line of content.split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    // Format: "<sha256>  <filename>" (two spaces, BSD-style)
+    const match = trimmed.match(/^([a-f0-9]{64})\s+(.+)$/);
+    if (match) {
+      checksums.set(match[2], match[1]);
+    }
+  }
+  return checksums;
+}
+
+export async function verifyChecksum(
+  filePath: string,
+  expectedHash: string,
+): Promise<void> {
+  const actualHash = await computeFileHash(filePath);
+  if (actualHash !== expectedHash) {
+    throw new Error(
+      `Checksum mismatch for ${path.basename(filePath)}:\n` +
+        `  expected: ${expectedHash}\n` +
+        `  actual:   ${actualHash}\n` +
+        `The downloaded binary may be corrupted or tampered with.`,
+    );
+  }
+}
+
 export async function ensureBinary(
   version: string,
   target: InstallTarget,
@@ -60,6 +105,34 @@ export async function ensureBinary(
   const tempPath = `${binaryPath}.download`;
   try {
     await downloadFile(getBinaryDownloadUrl(version, target, env), tempPath);
+
+    // Verify integrity against checksums.txt from the release
+    let checksumVerified = false;
+    try {
+      const checksumsPath = `${tempPath}.checksums`;
+      await downloadFile(getChecksumsUrl(version, env), checksumsPath);
+      const checksumsContent = await readFile(checksumsPath, "utf-8");
+      await unlink(checksumsPath).catch(() => undefined);
+
+      const checksums = parseChecksums(checksumsContent);
+      const expectedHash = checksums.get(target.downloadName);
+
+      if (expectedHash) {
+        await verifyChecksum(tempPath, expectedHash);
+        checksumVerified = true;
+      }
+    } catch (checksumError) {
+      // If checksum file is unavailable (e.g., dev build), warn but don't block
+      if (checksumError instanceof Error && checksumError.message.includes("Checksum mismatch")) {
+        // Mismatch is always fatal — delete the binary
+        throw checksumError;
+      }
+      // checksums.txt not found or download failed — allow with warning
+      console.warn(
+        "Warning: Could not verify binary checksum. checksums.txt unavailable.",
+      );
+    }
+
     if (target.platform !== "windows") {
       await chmod(tempPath, 0o755);
     }
