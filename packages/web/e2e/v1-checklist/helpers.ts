@@ -128,8 +128,10 @@ export async function createServerViaUI(
   // Step 2: Keep defaults, submit
   await page.getByRole("button", { name: "Create Server" }).click();
 
-  // Wait for modal to close and navigation to complete
-  await page.waitForTimeout(2000);
+  // Wait for the modal to close (signals server created + navigation started)
+  await expect(page.locator('[role="dialog"]')).not.toBeVisible({
+    timeout: 10_000,
+  });
 }
 
 /**
@@ -153,8 +155,10 @@ export async function createChannelViaUI(
     .filter({ hasText: "Create Channel" })
     .click();
 
-  // Wait for navigation
-  await page.waitForTimeout(2000);
+  // Wait for the modal to close (signals channel created)
+  await expect(page.locator('[role="dialog"]')).not.toBeVisible({
+    timeout: 10_000,
+  });
 }
 
 // ---------------------------------------------------------------------------
