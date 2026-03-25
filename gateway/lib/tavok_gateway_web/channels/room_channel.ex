@@ -1221,6 +1221,24 @@ defmodule TavokGatewayWeb.RoomChannel do
     agent_name = Map.get(agent_config, "name")
     agent_avatar_url = Map.get(agent_config, "avatarUrl")
 
+    # Defense-in-depth (DEC-0071): verify trigger content is non-empty before
+    # allocating a sequence number. The outer handle_in already validates, but
+    # this guard prevents burned sequences if a future code path bypasses that check.
+    if String.trim(trigger_content) == "" do
+      Logger.warning(
+        "[run_byok_trigger] Empty trigger content, skipping: channel=#{channel_id} agent=#{agent_id}"
+      )
+    else
+      run_byok_trigger_inner(socket, agent_config, trigger_message_id, trigger_content)
+    end
+  end
+
+  defp run_byok_trigger_inner(socket, agent_config, trigger_message_id, trigger_content) do
+    channel_id = socket.assigns.channel_id
+    agent_id = Map.get(agent_config, "id")
+    agent_name = Map.get(agent_config, "name")
+    agent_avatar_url = Map.get(agent_config, "avatarUrl")
+
     # 1. Generate ULID for the streaming placeholder
     message_id = Ulid.generate()
 

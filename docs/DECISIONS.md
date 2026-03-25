@@ -1460,3 +1460,17 @@ Replace "orchestration/orchestrator" with "stream management/stream manager" in 
 **Decision**: Add `COMPLETIONS_TIMEOUT_MS` optional env var (default 30000, range 5000–300000). Per-request timeout was considered but rejected due to DOS surface.
 
 **Consequences**: Operators can tune timeout per deployment. Default behavior unchanged. Validated at startup via Zod schema.
+
+---
+
+## DEC-0071 — Defense-in-depth guard before sequence allocation in Gateway
+
+**Date**: 2026-03-25
+**Status**: Accepted
+**Relates to**: A6 architecture decision
+
+**Context**: The Gateway allocates a Redis-backed sequence number in `run_byok_trigger` before publishing a stream request. If trigger content is empty (e.g., due to a future code path bypassing the outer validation in `handle_in`), the sequence number is "burned" — creating a gap in the channel's message ordering. The current code path is safe (content validation happens in `handle_in` before triggering), but there's no guard at the allocation site itself.
+
+**Decision**: Add an explicit empty-content check at the top of `run_byok_trigger`. If `String.trim(trigger_content) == ""`, log a warning and return without allocating a sequence. This is a defense-in-depth measure, not a fix for an existing bug.
+
+**Consequences**: Prevents burned sequence numbers from future regressions. No impact on current behavior since the outer check already filters empty content.
