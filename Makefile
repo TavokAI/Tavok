@@ -118,6 +118,19 @@ demo: ## Start demo agents (requires TAVOK_SERVER_ID and TAVOK_CHANNEL_ID)
 # ============================================================
 
 regression-harness: ## Run full regression harness (K-001 through K-022, 130+ assertions)
+	@command -v pwsh >/dev/null 2>&1 || { \
+		echo ""; \
+		echo "ERROR: PowerShell Core (pwsh) is required but not installed."; \
+		echo ""; \
+		echo "Install it for your platform:"; \
+		echo "  macOS:   brew install powershell/tap/powershell"; \
+		echo "  Ubuntu:  sudo apt-get install -y powershell"; \
+		echo "  Fedora:  sudo dnf install -y powershell"; \
+		echo "  Windows: winget install Microsoft.PowerShell"; \
+		echo "  Other:   https://learn.microsoft.com/en-us/powershell/scripting/install/installing-powershell"; \
+		echo ""; \
+		exit 1; \
+	}
 	pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/regression-harness.ps1 -StartServicesIfDown
 
 # ============================================================

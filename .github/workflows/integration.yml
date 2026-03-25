@@ -114,8 +114,13 @@ jobs:
           sudo mv k6-v0.49.0-linux-amd64/k6 /usr/local/bin/
 
       - name: Load test smoke (messaging)
-        run: k6 run --duration 15s --vus 3 tests/load/k6-messaging.js || echo "Load test completed (non-blocking)"
-        continue-on-error: true
+        run: |
+          k6 run \
+            --duration 15s \
+            --vus 3 \
+            --env BASE_URL=http://localhost:5555 \
+            --env WS_URL=ws://localhost:4001 \
+            tests/load/k6-messaging.js
 
       - name: Install Playwright browsers
         run: cd packages/web && npx playwright install chromium --with-deps
