@@ -71,7 +71,6 @@ services:
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-tavok}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required - see .env.example}@db:5432/${POSTGRES_DB:-tavok}
       REDIS_URL: redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required - see .env.example}@redis:6379
-      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:?NEXTAUTH_SECRET is required - see .env.example}
       NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:5555}
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required - see .env.example}
       INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:?INTERNAL_API_SECRET is required - see .env.example}

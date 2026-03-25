@@ -51,7 +51,6 @@ function New-AlphaSecret($length = 20) {
     return -join ($buf | ForEach-Object { $chars[$_ % $chars.Length] })
 }
 
-$NEXTAUTH_SECRET = New-Secret
 $JWT_SECRET = New-Secret
 $INTERNAL_API_SECRET = New-Secret
 $SECRET_KEY_BASE = New-Secret 64
@@ -108,7 +107,7 @@ REDIS_PASSWORD=$REDIS_PASSWORD
 # SECRETS (auto-generated, do not share)
 # ============================================================
 
-NEXTAUTH_SECRET=$NEXTAUTH_SECRET
+# NEXTAUTH_SECRET removed — JWT_SECRET is used for all services (DEC-0069)
 JWT_SECRET=$JWT_SECRET
 INTERNAL_API_SECRET=$INTERNAL_API_SECRET
 SECRET_KEY_BASE=$SECRET_KEY_BASE

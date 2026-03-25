@@ -85,7 +85,7 @@ git clone https://github.com/TavokAI/Tavok.git
 cd Tavok
 cp .env.example .env
 # Edit .env — replace every CHANGE-ME value:
-#   openssl rand -base64 32   (NEXTAUTH_SECRET, JWT_SECRET, INTERNAL_API_SECRET, REDIS_PASSWORD, TAVOK_ADMIN_TOKEN)
+#   openssl rand -base64 32   (JWT_SECRET, INTERNAL_API_SECRET, REDIS_PASSWORD, TAVOK_ADMIN_TOKEN)
 #   openssl rand -base64 64   (SECRET_KEY_BASE)
 #   openssl rand -hex 32      (ENCRYPTION_KEY)
 # Set DOMAIN, NEXTAUTH_URL, NEXT_PUBLIC_GATEWAY_URL for your domain
@@ -141,8 +141,7 @@ All variables are documented in `.env.example`. The critical ones:
 |----------|----------|----------------------|---------|
 | `POSTGRES_PASSWORD` | Yes | Yes | Database authentication |
 | `REDIS_PASSWORD` | Yes | Yes | Redis authentication |
-| `NEXTAUTH_SECRET` | Yes | Yes | NextAuth session encryption |
-| `JWT_SECRET` | Yes | Yes | JWT signing for WebSocket auth |
+| `JWT_SECRET` | Yes | Yes | Session signing + WebSocket auth (shared by Web + Gateway) |
 | `INTERNAL_API_SECRET` | Yes | Yes | Service-to-service auth |
 | `SECRET_KEY_BASE` | Yes | Yes | Phoenix session encryption |
 | `ENCRYPTION_KEY` | Yes | Yes | AES-256 encryption key |

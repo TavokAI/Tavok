@@ -157,7 +157,7 @@ echo "=== all secrets present ==="
 
 ENV_OUT=$(run_setup --domain localhost)
 
-for VAR in NEXTAUTH_SECRET JWT_SECRET INTERNAL_API_SECRET SECRET_KEY_BASE ENCRYPTION_KEY POSTGRES_PASSWORD REDIS_PASSWORD; do
+for VAR in JWT_SECRET INTERNAL_API_SECRET SECRET_KEY_BASE ENCRYPTION_KEY POSTGRES_PASSWORD REDIS_PASSWORD; do
   LABEL="$VAR is present and non-empty"
   VALUE=$(echo "$ENV_OUT" | grep "^${VAR}=" | cut -d= -f2-)
   if [ -n "$VALUE" ]; then
@@ -185,10 +185,10 @@ else
   fail "$LABEL" "both runs produced: $PW1"
 fi
 
-NA1=$(echo "$ENV_OUT_1" | grep "^NEXTAUTH_SECRET=" | cut -d= -f2-)
-NA2=$(echo "$ENV_OUT_2" | grep "^NEXTAUTH_SECRET=" | cut -d= -f2-)
+NA1=$(echo "$ENV_OUT_1" | grep "^JWT_SECRET=" | cut -d= -f2-)
+NA2=$(echo "$ENV_OUT_2" | grep "^JWT_SECRET=" | cut -d= -f2-)
 
-LABEL="NEXTAUTH_SECRET differs between runs"
+LABEL="JWT_SECRET differs between runs"
 if [ "$NA1" != "$NA2" ]; then
   pass "$LABEL"
 else

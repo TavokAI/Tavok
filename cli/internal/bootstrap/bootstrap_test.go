@@ -10,7 +10,6 @@ import (
 
 func TestBuildConfigForLocalhost(t *testing.T) {
 	secrets := Secrets{
-		NextAuthSecret:    "next-auth-secret",
 		JWTSecret:         "jwt-secret",
 		InternalAPISecret: "internal-secret",
 		SecretKeyBase:     "secret-key-base",
@@ -46,7 +45,6 @@ func TestBuildConfigForProductionBindsAllInterfaces(t *testing.T) {
 
 func TestRenderEnvIncludesExpectedFields(t *testing.T) {
 	secrets := Secrets{
-		NextAuthSecret:    "next-auth-secret",
 		JWTSecret:         "jwt-secret",
 		InternalAPISecret: "internal-secret",
 		SecretKeyBase:     "secret-key-base",
@@ -66,7 +64,6 @@ func TestRenderEnvIncludesExpectedFields(t *testing.T) {
 		"BIND_ADDRESS=0.0.0.0",
 		"POSTGRES_PASSWORD=postgres-password",
 		"REDIS_PASSWORD=redis-password",
-		"NEXTAUTH_SECRET=next-auth-secret",
 		"JWT_SECRET=jwt-secret",
 		"INTERNAL_API_SECRET=internal-secret",
 		"SECRET_KEY_BASE=secret-key-base",
@@ -88,7 +85,6 @@ func TestNewSecretsPopulatesAllFields(t *testing.T) {
 	}
 
 	fields := map[string]string{
-		"NextAuthSecret":    secrets.NextAuthSecret,
 		"JWTSecret":         secrets.JWTSecret,
 		"InternalAPISecret": secrets.InternalAPISecret,
 		"SecretKeyBase":     secrets.SecretKeyBase,
@@ -116,8 +112,8 @@ func TestNewSecretsAreUnique(t *testing.T) {
 		t.Fatalf("NewSecrets (second): %v", err)
 	}
 
-	if a.NextAuthSecret == b.NextAuthSecret {
-		t.Fatal("two calls to NewSecrets produced identical NextAuthSecret")
+	if a.JWTSecret == b.JWTSecret {
+		t.Fatal("two calls to NewSecrets produced identical JWTSecret")
 	}
 
 	if a.RedisPassword == b.RedisPassword {
@@ -172,7 +168,6 @@ func TestParseEnvSecrets(t *testing.T) {
 
 	envContent := `# Tavok Config
 DOMAIN=localhost
-NEXTAUTH_SECRET=my-next-secret
 JWT_SECRET=my-jwt-secret
 INTERNAL_API_SECRET=my-internal-secret
 SECRET_KEY_BASE=my-secret-key

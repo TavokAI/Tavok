@@ -13,9 +13,6 @@ const serverEnvSchema = z.object({
   REDIS_URL: z.string(),
 
   // Auth
-  NEXTAUTH_SECRET: z
-    .string()
-    .min(16, "NEXTAUTH_SECRET must be at least 16 characters"),
   NEXTAUTH_URL: z.string().url(),
   JWT_SECRET: z.string().min(16, "JWT_SECRET must be at least 16 characters"),
 
@@ -48,6 +45,15 @@ const clientEnvSchema = z.object({
 
 // Validate and export server env
 export const serverEnv = serverEnvSchema.parse(process.env);
+
+// DEC-0069: NEXTAUTH_SECRET consolidated into JWT_SECRET.
+// Warn if the deprecated variable is still set so operators know to clean up.
+if (process.env.NEXTAUTH_SECRET) {
+  console.warn(
+    "[env] NEXTAUTH_SECRET is deprecated and ignored — remove it from your .env. " +
+      "JWT_SECRET is now used for all services (Web + Gateway). See DEC-0069.",
+  );
+}
 
 // Client env is validated lazily (only when accessed in client components)
 export function getClientEnv() {

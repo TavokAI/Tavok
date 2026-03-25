@@ -61,7 +61,7 @@ export async function middleware(request: NextRequest) {
 
   let token = await getToken({
     req: request,
-    secret: process.env.NEXTAUTH_SECRET,
+    secret: process.env.JWT_SECRET,
   });
 
   // Be explicit about cookie names so auth works consistently across mixed local environments.
@@ -69,12 +69,12 @@ export async function middleware(request: NextRequest) {
     token =
       (await getToken({
         req: request,
-        secret: process.env.NEXTAUTH_SECRET,
+        secret: process.env.JWT_SECRET,
         cookieName: "__Secure-next-auth.session-token",
       })) ||
       (await getToken({
         req: request,
-        secret: process.env.NEXTAUTH_SECRET,
+        secret: process.env.JWT_SECRET,
         cookieName: "next-auth.session-token",
       }));
   }

@@ -21,7 +21,6 @@ import (
 var DockerComposeYML []byte
 
 type Secrets struct {
-	NextAuthSecret    string
 	JWTSecret         string
 	InternalAPISecret string
 	SecretKeyBase     string
@@ -39,7 +38,6 @@ type Config struct {
 	BindAddress       string
 	PostgresPassword  string
 	RedisPassword     string
-	NextAuthSecret    string
 	JWTSecret         string
 	InternalAPISecret string
 	SecretKeyBase     string
@@ -105,7 +103,6 @@ func BuildConfig(domain string, generatedAt time.Time, secrets Secrets) Config {
 		BindAddress:       bindAddress,
 		PostgresPassword:  secrets.PostgresPassword,
 		RedisPassword:     secrets.RedisPassword,
-		NextAuthSecret:    secrets.NextAuthSecret,
 		JWTSecret:         secrets.JWTSecret,
 		InternalAPISecret: secrets.InternalAPISecret,
 		SecretKeyBase:     secrets.SecretKeyBase,
@@ -137,7 +134,7 @@ func RenderEnv(config Config) string {
 		"",
 		"REDIS_PASSWORD=" + config.RedisPassword,
 		"",
-		"NEXTAUTH_SECRET=" + config.NextAuthSecret,
+		"# NEXTAUTH_SECRET removed — JWT_SECRET is used for all services (DEC-0069)",
 		"JWT_SECRET=" + config.JWTSecret,
 		"INTERNAL_API_SECRET=" + config.InternalAPISecret,
 		"SECRET_KEY_BASE=" + config.SecretKeyBase,
@@ -174,11 +171,6 @@ func WriteEnvFile(path string, config Config, force bool) error {
 }
 
 func NewSecrets() (Secrets, error) {
-	nextAuthSecret, err := randomBase64(32)
-	if err != nil {
-		return Secrets{}, err
-	}
-
 	jwtSecret, err := randomBase64(32)
 	if err != nil {
 		return Secrets{}, err
@@ -218,7 +210,6 @@ func NewSecrets() (Secrets, error) {
 	}
 
 	return Secrets{
-		NextAuthSecret:    nextAuthSecret,
 		JWTSecret:         jwtSecret,
 		InternalAPISecret: internalAPISecret,
 		SecretKeyBase:     secretKeyBase,
@@ -424,7 +415,6 @@ func ParseEnvSecrets(path string) (Secrets, error) {
 	}
 
 	s := Secrets{
-		NextAuthSecret:    vars["NEXTAUTH_SECRET"],
 		JWTSecret:         vars["JWT_SECRET"],
 		InternalAPISecret: vars["INTERNAL_API_SECRET"],
 		SecretKeyBase:     vars["SECRET_KEY_BASE"],

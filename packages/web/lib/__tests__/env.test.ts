@@ -13,7 +13,6 @@ import { ZodError } from "zod";
 const VALID_SERVER_ENV = {
   DATABASE_URL: "postgresql://user:pass@localhost:5432/tavok",
   REDIS_URL: "redis://localhost:6379",
-  NEXTAUTH_SECRET: "test-secret-at-least-16-chars",
   NEXTAUTH_URL: "http://localhost:3000",
   JWT_SECRET: "jwt-secret-at-least-16-chars",
   INTERNAL_API_SECRET: "internal-secret-at-least-16",
@@ -73,7 +72,6 @@ describe("env", () => {
 
       expect(serverEnv.DATABASE_URL).toBe(VALID_SERVER_ENV.DATABASE_URL);
       expect(serverEnv.REDIS_URL).toBe(VALID_SERVER_ENV.REDIS_URL);
-      expect(serverEnv.NEXTAUTH_SECRET).toBe(VALID_SERVER_ENV.NEXTAUTH_SECRET);
       expect(serverEnv.NEXTAUTH_URL).toBe(VALID_SERVER_ENV.NEXTAUTH_URL);
       expect(serverEnv.JWT_SECRET).toBe(VALID_SERVER_ENV.JWT_SECRET);
       expect(serverEnv.INTERNAL_API_SECRET).toBe(
@@ -95,8 +93,8 @@ describe("env", () => {
       await expect(() => import("../env")).rejects.toThrow();
     });
 
-    it("throws when NEXTAUTH_SECRET is too short", async () => {
-      process.env.NEXTAUTH_SECRET = "short";
+    it("throws when JWT_SECRET is too short", async () => {
+      process.env.JWT_SECRET = "short";
 
       await expect(() => import("../env")).rejects.toThrow();
     });

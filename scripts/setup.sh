@@ -144,7 +144,6 @@ generate_hex() {
   echo "$result"
 }
 
-NEXTAUTH_SECRET=$(generate_secret 32)
 JWT_SECRET=$(generate_secret 32)
 INTERNAL_API_SECRET=$(generate_secret 32)
 SECRET_KEY_BASE=$(generate_secret 64)
@@ -211,7 +210,7 @@ REDIS_PASSWORD=${REDIS_PASSWORD}
 # SECRETS (auto-generated, do not share)
 # ============================================================
 
-NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
+# NEXTAUTH_SECRET removed — JWT_SECRET is used for all services (DEC-0069)
 JWT_SECRET=${JWT_SECRET}
 INTERNAL_API_SECRET=${INTERNAL_API_SECRET}
 SECRET_KEY_BASE=${SECRET_KEY_BASE}

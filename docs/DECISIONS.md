@@ -1430,3 +1430,19 @@ Replace "orchestration/orchestrator" with "stream management/stream manager" in 
 **Rationale**: OpenTelemetry is the industry standard. Tempo is already part of the Grafana ecosystem (matches existing Prometheus + Grafana stack). Auto-instrumentation minimizes code changes in the web service. The OTLP Collector decouples services from the trace backend — switching from Tempo to Jaeger requires only a collector config change.
 
 **Consequences**: Operators can visualize full request traces in Grafana. Streaming lifecycle latency breakdown (config load → LLM TTFT → token streaming → tool execution → completion) is visible per-trace. All tracing is opt-in via `OTEL_EXPORTER_OTLP_ENDPOINT` — services run without tracing if the env var is unset. Adds ~5 new dependencies per service.
+
+---
+
+## DEC-0069 — Consolidate NEXTAUTH_SECRET into JWT_SECRET
+
+**Date**: 2026-03-25
+**Status**: Accepted
+**Relates to**: A9 architecture decision
+
+**Context**: The .env required two separate secrets — `NEXTAUTH_SECRET` (for NextAuth session signing) and `JWT_SECRET` (passed to Gateway for independent JWT validation). Both must be identical because they verify the same session tokens. Two env vars that must match is a misconfiguration trap — if they diverge, Gateway WebSocket auth silently breaks.
+
+**Decision**: Consolidate to `JWT_SECRET` only. NextAuth's `secret:` option in authOptions overrides the env var convention, so `NEXTAUTH_SECRET` is not required. All code now reads `JWT_SECRET`. A startup deprecation warning fires if `NEXTAUTH_SECRET` is still set.
+
+**Changes**: `auth.ts`, `middleware.ts`, `env.ts` (schema + deprecation warning), `docker-compose.yml`, `.env.example`.
+
+**Consequences**: One secret for Web + Gateway. Existing deployments must remove `NEXTAUTH_SECRET` from their .env (deprecation warning guides them). No functional change — the secret value is the same.

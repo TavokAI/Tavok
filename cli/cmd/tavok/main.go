@@ -388,7 +388,6 @@ func cleanEnvForCompose() []string {
 		"DATABASE_URL":            true,
 		"REDIS_PASSWORD":          true,
 		"REDIS_URL":               true,
-		"NEXTAUTH_SECRET":         true,
 		"NEXTAUTH_URL":            true,
 		"JWT_SECRET":              true,
 		"INTERNAL_API_SECRET":     true,
