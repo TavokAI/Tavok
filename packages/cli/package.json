@@ -12,6 +12,7 @@
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "pretest": "node -e \"try{require.resolve('vitest')}catch(e){console.error('ERROR: Run pnpm install from workspace root first');process.exit(1)}\"",
     "test": "vitest run",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },

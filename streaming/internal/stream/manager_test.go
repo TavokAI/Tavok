@@ -348,6 +348,129 @@ func TestActiveCountIsThreadSafe(t *testing.T) {
 	}
 }
 
+// --- Concurrent Slot Exhaustion Tests (X5) ---
+
+func TestConcurrentSlotExhaustion(t *testing.T) {
+	const maxSlots = 5
+	const totalGoroutines = 50
+
+	manager := &Manager{
+		logger:               silentLogger(),
+		active:               make(map[string]struct{}),
+		maxConcurrentStreams: maxSlots,
+		semaphore:            make(chan struct{}, maxSlots),
+	}
+
+	var (
+		wg        sync.WaitGroup
+		mu        sync.Mutex
+		acquired  int
+		rejected  int
+		held      = make(chan struct{}) // blocks goroutines that acquired a slot
+	)
+
+	// Launch many goroutines simultaneously racing for limited slots
+	wg.Add(totalGoroutines)
+	for i := 0; i < totalGoroutines; i++ {
+		go func() {
+			defer wg.Done()
+			if manager.tryAcquireSlot() {
+				mu.Lock()
+				acquired++
+				mu.Unlock()
+				// Hold the slot until test releases
+				<-held
+				manager.releaseSlot()
+			} else {
+				mu.Lock()
+				rejected++
+				mu.Unlock()
+			}
+		}()
+	}
+
+	// Wait briefly for all goroutines to attempt acquisition
+	// (they'll either acquire and block on <-held, or get rejected and finish)
+	// Poll until rejected count stabilizes
+	for {
+		mu.Lock()
+		r := rejected
+		a := acquired
+		mu.Unlock()
+		if r+a == totalGoroutines {
+			break
+		}
+	}
+
+	mu.Lock()
+	finalAcquired := acquired
+	finalRejected := rejected
+	mu.Unlock()
+
+	// Exactly maxSlots goroutines should have acquired
+	if finalAcquired != maxSlots {
+		t.Fatalf("expected exactly %d acquired, got %d", maxSlots, finalAcquired)
+	}
+	if finalRejected != totalGoroutines-maxSlots {
+		t.Fatalf("expected %d rejected, got %d", totalGoroutines-maxSlots, finalRejected)
+	}
+
+	// Release held goroutines
+	close(held)
+	wg.Wait()
+
+	// All slots should be free now
+	for i := 0; i < maxSlots; i++ {
+		if !manager.tryAcquireSlot() {
+			t.Fatalf("expected slot %d to be available after release", i)
+		}
+	}
+	// And the next one should fail
+	if manager.tryAcquireSlot() {
+		t.Fatal("expected slot to be rejected after re-acquiring all")
+	}
+}
+
+func TestConcurrentAcquireReleaseCycles(t *testing.T) {
+	const maxSlots = 3
+	const cycles = 100
+	const goroutines = 10
+
+	manager := &Manager{
+		logger:               silentLogger(),
+		active:               make(map[string]struct{}),
+		maxConcurrentStreams: maxSlots,
+		semaphore:            make(chan struct{}, maxSlots),
+	}
+
+	// Multiple goroutines repeatedly acquire and release slots
+	// to verify no slot leaks under contention
+	var wg sync.WaitGroup
+	wg.Add(goroutines)
+	for g := 0; g < goroutines; g++ {
+		go func() {
+			defer wg.Done()
+			for c := 0; c < cycles; c++ {
+				if manager.tryAcquireSlot() {
+					// Simulate brief work
+					manager.releaseSlot()
+				}
+			}
+		}()
+	}
+	wg.Wait()
+
+	// After all cycles, all slots must be free (no leaks)
+	for i := 0; i < maxSlots; i++ {
+		if !manager.tryAcquireSlot() {
+			t.Fatalf("slot leak detected: slot %d unavailable after all cycles", i)
+		}
+	}
+	if manager.tryAcquireSlot() {
+		t.Fatal("more slots available than maxSlots — something is wrong")
+	}
+}
+
 // --- appendToolContext Tests (TASK-0018) ---
 
 func newTestManager() *Manager {
