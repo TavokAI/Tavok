@@ -362,11 +362,11 @@ func TestConcurrentSlotExhaustion(t *testing.T) {
 	}
 
 	var (
-		wg        sync.WaitGroup
-		mu        sync.Mutex
-		acquired  int
-		rejected  int
-		held      = make(chan struct{}) // blocks goroutines that acquired a slot
+		wg       sync.WaitGroup
+		mu       sync.Mutex
+		acquired int
+		rejected int
+		held     = make(chan struct{}) // blocks goroutines that acquired a slot
 	)
 
 	// Launch many goroutines simultaneously racing for limited slots
