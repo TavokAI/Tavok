@@ -1,3 +1,5 @@
+# Template formula — SHA256 placeholders are replaced at release time by
+# .github/workflows/release.yml (update-homebrew job) with real checksums.
 class Tavok < Formula
   desc "Bootstrap CLI for self-hosting Tavok"
   homepage "https://tavok.dev"
