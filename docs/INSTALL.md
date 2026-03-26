@@ -101,6 +101,8 @@ docker compose --profile production up -d
 
 Caddy (included in the `production` profile) automatically obtains and renews HTTPS certificates via Let's Encrypt.
 
+**Using nginx instead of Caddy (L37):** If you prefer nginx, remove the Caddy service from docker-compose and configure nginx as a reverse proxy. Key requirements: proxy WebSocket connections to the Gateway (`/socket` path with `Upgrade` and `Connection` headers), proxy HTTP to the Web service, and handle TLS termination (e.g. via certbot). The Caddy config in `docker/Caddyfile` shows the routing rules to replicate.
+
 ---
 
 ## Verify Installation

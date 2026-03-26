@@ -187,14 +187,19 @@
 
 ---
 
-## DEC-0015 — Go stdlib for HTTP and SSE parsing
+## DEC-0015 — Go minimal dependencies for HTTP and SSE parsing
 
 **Date**: 2026-02-23
-**Status**: Accepted
+**Status**: Accepted (updated 2026-03-26: L11 accuracy fix)
 **Context**: The Go streaming proxy needs to make HTTP requests to LLM APIs and parse SSE responses. Options: third-party libraries (go-sse, etc.) or stdlib.
-**Decision**: Use Go stdlib only (`net/http`, `bufio`, `encoding/json`). Custom SSE parser in `internal/sse/parser.go`.
-**Rationale**: SSE is a simple line-based protocol — parsing it is ~70 lines of code. Using stdlib means zero external dependencies beyond `go-redis`. The Go binary stays small (~8MB). No dependency supply chain risk for a security-critical component (it handles API keys).
-**Consequences**: SSE parser handles both OpenAI format (`data: [DONE]` termination) and Anthropic format (`event: content_block_delta`). Provider registry maps `llmProvider` to the correct parser. Only dependency: `github.com/redis/go-redis/v9`.
+**Decision**: Use Go stdlib for HTTP and SSE parsing (`net/http`, `bufio`, `encoding/json`). Custom SSE parser in `internal/sse/parser.go`. Minimal external dependencies for infrastructure only.
+**Rationale**: SSE is a simple line-based protocol — parsing it is ~70 lines of code. The Go binary stays small (~8MB). No dependency supply chain risk for the core streaming path (it handles API keys).
+**Current dependencies** (from `go.mod`):
+- `github.com/redis/go-redis/v9` — Redis pub/sub communication with Gateway
+- `go.opentelemetry.io/otel` + exporters — optional distributed tracing (OTLP/gRPC)
+- All other deps are indirect (transitive from the above two)
+
+**Consequences**: SSE parser handles both OpenAI format (`data: [DONE]` termination) and Anthropic format (`event: content_block_delta`). Provider registry maps `llmProvider` to the correct parser. The principle is "minimal deps" not "zero deps" — Redis and OTel are infrastructure, not application logic.
 
 ---
 

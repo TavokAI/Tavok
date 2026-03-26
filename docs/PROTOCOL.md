@@ -1108,6 +1108,8 @@ The Gateway uses a **broadcast-first** pattern for all messages:
 
 **Reconnection safety**: Client's `lastSequence` is updated on broadcast receipt (not on persist confirmation). Sync queries use `WHERE sequence > N` which handles gaps gracefully — the client never checks sequence contiguity.
 
+**ULID collision risk (L23)**: All IDs are ULIDs (128-bit: 48-bit timestamp + 80-bit random). Collision probability is ~1 in 2^80 (~10^24) per millisecond. At 1000 messages/second, expected time to first collision is ~10^18 years. The database enforces uniqueness via primary key constraints as a defense-in-depth measure. No additional mitigation needed.
+
 ---
 
 ## 5. Reconnection Sync Protocol

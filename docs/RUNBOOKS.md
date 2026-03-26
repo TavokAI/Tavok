@@ -215,3 +215,58 @@ make monitoring-up
 - `tavok_ttft_ms{quantile="0.95"}` — should be < 200ms overhead
 - `tavok_gateway_beam_processes` — gradual increase = process leak
 - `tavok_web_memory_rss_bytes` — gradual increase = memory leak
+
+---
+
+## 9. Database Migrations (L21)
+
+### Safe Migration Procedure (Minimal Downtime)
+
+Prisma migrations run automatically on Web service startup. For schema changes that add columns or indexes, the procedure is:
+
+**Additive changes (new columns, new indexes, new tables):**
+```bash
+# 1. Apply migration with services running — additive changes are safe
+docker compose exec web npx prisma migrate deploy
+
+# 2. Restart Web to pick up new Prisma Client
+docker compose restart web
+
+# 3. Gateway and Streaming don't use Prisma — no restart needed
+```
+
+**Destructive changes (drop column, rename, change type):**
+```bash
+# 1. Deploy new code that handles BOTH old and new schema
+docker compose up -d --build web
+
+# 2. Apply migration
+docker compose exec web npx prisma migrate deploy
+
+# 3. Deploy cleanup code that removes old-schema handling
+# (This is a two-phase deployment)
+```
+
+**Full restart migration (rare — breaking schema changes):**
+```bash
+# 1. Back up the database first
+make db-backup
+
+# 2. Stop all services
+make down
+
+# 3. Apply migration and start
+make up
+
+# 4. Verify
+make health
+```
+
+### Rollback
+
+```bash
+# Restore from backup (destructive — replaces current data)
+make db-restore FILE=backups/tavok_YYYYMMDD_HHMMSS.sql.gz
+```
+
+**Note:** Prisma doesn't support `migrate down`. Rollback requires restoring from backup or writing a reverse migration manually.
