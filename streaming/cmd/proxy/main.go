@@ -99,7 +99,10 @@ func main() {
 
 	// Create stream manager
 	maxConcurrentStreams := getEnvInt("STREAMING_MAX_CONCURRENT_STREAMS", 32)
-	manager := stream.NewManager(logger, gwClient, loader, registry, toolRegistry, maxConcurrentStreams)
+	// L14: Max stream duration — hard ceiling to prevent runaway streams from holding slots
+	maxStreamDurationSec := getEnvInt("STREAMING_MAX_DURATION_SEC", 300) // 5 minutes default
+	maxStreamDuration := time.Duration(maxStreamDurationSec) * time.Second
+	manager := stream.NewManager(logger, gwClient, loader, registry, toolRegistry, maxConcurrentStreams, maxStreamDuration)
 
 	// Wire readiness: the health check gates on the subscription being live.
 	manager.SetOnReady(func() {

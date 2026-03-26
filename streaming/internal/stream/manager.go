@@ -100,15 +100,20 @@ type Manager struct {
 	// maxConcurrentStreams caps active stream workers.
 	maxConcurrentStreams int
 	semaphore            chan struct{}
+	// maxStreamDuration is the hard ceiling for any single stream (L14).
+	maxStreamDuration time.Duration
 	// onReady is called once after the Redis pub/sub subscription is confirmed.
 	// Used by the health check to gate readiness.
 	onReady func()
 }
 
 // NewManager creates a new stream manager.
-func NewManager(logger *slog.Logger, gwClient *gateway.Client, loader *config.Loader, registry *provider.Registry, toolRegistry *tools.Registry, maxConcurrentStreams int) *Manager {
+func NewManager(logger *slog.Logger, gwClient *gateway.Client, loader *config.Loader, registry *provider.Registry, toolRegistry *tools.Registry, maxConcurrentStreams int, maxStreamDuration time.Duration) *Manager {
 	if maxConcurrentStreams <= 0 {
 		maxConcurrentStreams = 32
+	}
+	if maxStreamDuration <= 0 {
+		maxStreamDuration = 5 * time.Minute
 	}
 
 	return &Manager{
@@ -120,6 +125,7 @@ func NewManager(logger *slog.Logger, gwClient *gateway.Client, loader *config.Lo
 		toolRegistry:         toolRegistry,
 		maxConcurrentStreams: maxConcurrentStreams,
 		semaphore:            make(chan struct{}, maxConcurrentStreams),
+		maxStreamDuration:    maxStreamDuration,
 	}
 }
 
@@ -406,8 +412,8 @@ func (m *Manager) handleStream(ctx context.Context, req streamRequest) {
 		Tools:           toolDefs,
 	}
 
-	// Create a context with cancel for the entire stream
-	streamCtx, streamCancel := context.WithCancel(ctx)
+	// L14: Hard ceiling on stream duration — prevents runaway streams from holding slots forever
+	streamCtx, streamCancel := context.WithTimeout(ctx, m.maxStreamDuration)
 	defer streamCancel()
 
 	// Accumulated content and token count across all iterations

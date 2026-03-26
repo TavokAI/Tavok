@@ -4,6 +4,15 @@
 
 export async function register() {
   if (process.env.NEXT_RUNTIME === "nodejs") {
+    // L41: Global handlers for unhandled promise rejections and uncaught exceptions.
+    // Prevents silent failures — logs the error with context for debugging.
+    process.on("unhandledRejection", (reason, promise) => {
+      console.error("[FATAL] Unhandled promise rejection:", reason);
+    });
+    process.on("uncaughtException", (error) => {
+      console.error("[FATAL] Uncaught exception:", error);
+      // Don't exit — Next.js handles its own process lifecycle
+    });
     // Dynamic import to avoid loading OTel in edge runtime
     const { NodeSDK } = await import("@opentelemetry/sdk-node");
     const { OTLPTraceExporter } =
