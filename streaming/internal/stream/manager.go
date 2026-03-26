@@ -103,7 +103,7 @@ type Manager struct {
 	// maxStreamDuration is the hard ceiling for any single stream (L14).
 	maxStreamDuration time.Duration
 	// L13: Token batching parameters (configurable via env vars)
-	batchMaxTokens    int
+	batchMaxTokens     int
 	batchFlushInterval time.Duration
 	// onReady is called once after the Redis pub/sub subscription is confirmed.
 	// Used by the health check to gate readiness.
@@ -114,15 +114,15 @@ type Manager struct {
 // ManagerConfig holds configurable parameters for the stream manager.
 type ManagerConfig struct {
 	MaxConcurrentStreams int
-	MaxStreamDuration   time.Duration
-	BatchMaxTokens      int           // L13: Max tokens per batch before flush (default 10)
-	BatchFlushInterval  time.Duration // L13: Max time before flushing partial batch (default 50ms)
+	MaxStreamDuration    time.Duration
+	BatchMaxTokens       int           // L13: Max tokens per batch before flush (default 10)
+	BatchFlushInterval   time.Duration // L13: Max time before flushing partial batch (default 50ms)
 }
 
 func NewManager(logger *slog.Logger, gwClient *gateway.Client, loader *config.Loader, registry *provider.Registry, toolRegistry *tools.Registry, maxConcurrentStreams int, maxStreamDuration time.Duration) *Manager {
 	return NewManagerWithConfig(logger, gwClient, loader, registry, toolRegistry, ManagerConfig{
 		MaxConcurrentStreams: maxConcurrentStreams,
-		MaxStreamDuration:   maxStreamDuration,
+		MaxStreamDuration:    maxStreamDuration,
 	})
 }
 
