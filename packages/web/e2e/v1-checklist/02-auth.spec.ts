@@ -133,7 +133,9 @@ test.describe("Section 2: Auth & Accounts", () => {
 
     // Should show error about duplicate email (use .first() to avoid strict mode violation
     // when "Already have an account?" link also matches the regex)
-    await expect(page.getByText(/already|exists|taken|in use/i).first()).toBeVisible({
+    await expect(
+      page.getByText(/already|exists|taken|in use/i).first(),
+    ).toBeVisible({
       timeout: 5_000,
     });
   });
