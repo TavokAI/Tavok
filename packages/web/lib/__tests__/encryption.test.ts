@@ -72,7 +72,14 @@ describe("encryption", () => {
     const firstByte = parseInt(parts[3].slice(0, 2), 16);
     const flipped = (firstByte ^ 0x01).toString(16).padStart(2, "0");
     const tampered =
-      parts[0] + ":" + parts[1] + ":" + parts[2] + ":" + flipped + parts[3].slice(2);
+      parts[0] +
+      ":" +
+      parts[1] +
+      ":" +
+      parts[2] +
+      ":" +
+      flipped +
+      parts[3].slice(2);
     expect(tampered).not.toBe(ciphertext);
     expect(() => decrypt(tampered)).toThrow();
   });
@@ -84,7 +91,14 @@ describe("encryption", () => {
     const firstByte = parseInt(parts[2].slice(0, 2), 16);
     const flipped = (firstByte ^ 0x01).toString(16).padStart(2, "0");
     const tampered =
-      parts[0] + ":" + parts[1] + ":" + flipped + parts[2].slice(2) + ":" + parts[3];
+      parts[0] +
+      ":" +
+      parts[1] +
+      ":" +
+      flipped +
+      parts[2].slice(2) +
+      ":" +
+      parts[3];
     expect(tampered).not.toBe(ciphertext);
     expect(() => decrypt(tampered)).toThrow();
   });
