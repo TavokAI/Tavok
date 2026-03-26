@@ -199,7 +199,7 @@ func (m *Manager) Start(ctx context.Context) error {
 					"activeStreams", m.ActiveCount(),
 					"maxStreams", m.maxConcurrentStreams,
 				)
-				m.publishError(ctx, req, "", "Stream concurrency limit reached", 0, time.Now())
+				m.publishError(ctx, req, "", "Stream concurrency limit reached", 0, time.Now(), "CAPACITY_EXCEEDED")
 			}
 		}
 	}
@@ -865,10 +865,11 @@ func (m *Manager) appendToolContext(
 }
 
 // publishError sends an error status and persists the error state.
-func (m *Manager) publishError(ctx context.Context, req streamRequest, partialContent, errMsg string, tokenCount int, startTime time.Time) {
+// Optional errorCode provides a machine-readable code (e.g. "CAPACITY_EXCEEDED") for client UX (DEC-0075).
+func (m *Manager) publishError(ctx context.Context, req streamRequest, partialContent, errMsg string, tokenCount int, startTime time.Time, errorCode ...string) {
 	durationMs := time.Since(startTime).Milliseconds()
 
-	statusPayload, _ := json.Marshal(map[string]interface{}{
+	payload := map[string]interface{}{
 		"messageId":      req.MessageID,
 		"status":         "error",
 		"finalContent":   nil,
@@ -876,7 +877,11 @@ func (m *Manager) publishError(ctx context.Context, req streamRequest, partialCo
 		"partialContent": partialContent,
 		"tokenCount":     tokenCount,
 		"durationMs":     durationMs,
-	})
+	}
+	if len(errorCode) > 0 && errorCode[0] != "" {
+		payload["code"] = errorCode[0]
+	}
+	statusPayload, _ := json.Marshal(payload)
 
 	if err := m.gwClient.PublishStatus(ctx, req.ChannelID, req.MessageID, string(statusPayload)); err != nil {
 		m.logger.Error("Failed to publish error status",

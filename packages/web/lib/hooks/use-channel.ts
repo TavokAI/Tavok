@@ -254,13 +254,24 @@ export function applyStreamComplete(
 /** Apply a stream_error payload to an existing message. */
 export function applyStreamError(
   msg: MessagePayload,
-  payload: { messageId: string; error: string; partialContent: string | null },
+  payload: {
+    messageId: string;
+    error: string;
+    partialContent: string | null;
+    code?: string;
+  },
 ): MessagePayload {
   if (msg.id !== payload.messageId) return msg;
+
+  // DEC-0075: Capacity errors get a user-friendly message instead of raw error
+  const errorContent =
+    payload.code === "CAPACITY_EXCEEDED"
+      ? "[All agents are busy right now. Your message will be processed when a slot opens.]"
+      : payload.partialContent || msg.content || `[Error: ${payload.error}]`;
+
   return {
     ...msg,
-    content:
-      payload.partialContent || msg.content || `[Error: ${payload.error}]`,
+    content: errorContent,
     type: "STREAMING",
     streamingStatus: "ERROR",
     thinkingPhase: undefined,
@@ -344,7 +355,12 @@ export function applyStreamToolResult(
 /** Build a fallback error message when stream_error arrives with no matching message. */
 export function buildStreamErrorFallback(
   channelId: string,
-  payload: { messageId: string; error: string; partialContent: string | null },
+  payload: {
+    messageId: string;
+    error: string;
+    partialContent: string | null;
+    code?: string;
+  },
   streamMeta:
     | {
         agentId: string;
@@ -355,6 +371,12 @@ export function buildStreamErrorFallback(
     | undefined,
   lastSequence: string,
 ): MessagePayload {
+  // DEC-0075: Capacity errors get user-friendly content
+  const errorContent =
+    payload.code === "CAPACITY_EXCEEDED"
+      ? "[All agents are busy right now. Your message will be processed when a slot opens.]"
+      : payload.partialContent || `[Error: ${payload.error}]`;
+
   return {
     id: payload.messageId,
     channelId,
@@ -362,7 +384,7 @@ export function buildStreamErrorFallback(
     authorType: "AGENT",
     authorName: streamMeta?.agentName || "Agent",
     authorAvatarUrl: streamMeta?.agentAvatarUrl || null,
-    content: payload.partialContent || `[Error: ${payload.error}]`,
+    content: errorContent,
     type: "STREAMING",
     streamingStatus: "ERROR",
     sequence: streamMeta?.sequence || lastSequence,
@@ -472,6 +494,7 @@ function registerStreamingHandlers(channel: Channel, deps: HandlerDeps) {
       messageId: string;
       error: string;
       partialContent: string | null;
+      code?: string;
     };
     deps.streamLastTokenRef.current.delete(payload.messageId);
     deps.streamNextIndexRef.current.delete(payload.messageId);
@@ -501,8 +524,14 @@ function registerStreamingHandlers(channel: Channel, deps: HandlerDeps) {
     });
     deps.streamBufferRef.current.delete(payload.messageId);
     const errorText = (payload.error || "").trim();
-    if (errorText)
-      deps.setAgentTriggerHint(`Agent response failed: ${errorText}`);
+    if (errorText) {
+      // DEC-0075: User-friendly hint for capacity errors
+      const hint =
+        payload.code === "CAPACITY_EXCEEDED"
+          ? "All agents are busy right now. Try again in a moment."
+          : `Agent response failed: ${errorText}`;
+      deps.setAgentTriggerHint(hint);
+    }
   });
 
   channel.on("stream_thinking", (raw: unknown) => {

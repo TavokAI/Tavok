@@ -94,7 +94,7 @@ On failure: socket connection is rejected.
 | `stream_start`    | `{agentId, agentName}`                                        | **Agent only** — start streaming, creates placeholder (DEC-0040)         |
 | `stream_token`    | `{messageId, token, index}`                               | **Agent only** — send a streaming token                                  |
 | `stream_complete` | `{messageId, finalContent, thinkingTimeline?, metadata?}` | **Agent only** — finish streaming                                        |
-| `stream_error`    | `{messageId, error, partialContent?}`                     | **Agent only** — mark stream as errored                                  |
+| `stream_error`    | `{messageId, error, partialContent?, code?}`              | **Agent only** — mark stream as errored                                  |
 | `stream_thinking` | `{messageId, phase, detail?}`                             | **Agent only** — send thinking/status update                             |
 | `typed_message`   | [TypedMessagePush](#typedmessagepush)                     | **Agent only** — send structured typed message (TASK-0039)               |
 
@@ -200,9 +200,13 @@ On failure: socket connection is rejected.
 {
   "messageId": "01HXY...",
   "error": "Provider returned 429: rate limited",
-  "partialContent": "Hello! How can I" // may be null
+  "partialContent": "Hello! How can I",
+  "code": "CAPACITY_EXCEEDED"
 }
 ```
+
+`code` is optional. Known codes:
+- `CAPACITY_EXCEEDED` — all stream slots are full (DEC-0075). Client should show a user-friendly "agents busy" message instead of the raw error.
 
 #### StreamThinkingPayload
 
@@ -1888,3 +1892,4 @@ When a message is rate-limited, the Gateway replies with an error instead of bro
 | 2026-03-09 | v4.1    | Rename Bot → Agent across all services (DEC-0062): AuthorType.BOT → AGENT, Prisma model Bot → Agent, all API paths /bots/ → /agents/, botId → agentId, fix SDK agent trigger routing (WEBSOCKET skips BYOK), add charter_update delivery to SDK agents on join |
 | 2026-03-14 | v4.2    | Add GET /api/internal/sequence for non-WebSocket adapters, require object-shaped `metadata` for message persistence/finalization, and align adapter stream completion with Prisma JSON storage |
 | 2026-03-25 | v4.3    | Selective channel assignment: agent creation APIs accept optional `channelIds[]` parameter (DEC-0074). GET agents endpoint returns `channels` array. Channel picker in all agent creation UI forms. |
+| 2026-03-25 | v4.4    | Tagged stream error codes: StreamErrorPayload gains optional `code` field. `CAPACITY_EXCEEDED` code for concurrency limit errors with user-friendly client handling (DEC-0075). |

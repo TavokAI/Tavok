@@ -1538,3 +1538,23 @@ Changes:
 6. Channel creation (`POST /api/servers/{serverId}/channels`) — unchanged, still auto-assigns all active agents. Use channel settings modal to manage post-creation.
 
 **Consequences**: SDK/CLI users can scope agents to specific channels from day one. UI users see which channels each agent is in and can pick channels during creation. Default behavior (all channels) is preserved — no breaking change. Channel settings modal (existing) provides post-creation management.
+
+## DEC-0075 — Tagged stream error codes for backpressure UX
+
+**Date**: 2026-03-25
+**Status**: Accepted
+**Relates to**: A7 architecture decision
+
+**Context**: When Go proxy's 32-stream concurrency limit is reached, it rejects new streams and publishes an error to Redis. The error reaches the client, but: (1) the error message is generic ("Stream concurrency limit reached") with no machine-readable code, so the client can't differentiate capacity errors from other failures; (2) the client shows the raw error text to the user.
+
+**Decision**: Add optional `code` field to the stream error payload. For capacity rejections, set `code: "CAPACITY_EXCEEDED"`. The client recognizes this code and shows "All agents are busy right now" instead of the raw error.
+
+Implementation:
+1. `manager.go` `publishError()` — variadic `errorCode` parameter, included in JSON payload when provided
+2. Capacity rejection call passes `"CAPACITY_EXCEEDED"` code
+3. Frontend `applyStreamError()` and `buildStreamErrorFallback()` check `payload.code` for capacity-specific UX
+4. Agent trigger hint shows "All agents are busy right now. Try again in a moment." instead of raw error
+
+**DB cleanup note**: The Go proxy's `publishError` already calls `FinalizeMessageWithRetry` which sets the placeholder to `ERROR` status immediately. The 45s watchdog is a fallback safety net, not the primary cleanup path — so no Gateway-side changes needed.
+
+**Consequences**: User-friendly capacity error experience. Extensible — future error codes (e.g. `RATE_LIMITED`, `PROVIDER_ERROR`) can be added to the same mechanism. Backward compatible — `code` is optional, old clients ignore it.
