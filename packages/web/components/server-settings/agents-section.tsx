@@ -12,6 +12,11 @@ import {
   Zap,
 } from "lucide-react";
 
+interface AgentChannel {
+  id: string;
+  name: string;
+}
+
 interface AgentData {
   id: string;
   name: string;
@@ -20,6 +25,7 @@ interface AgentData {
   triggerMode: string;
   connectionMethod: string | null; // null = BYOK
   capabilities: string[] | null;
+  channels: AgentChannel[];
   createdAt: string;
 }
 
@@ -200,6 +206,18 @@ export function AgentsSection({ serverId }: AgentsSectionProps) {
                         {new Date(agent.createdAt).toLocaleDateString()}
                       </span>
                     </div>
+                    {agent.channels && agent.channels.length > 0 && (
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        {agent.channels.map((ch) => (
+                          <span
+                            key={ch.id}
+                            className="inline-flex items-center rounded bg-background-tertiary px-1.5 py-0.5 text-[10px] text-text-muted"
+                          >
+                            #{ch.name}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
 

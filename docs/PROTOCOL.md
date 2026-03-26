@@ -69,7 +69,7 @@ On success: socket assigns `user_id=agentId`, `username=agentName`, `display_nam
 On failure: socket connection is rejected.
 
 **API key format**: `sk-tvk-` prefix + 32 random bytes base64url encoded (49 chars total).
-**Channel authorization**: agents can join any channel in their server (Agent.serverId == Channel.serverId). No per-channel assignment needed.
+**Channel authorization**: agents are assigned to specific channels via `ChannelAgent` entries (DEC-0074). By default, agents are assigned to all channels on creation. This can be overridden with the `channelIds` parameter on the creation API.
 
 ### Topics
 
@@ -835,11 +835,13 @@ Create an agent via CLI. Admin token required (`Authorization: Bearer admin-{TAV
 {
   "name": "Jack",
   "serverId": "01HXY...",
-  "connectionMethod": "WEBSOCKET"
+  "connectionMethod": "WEBSOCKET",
+  "channelIds": ["01HXY..."]
 }
 ```
 
 Required: `name`, `serverId`. `connectionMethod` defaults to `WEBSOCKET`.
+Optional: `channelIds` — array of channel IDs to assign. If omitted, agent is assigned to **all** channels in the server (DEC-0074).
 
 **Response:** `201 Created`
 
@@ -1885,3 +1887,4 @@ When a message is rate-limited, the Gateway replies with an error instead of bro
 | 2026-03-09 | v4.0    | Remove self-registration (DEC-0060), add CLI agent setup via POST /api/v1/bootstrap/agents, add agent_trigger_skipped event (BUG-007), add §10 Rate Limiting with per-user limits (BUG-005), auto channel assignment via ChannelAgent (DEC-0061) |
 | 2026-03-09 | v4.1    | Rename Bot → Agent across all services (DEC-0062): AuthorType.BOT → AGENT, Prisma model Bot → Agent, all API paths /bots/ → /agents/, botId → agentId, fix SDK agent trigger routing (WEBSOCKET skips BYOK), add charter_update delivery to SDK agents on join |
 | 2026-03-14 | v4.2    | Add GET /api/internal/sequence for non-WebSocket adapters, require object-shaped `metadata` for message persistence/finalization, and align adapter stream completion with Prisma JSON storage |
+| 2026-03-25 | v4.3    | Selective channel assignment: agent creation APIs accept optional `channelIds[]` parameter (DEC-0074). GET agents endpoint returns `channels` array. Channel picker in all agent creation UI forms. |

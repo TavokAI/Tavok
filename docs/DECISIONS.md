@@ -1518,3 +1518,23 @@ Key rotation flow:
 **Changes**: `encryption.ts` (versioned format + key fallback chain), `env.ts` (optional `ENCRYPTION_KEYS_PREV`), new `rotate-encryption/route.ts`, `.env.example`.
 
 **Consequences**: Key rotation is safe — old ciphertexts remain readable via fallback chain. Backward compatible — legacy format decrypts correctly. Future key versions can be added by incrementing the prefix. The `needsReEncryption` helper enables automated migration tooling.
+
+## DEC-0074 — Selective agent-channel assignment
+
+**Date**: 2026-03-25
+**Status**: Accepted
+**Relates to**: A3 architecture decision
+
+**Context**: Agent creation auto-assigns to ALL channels in the server. Channel creation auto-assigns ALL active agents. This is inflexible — a server with 10 channels and 5 agents means every message evaluates triggers for all agents, with no way to scope an agent to specific channels.
+
+**Decision**: Add optional `channelIds[]` parameter to agent creation APIs. If provided, assign only those channels. If omitted, preserve current behavior (all channels) for backward compatibility.
+
+Changes:
+1. `agent-factory.ts` `createAgent()` — accepts `channelIds?: string[]`, validates against server channels
+2. `POST /api/servers/{serverId}/agents` — passes `channelIds` for both BYOK and non-BYOK paths
+3. `POST /api/v1/bootstrap/agents` — passes `channelIds` for CLI-initiated creation
+4. `GET /api/servers/{serverId}/agents` — returns `channels[]` array per agent (id + name)
+5. All agent creation UI forms — channel picker with checkboxes (all selected by default)
+6. Channel creation (`POST /api/servers/{serverId}/channels`) — unchanged, still auto-assigns all active agents. Use channel settings modal to manage post-creation.
+
+**Consequences**: SDK/CLI users can scope agents to specific channels from day one. UI users see which channels each agent is in and can pick channels during creation. Default behavior (all channels) is preserved — no breaking change. Channel settings modal (existing) provides post-creation management.

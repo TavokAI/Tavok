@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { ChannelPicker } from "./channel-picker";
 import type { CreatedAgentCredentials } from "./types";
 
 interface SDKSetupFormProps {
@@ -17,6 +18,7 @@ export function SDKSetupForm({
   onCancel,
 }: SDKSetupFormProps) {
   const [name, setName] = useState("");
+  const [channelIds, setChannelIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -34,6 +36,7 @@ export function SDKSetupForm({
         body: JSON.stringify({
           name: name.trim(),
           connectionMethod: "WEBSOCKET",
+          channelIds: channelIds.length > 0 ? channelIds : undefined,
         }),
       });
 
@@ -102,6 +105,12 @@ agent.run()`}
           </pre>
         </div>
       </div>
+
+      <ChannelPicker
+        serverId={serverId}
+        selectedChannelIds={channelIds}
+        onChange={setChannelIds}
+      />
 
       <p className="text-xs text-text-muted">
         Your API key will be shown after creation. You&apos;ll need it for the

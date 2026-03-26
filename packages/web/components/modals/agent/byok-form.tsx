@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { ChannelPicker } from "./channel-picker";
 import type { AgentListItem } from "./types";
 
 const PROVIDER_DEFAULTS: Record<string, { endpoint: string; model: string }> = {
@@ -76,6 +77,7 @@ export function BYOKForm({
         })()
       : "",
   );
+  const [channelIds, setChannelIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -110,6 +112,7 @@ export function BYOKForm({
             .map((s: string) => s.trim())
             .filter(Boolean)
         : undefined,
+      channelIds: channelIds.length > 0 ? channelIds : undefined,
     };
 
     if (apiKey.trim()) {
@@ -249,6 +252,14 @@ export function BYOKForm({
         onChange={(e) => setThinkingSteps(e.target.value)}
         placeholder="Thinking, Writing"
       />
+
+      {!editingAgent && (
+        <ChannelPicker
+          serverId={serverId}
+          selectedChannelIds={channelIds}
+          onChange={setChannelIds}
+        />
+      )}
 
       {error && <p className="text-sm text-status-danger">{error}</p>}
 

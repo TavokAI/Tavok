@@ -40,6 +40,8 @@ interface CreateAgentOptions {
   webhookUrl?: string;
   capabilities?: string[];
   systemPrompt?: string;
+  /** Optional channel IDs to assign. If omitted or empty, assigns to ALL channels (backward compatible). */
+  channelIds?: string[];
 }
 
 interface CreateAgentResult {
@@ -112,17 +114,29 @@ export async function createAgent(
         },
       });
 
-      // Auto-assign agent to all channels in the server so Gateway can trigger it
-      const channels = await tx.channel.findMany({
-        where: { serverId: opts.serverId },
-        select: { id: true },
-      });
+      // Assign agent to channels — specific channels if provided, all channels if not (DEC-0073)
+      let assignChannelIds: string[];
+      if (opts.channelIds && opts.channelIds.length > 0) {
+        // Validate that requested channels belong to this server
+        const validChannels = await tx.channel.findMany({
+          where: { serverId: opts.serverId, id: { in: opts.channelIds } },
+          select: { id: true },
+        });
+        assignChannelIds = validChannels.map((ch) => ch.id);
+      } else {
+        // Default: assign to all channels (backward compatible)
+        const allChannels = await tx.channel.findMany({
+          where: { serverId: opts.serverId },
+          select: { id: true },
+        });
+        assignChannelIds = allChannels.map((ch) => ch.id);
+      }
 
-      if (channels.length > 0) {
+      if (assignChannelIds.length > 0) {
         await tx.channelAgent.createMany({
-          data: channels.map((ch) => ({
+          data: assignChannelIds.map((chId) => ({
             id: generateId(),
-            channelId: ch.id,
+            channelId: chId,
             agentId: agent.id,
           })),
         });

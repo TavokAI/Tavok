@@ -53,11 +53,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const { name, serverId, connectionMethod, webhookUrl } = body as {
+  const { name, serverId, connectionMethod, webhookUrl, channelIds } = body as {
     name?: string;
     serverId?: string;
     connectionMethod?: string;
     webhookUrl?: string;
+    channelIds?: string[];
   };
 
   // Validate required fields
@@ -90,11 +91,17 @@ export async function POST(request: NextRequest) {
       : "WEBSOCKET";
 
   try {
+    // DEC-0073: Pass optional channelIds for selective assignment
+    const validatedChannelIds = Array.isArray(channelIds)
+      ? channelIds.filter((id): id is string => typeof id === "string")
+      : undefined;
+
     const result = await createAgent({
       name: name.trim(),
       serverId,
       connectionMethod: resolvedMethod,
       webhookUrl,
+      channelIds: validatedChannelIds,
     });
 
     const connectionInfo = buildConnectionInfo(

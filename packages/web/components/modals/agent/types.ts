@@ -36,6 +36,7 @@ export interface AgentListItem {
   thinkingSteps: string | null;
   connectionMethod: ConnectionMethodType | null; // null = BYOK
   capabilities: string[];
+  channels: { id: string; name: string }[]; // DEC-0073
   createdAt: string;
 }
 

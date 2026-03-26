@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { ChannelPicker } from "./channel-picker";
 import type { ConnectionMethodType, CreatedAgentCredentials } from "./types";
 
 /**
@@ -30,6 +31,7 @@ function SimpleAgentForm({
   onCancel,
 }: SimpleAgentFormProps) {
   const [name, setName] = useState("");
+  const [channelIds, setChannelIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -47,6 +49,7 @@ function SimpleAgentForm({
         body: JSON.stringify({
           name: name.trim(),
           connectionMethod,
+          channelIds: channelIds.length > 0 ? channelIds : undefined,
         }),
       });
 
@@ -101,6 +104,12 @@ function SimpleAgentForm({
           </pre>
         </div>
       )}
+
+      <ChannelPicker
+        serverId={serverId}
+        selectedChannelIds={channelIds}
+        onChange={setChannelIds}
+      />
 
       {error && <p className="text-sm text-status-danger">{error}</p>}
 

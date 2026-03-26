@@ -66,6 +66,14 @@ export async function GET(
           capabilities: true,
         },
       },
+      // DEC-0073: Include channel assignments
+      channelAgents: {
+        select: {
+          channel: {
+            select: { id: true, name: true },
+          },
+        },
+      },
     },
     orderBy: { createdAt: "asc" },
   });
@@ -99,6 +107,11 @@ export async function GET(
     connectionMethod: agent.connectionMethod || null, // null = BYOK
     capabilities: agent.agentRegistration?.capabilities || null,
     createdAt: agent.createdAt,
+    // DEC-0073: Channel assignments
+    channels: agent.channelAgents.map((ca) => ({
+      id: ca.channel.id,
+      name: ca.channel.name,
+    })),
   }));
 
   return NextResponse.json({ agents: result });
@@ -148,11 +161,16 @@ export async function POST(
     // Method-specific fields
     webhookUrl,
     capabilities,
+    // DEC-0073: Optional channel assignment
+    channelIds,
   } = body;
 
   if (!name || typeof name !== "string" || !name.trim()) {
     return NextResponse.json({ error: "name is required" }, { status: 400 });
   }
+
+  // Validate channelIds if provided (DEC-0073)
+  const validatedChannelIds = Array.isArray(channelIds) ? channelIds.filter((id: unknown) => typeof id === "string") : undefined;
 
   // --- Non-BYOK creation (DEC-0047) ---
   if (connectionMethod && VALID_CONNECTION_METHODS.includes(connectionMethod)) {
@@ -163,6 +181,7 @@ export async function POST(
       webhookUrl,
       capabilities,
       systemPrompt,
+      channelIds: validatedChannelIds,
     });
   }
 
@@ -216,16 +235,26 @@ export async function POST(
     throw error;
   }
 
-  // Auto-assign BYOK agent to all channels in the server so Gateway can trigger it
-  const channels = await prisma.channel.findMany({
-    where: { serverId },
-    select: { id: true },
-  });
-  if (channels.length > 0) {
+  // Assign BYOK agent to channels — specific if provided, all if not (DEC-0073)
+  let assignChannelIds: string[];
+  if (validatedChannelIds && validatedChannelIds.length > 0) {
+    const validChannels = await prisma.channel.findMany({
+      where: { serverId, id: { in: validatedChannelIds } },
+      select: { id: true },
+    });
+    assignChannelIds = validChannels.map((ch) => ch.id);
+  } else {
+    const allChannels = await prisma.channel.findMany({
+      where: { serverId },
+      select: { id: true },
+    });
+    assignChannelIds = allChannels.map((ch) => ch.id);
+  }
+  if (assignChannelIds.length > 0) {
     await prisma.channelAgent.createMany({
-      data: channels.map((ch) => ({
+      data: assignChannelIds.map((chId) => ({
         id: generateId(),
-        channelId: ch.id,
+        channelId: chId,
         agentId: agent.id,
       })),
     });
@@ -264,6 +293,7 @@ async function createNonBYOKAgent(
     webhookUrl?: string;
     capabilities?: string[];
     systemPrompt?: string;
+    channelIds?: string[];
   },
 ) {
   try {

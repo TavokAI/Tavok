@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { ChannelPicker } from "./channel-picker";
 import type { CreatedAgentCredentials } from "./types";
 
 // ─── Inbound Webhook Form ───
@@ -19,6 +20,7 @@ export function InboundWebhookForm({
   onCancel,
 }: InboundWebhookFormProps) {
   const [name, setName] = useState("");
+  const [channelIds, setChannelIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -36,6 +38,7 @@ export function InboundWebhookForm({
         body: JSON.stringify({
           name: name.trim(),
           connectionMethod: "INBOUND_WEBHOOK",
+          channelIds: channelIds.length > 0 ? channelIds : undefined,
         }),
       });
 
@@ -88,6 +91,12 @@ export function InboundWebhookForm({
         </pre>
       </div>
 
+      <ChannelPicker
+        serverId={serverId}
+        selectedChannelIds={channelIds}
+        onChange={setChannelIds}
+      />
+
       {error && <p className="text-sm text-status-danger">{error}</p>}
 
       <div className="flex justify-end gap-2 pt-1">
@@ -117,6 +126,7 @@ export function OutboundWebhookForm({
 }: OutboundWebhookFormProps) {
   const [name, setName] = useState("");
   const [webhookUrl, setWebhookUrl] = useState("");
+  const [channelIds, setChannelIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -135,6 +145,7 @@ export function OutboundWebhookForm({
           name: name.trim(),
           connectionMethod: "WEBHOOK",
           webhookUrl: webhookUrl.trim(),
+          channelIds: channelIds.length > 0 ? channelIds : undefined,
         }),
       });
 
@@ -188,6 +199,12 @@ export function OutboundWebhookForm({
           after creation.
         </p>
       </div>
+
+      <ChannelPicker
+        serverId={serverId}
+        selectedChannelIds={channelIds}
+        onChange={setChannelIds}
+      />
 
       {error && <p className="text-sm text-status-danger">{error}</p>}
 
