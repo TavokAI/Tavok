@@ -62,5 +62,5 @@ EXPOSE 5555
 ENV PORT=5555
 ENV HOSTNAME="0.0.0.0"
 
-# Run migrations then start
-CMD ["sh", "-c", "npx prisma migrate deploy --schema=./prisma/schema.prisma 2>/dev/null; node packages/web/server.js"]
+# Run migrations then start (L36: log migration output instead of suppressing stderr)
+CMD ["sh", "-c", "echo '[startup] Running database migrations...' && npx prisma migrate deploy --schema=./prisma/schema.prisma && echo '[startup] Migrations complete, starting server...' && node packages/web/server.js"]

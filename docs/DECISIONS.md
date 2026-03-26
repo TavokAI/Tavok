@@ -1607,3 +1607,27 @@ Consequences of claim-time increment:
 Planning doc: `docs/internal/NEXTAUTH-V5-MIGRATION.md`
 
 **Consequences**: No code change. Migration plan ready for when v5 reaches full stability with Credentials provider support. Estimated 2 days of focused work when executed.
+
+## DEC-0079 — Serialized JSON stored as String @db.Text (L20)
+
+**Date**: 2026-03-26
+**Status**: Accepted (documentation)
+
+**Context**: Several Message fields store structured data as serialized JSON strings (`thinkingTimeline`, `tokenHistory`, `checkpoints`) rather than Prisma `Json` type. This was flagged as a potential normalization issue.
+
+**Decision**: Keep as `String @db.Text`. This is intentional for three reasons:
+1. **Write pattern**: These fields are written once at stream completion by `FinalizeMessageFull`, which receives pre-serialized JSON from the Go proxy. Using `String` avoids a redundant parse-then-serialize cycle.
+2. **Read pattern**: The frontend receives these as opaque JSON strings and parses client-side. No server-side querying or filtering on these fields — they're display-only.
+3. **Size**: Token histories can be large (thousands of entries for long streams). PostgreSQL JSONB has parsing overhead on write. Text storage is cheaper for write-once, read-rarely data.
+
+Fields using this pattern:
+- `Message.thinkingTimeline` — `String? @db.Text` — array of {phase, timestamp}
+- `Message.tokenHistory` — `String? @db.Text` — array of {o: offset, t: relativeMs}
+- `Message.checkpoints` — `String? @db.Text` — array of {index, label, contentOffset, timestamp}
+- `Agent.thinkingSteps` — `String? @db.Text` — array of phase labels
+- `Agent.enabledTools` — `String? @db.Text` — array of tool names
+- `Channel.charterAgentOrder` — `String? @db.Text` — array of agentIds
+
+The `Message.metadata` field uses Prisma `Json?` type because it's queried for token counts in analytics.
+
+**Consequences**: No schema change. Pattern is documented. Future normalization (e.g., separate `TokenHistory` table) can be done if querying these fields becomes necessary.
