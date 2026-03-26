@@ -52,7 +52,7 @@ export async function POST(
         messageId,
         content,
         authorId: authorId || "unknown",
-        authorName: authorName || "Unknown",
+        authorName: authorName || "Deleted User",
         authorType: authorType || "USER",
         delivered: false,
         expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24h TTL

@@ -95,24 +95,26 @@ export async function POST(
       );
     }
 
-    // Get next position
-    const lastChannel = await prisma.channel.findFirst({
-      where: { serverId },
-      orderBy: { position: "desc" },
-      select: { position: true },
-    });
-    const nextPosition = (lastChannel?.position ?? -1) + 1;
-
+    // L5: Atomic position assignment to prevent collision on concurrent creation
     const channelId = generateId();
-    const channel = await prisma.channel.create({
-      data: {
-        id: channelId,
-        serverId,
-        name,
-        topic,
-        type,
-        position: nextPosition,
-      },
+    const channel = await prisma.$transaction(async (tx) => {
+      const lastChannel = await tx.channel.findFirst({
+        where: { serverId },
+        orderBy: { position: "desc" },
+        select: { position: true },
+      });
+      const nextPosition = (lastChannel?.position ?? -1) + 1;
+
+      return tx.channel.create({
+        data: {
+          id: channelId,
+          serverId,
+          name,
+          topic,
+          type,
+          position: nextPosition,
+        },
+      });
     });
 
     // Auto-assign all active agents in this server to the new channel

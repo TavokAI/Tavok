@@ -256,6 +256,19 @@ defmodule TavokGatewayWeb.RoomChannel do
     # The channel process handles ALL messages for this room — blocking it with HTTP calls
     # would freeze message delivery for every user in the channel. (ISSUE-007)
     Task.Supervisor.async_nolink(TavokGateway.TaskSupervisor, fn ->
+      # L15: Skip triggers if charter is completed — prevents wasted dispatches and user-facing errors
+      charter_completed =
+        case WebClient.get_channel_info(channel_id) do
+          {:ok, %{"charterStatus" => "COMPLETED"}} -> true
+          {:ok, %{"charterStatus" => "PAUSED"}} -> true
+          _ -> false
+        end
+
+      if charter_completed do
+        Logger.info(
+          "[TriggerDecision] channel=#{channel_id} charter completed/paused — skipping all triggers"
+        )
+      else
       # Multi-agent: try ChannelAgent join table first, fall back to single defaultAgent (TASK-0012)
       case ConfigCache.get_channel_agents(channel_id) do
         {:ok, agents} when is_list(agents) and length(agents) > 0 ->
@@ -291,6 +304,7 @@ defmodule TavokGatewayWeb.RoomChannel do
         {:error, reason} ->
           Logger.error("Failed to fetch channel agents: #{inspect(reason)}")
       end
+      end # if charter_completed
     end)
 
     {:noreply, socket}

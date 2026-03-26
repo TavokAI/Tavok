@@ -109,10 +109,10 @@ export async function GET(request: NextRequest) {
     return {
       id: row.id,
       dmId: row.dmId,
-      dmParticipantName: dmParticipantMap.get(row.dmId) || "Unknown",
+      dmParticipantName: dmParticipantMap.get(row.dmId) || "Deleted User",
       authorId: row.authorId,
       authorType: "USER",
-      authorName: user?.displayName || "Unknown",
+      authorName: user?.displayName || "Deleted User",
       authorAvatarUrl: user?.avatarUrl || null,
       content: row.content,
       highlightedContent: row.highlightedContent,

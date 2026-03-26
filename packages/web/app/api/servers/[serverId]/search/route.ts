@@ -107,7 +107,9 @@ export async function GET(
 
   // Map to SearchResult
   const results: SearchResult[] = resultRows.map((row) => {
-    let authorName = "Unknown";
+    // L1: Consistent fallback for deleted authors (matches BUG-002 pattern)
+    let authorName =
+      row.authorType === "AGENT" ? "Deleted Agent" : "Deleted User";
     let authorAvatarUrl: string | null = null;
 
     if (row.authorType === "USER") {
