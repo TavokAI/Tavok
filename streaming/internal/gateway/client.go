@@ -109,3 +109,15 @@ func (c *Client) PublishCharterStatus(ctx context.Context, channelID, payload st
 	topic := "hive:stream:charter_status:" + channelID
 	return c.rdb.Publish(ctx, topic, payload).Err()
 }
+
+// PushDeadLetter pushes a failed stream entry to the dead letter list for
+// later inspection. Capped at 1000 entries to prevent unbounded growth. (L27)
+func (c *Client) PushDeadLetter(ctx context.Context, payload string) error {
+	const key = "hive:stream:dead_letters"
+	const maxEntries = 1000
+	pipe := c.rdb.Pipeline()
+	pipe.LPush(ctx, key, payload)
+	pipe.LTrim(ctx, key, 0, maxEntries-1)
+	_, err := pipe.Exec(ctx)
+	return err
+}

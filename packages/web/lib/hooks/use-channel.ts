@@ -110,7 +110,7 @@ function getSendErrorHint(resp: unknown): string {
 
   switch (reason) {
     case "rate_limited":
-      return "Message send failed: rate limited. You can send up to 5 messages every 10 seconds in a channel.";
+      return "Slow down — you can send up to 5 messages every 10 seconds per channel (20/sec channel-wide).";
     case "content_too_long":
       return "Message send failed: message is too long for this channel.";
     case "empty_content":
@@ -584,23 +584,36 @@ function registerStreamingHandlers(channel: Channel, deps: HandlerDeps) {
       contentOffset: number;
       timestamp: string;
     };
+    // L17: Validate checkpoint data before applying
+    if (
+      typeof payload.messageId !== "string" ||
+      typeof payload.index !== "number" ||
+      payload.index < 0 ||
+      typeof payload.contentOffset !== "number" ||
+      payload.contentOffset < 0
+    ) {
+      console.warn("[stream_checkpoint] Invalid payload, skipping:", payload);
+      return;
+    }
     deps.setMessages((prev) =>
-      prev.map((m) =>
-        m.id === payload.messageId
-          ? {
-              ...m,
-              checkpoints: [
-                ...(m.checkpoints || []),
-                {
-                  index: payload.index,
-                  label: payload.label,
-                  contentOffset: payload.contentOffset,
-                  timestamp: payload.timestamp,
-                },
-              ],
-            }
-          : m,
-      ),
+      prev.map((m) => {
+        if (m.id !== payload.messageId) return m;
+        // Deduplicate: skip if we already have this index
+        const existing = m.checkpoints || [];
+        if (existing.some((cp) => cp.index === payload.index)) return m;
+        return {
+          ...m,
+          checkpoints: [
+            ...existing,
+            {
+              index: payload.index,
+              label: payload.label || `Checkpoint ${payload.index}`,
+              contentOffset: payload.contentOffset,
+              timestamp: payload.timestamp,
+            },
+          ],
+        };
+      }),
     );
   });
 }

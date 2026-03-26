@@ -600,6 +600,22 @@ func (m *Manager) handleStream(ctx context.Context, req streamRequest) {
 			"messageId", req.MessageID,
 			"error", err,
 		)
+		// L27: Push to dead letter queue for later inspection
+		dlqPayload, _ := json.Marshal(map[string]interface{}{
+			"messageId":   req.MessageID,
+			"channelId":   req.ChannelID,
+			"agentId":     req.AgentID,
+			"status":      "COMPLETE",
+			"finalizeErr": err.Error(),
+			"tokenCount":  totalTokenCount,
+			"timestamp":   time.Now().UTC().Format(time.RFC3339Nano),
+		})
+		if dlqErr := m.gwClient.PushDeadLetter(ctx, string(dlqPayload)); dlqErr != nil {
+			m.logger.Error("Failed to push to dead letter queue",
+				"messageId", req.MessageID,
+				"error", dlqErr,
+			)
+		}
 	}
 
 	// 8. Publish charter status event (TASK-0020, P1-Fix 4)
@@ -939,6 +955,22 @@ func (m *Manager) publishError(ctx context.Context, req streamRequest, partialCo
 			"messageId", req.MessageID,
 			"error", err,
 		)
+		// L27: Push to dead letter queue for later inspection
+		dlqPayload, _ := json.Marshal(map[string]interface{}{
+			"messageId":   req.MessageID,
+			"channelId":   req.ChannelID,
+			"agentId":     req.AgentID,
+			"error":       errMsg,
+			"finalizeErr": err.Error(),
+			"content":     content,
+			"timestamp":   time.Now().UTC().Format(time.RFC3339Nano),
+		})
+		if dlqErr := m.gwClient.PushDeadLetter(ctx, string(dlqPayload)); dlqErr != nil {
+			m.logger.Error("Failed to push to dead letter queue",
+				"messageId", req.MessageID,
+				"error", dlqErr,
+			)
+		}
 	}
 }
 
