@@ -22,11 +22,13 @@ vi.mock("@/lib/permissions", () => ({
 import {
   checkMemberPermission,
   checkMembership,
+  clearPermissionCache,
 } from "../check-member-permission";
 
 describe("checkMemberPermission", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    clearPermissionCache(); // L42: Clear cache between tests
   });
 
   it("returns allowed:false when member not found", async () => {

@@ -102,18 +102,42 @@ type Manager struct {
 	semaphore            chan struct{}
 	// maxStreamDuration is the hard ceiling for any single stream (L14).
 	maxStreamDuration time.Duration
+	// L13: Token batching parameters (configurable via env vars)
+	batchMaxTokens    int
+	batchFlushInterval time.Duration
 	// onReady is called once after the Redis pub/sub subscription is confirmed.
 	// Used by the health check to gate readiness.
 	onReady func()
 }
 
 // NewManager creates a new stream manager.
+// ManagerConfig holds configurable parameters for the stream manager.
+type ManagerConfig struct {
+	MaxConcurrentStreams int
+	MaxStreamDuration   time.Duration
+	BatchMaxTokens      int           // L13: Max tokens per batch before flush (default 10)
+	BatchFlushInterval  time.Duration // L13: Max time before flushing partial batch (default 50ms)
+}
+
 func NewManager(logger *slog.Logger, gwClient *gateway.Client, loader *config.Loader, registry *provider.Registry, toolRegistry *tools.Registry, maxConcurrentStreams int, maxStreamDuration time.Duration) *Manager {
-	if maxConcurrentStreams <= 0 {
-		maxConcurrentStreams = 32
+	return NewManagerWithConfig(logger, gwClient, loader, registry, toolRegistry, ManagerConfig{
+		MaxConcurrentStreams: maxConcurrentStreams,
+		MaxStreamDuration:   maxStreamDuration,
+	})
+}
+
+func NewManagerWithConfig(logger *slog.Logger, gwClient *gateway.Client, loader *config.Loader, registry *provider.Registry, toolRegistry *tools.Registry, cfg ManagerConfig) *Manager {
+	if cfg.MaxConcurrentStreams <= 0 {
+		cfg.MaxConcurrentStreams = 32
 	}
-	if maxStreamDuration <= 0 {
-		maxStreamDuration = 5 * time.Minute
+	if cfg.MaxStreamDuration <= 0 {
+		cfg.MaxStreamDuration = 5 * time.Minute
+	}
+	if cfg.BatchMaxTokens <= 0 {
+		cfg.BatchMaxTokens = 10
+	}
+	if cfg.BatchFlushInterval <= 0 {
+		cfg.BatchFlushInterval = 50 * time.Millisecond
 	}
 
 	return &Manager{
@@ -123,9 +147,11 @@ func NewManager(logger *slog.Logger, gwClient *gateway.Client, loader *config.Lo
 		loader:               loader,
 		registry:             registry,
 		toolRegistry:         toolRegistry,
-		maxConcurrentStreams: maxConcurrentStreams,
-		semaphore:            make(chan struct{}, maxConcurrentStreams),
-		maxStreamDuration:    maxStreamDuration,
+		maxConcurrentStreams: cfg.MaxConcurrentStreams,
+		semaphore:            make(chan struct{}, cfg.MaxConcurrentStreams),
+		maxStreamDuration:    cfg.MaxStreamDuration,
+		batchMaxTokens:       cfg.BatchMaxTokens,
+		batchFlushInterval:   cfg.BatchFlushInterval,
 	}
 }
 
@@ -644,8 +670,8 @@ func (m *Manager) runProviderIteration(
 	tokenCount := 0
 	tokenTimeout := 30 * time.Second
 
-	const batchMaxTokens = 10
-	const batchFlushInterval = 50 * time.Millisecond
+	batchMaxTokens := m.batchMaxTokens
+	batchFlushInterval := m.batchFlushInterval
 
 	timer := time.NewTimer(tokenTimeout)
 	defer timer.Stop()

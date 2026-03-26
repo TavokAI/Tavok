@@ -97,12 +97,15 @@ func main() {
 	}))
 	slog.Info("Tool registry initialized", "toolCount", toolRegistry.Count())
 
-	// Create stream manager
-	maxConcurrentStreams := getEnvInt("STREAMING_MAX_CONCURRENT_STREAMS", 32)
-	// L14: Max stream duration — hard ceiling to prevent runaway streams from holding slots
-	maxStreamDurationSec := getEnvInt("STREAMING_MAX_DURATION_SEC", 300) // 5 minutes default
-	maxStreamDuration := time.Duration(maxStreamDurationSec) * time.Second
-	manager := stream.NewManager(logger, gwClient, loader, registry, toolRegistry, maxConcurrentStreams, maxStreamDuration)
+	// Create stream manager with configurable parameters
+	maxStreamDurationSec := getEnvInt("STREAMING_MAX_DURATION_SEC", 300)
+	batchFlushMs := getEnvInt("STREAMING_BATCH_FLUSH_MS", 50)
+	manager := stream.NewManagerWithConfig(logger, gwClient, loader, registry, toolRegistry, stream.ManagerConfig{
+		MaxConcurrentStreams: getEnvInt("STREAMING_MAX_CONCURRENT_STREAMS", 32),
+		MaxStreamDuration:   time.Duration(maxStreamDurationSec) * time.Second,
+		BatchMaxTokens:      getEnvInt("STREAMING_BATCH_MAX_TOKENS", 10),    // L13
+		BatchFlushInterval:  time.Duration(batchFlushMs) * time.Millisecond, // L13
+	})
 
 	// Wire readiness: the health check gates on the subscription being live.
 	manager.SetOnReady(func() {
