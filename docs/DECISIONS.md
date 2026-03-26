@@ -1558,3 +1558,47 @@ Implementation:
 **DB cleanup note**: The Go proxy's `publishError` already calls `FinalizeMessageWithRetry` which sets the placeholder to `ERROR` status immediately. The 45s watchdog is a fallback safety net, not the primary cleanup path — so no Gateway-side changes needed.
 
 **Consequences**: User-friendly capacity error experience. Extensible — future error codes (e.g. `RATE_LIMITED`, `PROVIDER_ERROR`) can be added to the same mechanism. Backward compatible — `code` is optional, old clients ignore it.
+
+## DEC-0076 — Completions endpoint author semantics
+
+**Date**: 2026-03-26
+**Status**: Accepted (documentation)
+**Relates to**: A2 architecture decision
+
+**Context**: The `/api/v1/chat/completions` endpoint creates a message with `authorType: "AGENT"` for the "user message" it injects. Developers familiar with OpenAI's API expect `role: "user"` to map to a human user, but in Tavok's context the authenticated caller is an agent.
+
+**Decision**: Document, don't change. The behavior is correct — the agent IS the authenticated caller, so `authorType: "AGENT"` is accurate. OpenAI's `role: "user"` means "the message sender," which in Tavok's completions context is the agent. The `model` field contains the target channel, not a model override.
+
+**Consequences**: SDK documentation updated to clarify semantics. No code change needed.
+
+## DEC-0077 — Charter turn claim-time increment
+
+**Date**: 2026-03-26
+**Status**: Accepted (documentation)
+**Relates to**: A8 architecture decision
+
+**Context**: Charter turn counter increments when a turn is claimed (stream start), not when the stream completes. Failed streams consume their claimed turn.
+
+**Decision**: Document as intentional design. The claim-time increment uses a Prisma `$transaction` with serializable isolation to prevent two agents from claiming the same turn. This is a deliberate concurrency control mechanism. Moving the increment to completion would re-introduce the TOCTOU race condition that this design explicitly prevents.
+
+Consequences of claim-time increment:
+- Failed streams consume their claimed turn
+- This prevents infinite retry loops from burning through turns
+- If maxTurns is 10, the charter terminates after 10 attempts regardless of success
+- Predictable, deterministic charter termination
+
+**Consequences**: Documented in PROTOCOL.md §9g. No code change needed.
+
+## DEC-0078 — NextAuth v5 migration planning
+
+**Date**: 2026-03-26
+**Status**: Accepted (planning)
+**Relates to**: A5 architecture decision
+
+**Context**: Tavok uses NextAuth v4.24.0 (stable). v5 (Auth.js) has a different API surface (`getServerSession(authOptions)` → `auth()`, different config export pattern). Migration would touch auth.ts, middleware.ts, and 47+ files that call `getServerSession`.
+
+**Decision**: Plan the migration but defer execution. v4 is stable, receives security patches, and Tavok's auth pattern (Credentials + JWT) is the simplest possible. v5's benefits (Edge runtime, universal framework support) don't apply to Tavok's architecture. The migration is high risk (47+ files, Gateway JWT compatibility) with zero user-facing benefit today.
+
+Planning doc: `docs/internal/NEXTAUTH-V5-MIGRATION.md`
+
+**Consequences**: No code change. Migration plan ready for when v5 reaches full stability with Credentials provider support. Estimated 2 days of focused work when executed.

@@ -1539,6 +1539,8 @@ The target channel must be assigned to the authenticated agent.
 
 **Streaming:** Set `"stream": true`. Returns SSE chunks in `chat.completion.chunk` format terminated with `data: [DONE]`.
 
+**Author semantics (DEC-0076):** The completions endpoint injects the user's message into the channel with `authorType: "AGENT"` because the authenticated caller IS the agent. OpenAI's `role: "user"` maps to "the message sender" — which in Tavok's completions context is the agent. The `model` field contains the target channel, not a model override. This is intentional, not a bug.
+
 #### GET /api/v1/models
 
 List assigned channels as "models" in OpenAI format. Auth: `Authorization: Bearer sk-tvk-...`.
@@ -1829,11 +1831,16 @@ After loading agent config, the Go proxy:
 
 1. Fetches charter config via `GET /api/internal/channels/{channelId}`
 2. If charter is active and mode != `HUMAN_IN_THE_LOOP`:
-   - Checks max turns (rejects if exceeded)
+   - Claims a turn atomically via `PUT /api/internal/channels/{channelId}/charter-turn`
+   - Rejects if turn claim denied (max turns exceeded, wrong agent's turn)
    - Checks turn order for `ROUND_ROBIN`/`CODE_REVIEW_SPRINT`
 3. Injects charter context into system prompt
-4. After stream completes: `POST /api/internal/channels/{channelId}/charter-turn`
-5. Publishes `charter_status` event to Redis
+4. Publishes `charter_status` event to Redis
+
+**Turn claim semantics (DEC-0077):** Turns are claimed atomically at stream START, not completion. This is a deliberate concurrency control mechanism — the Prisma transaction with serializable isolation prevents two agents from claiming the same turn. Consequences:
+- Failed streams consume their claimed turn (intentional — prevents infinite retry loops)
+- If maxTurns is 10, the charter completes after 10 attempts regardless of stream success
+- Moving the increment to completion would re-introduce the TOCTOU race this design prevents
 
 ---
 
@@ -1893,3 +1900,4 @@ When a message is rate-limited, the Gateway replies with an error instead of bro
 | 2026-03-14 | v4.2    | Add GET /api/internal/sequence for non-WebSocket adapters, require object-shaped `metadata` for message persistence/finalization, and align adapter stream completion with Prisma JSON storage |
 | 2026-03-25 | v4.3    | Selective channel assignment: agent creation APIs accept optional `channelIds[]` parameter (DEC-0074). GET agents endpoint returns `channels` array. Channel picker in all agent creation UI forms. |
 | 2026-03-25 | v4.4    | Tagged stream error codes: StreamErrorPayload gains optional `code` field. `CAPACITY_EXCEEDED` code for concurrency limit errors with user-friendly client handling (DEC-0075). |
+| 2026-03-26 | v4.5    | Documentation: completions endpoint author semantics (DEC-0076), charter turn claim-time semantics (DEC-0077), NextAuth v5 migration plan (DEC-0078). |
