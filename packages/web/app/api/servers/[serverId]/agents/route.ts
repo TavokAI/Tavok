@@ -170,7 +170,9 @@ export async function POST(
   }
 
   // Validate channelIds if provided (DEC-0073)
-  const validatedChannelIds = Array.isArray(channelIds) ? channelIds.filter((id: unknown) => typeof id === "string") : undefined;
+  const validatedChannelIds = Array.isArray(channelIds)
+    ? channelIds.filter((id: unknown) => typeof id === "string")
+    : undefined;
 
   // --- Non-BYOK creation (DEC-0047) ---
   if (connectionMethod && VALID_CONNECTION_METHODS.includes(connectionMethod)) {
