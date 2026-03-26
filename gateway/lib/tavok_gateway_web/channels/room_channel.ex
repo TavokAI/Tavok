@@ -269,42 +269,42 @@ defmodule TavokGatewayWeb.RoomChannel do
           "[TriggerDecision] channel=#{channel_id} charter completed/paused — skipping all triggers"
         )
       else
-      # Multi-agent: try ChannelAgent join table first, fall back to single defaultAgent (TASK-0012)
-      case ConfigCache.get_channel_agents(channel_id) do
-        {:ok, agents} when is_list(agents) and length(agents) > 0 ->
-          # Evaluate trigger condition for each agent independently
-          any_triggered =
-            Enum.reduce(agents, false, fn agent_config, acc ->
-              maybe_trigger_agent(socket, agent_config, trigger_message_id, content) or acc
-            end)
+        # Multi-agent: try ChannelAgent join table first, fall back to single defaultAgent (TASK-0012)
+        case ConfigCache.get_channel_agents(channel_id) do
+          {:ok, agents} when is_list(agents) and length(agents) > 0 ->
+            # Evaluate trigger condition for each agent independently
+            any_triggered =
+              Enum.reduce(agents, false, fn agent_config, acc ->
+                maybe_trigger_agent(socket, agent_config, trigger_message_id, content) or acc
+              end)
 
-          maybe_emit_trigger_hint(socket, agents, content, any_triggered)
+            maybe_emit_trigger_hint(socket, agents, content, any_triggered)
 
-        {:ok, _empty} ->
-          # No agents in ChannelAgent table — fall back to single defaultAgent (backward compat)
-          case ConfigCache.get_channel_agent(channel_id) do
-            {:ok, nil} ->
-              # BUG-008: Log when no agent is configured — helps diagnose BYOK trigger failures
-              Logger.debug(
-                "[TriggerDecision] channel=#{channel_id} no defaultAgent configured — no trigger"
-              )
+          {:ok, _empty} ->
+            # No agents in ChannelAgent table — fall back to single defaultAgent (backward compat)
+            case ConfigCache.get_channel_agent(channel_id) do
+              {:ok, nil} ->
+                # BUG-008: Log when no agent is configured — helps diagnose BYOK trigger failures
+                Logger.debug(
+                  "[TriggerDecision] channel=#{channel_id} no defaultAgent configured — no trigger"
+                )
 
-              :noop
+                :noop
 
-            {:ok, agent_config} ->
-              any_triggered =
-                maybe_trigger_agent(socket, agent_config, trigger_message_id, content)
+              {:ok, agent_config} ->
+                any_triggered =
+                  maybe_trigger_agent(socket, agent_config, trigger_message_id, content)
 
-              maybe_emit_trigger_hint(socket, [agent_config], content, any_triggered)
+                maybe_emit_trigger_hint(socket, [agent_config], content, any_triggered)
 
-            {:error, reason} ->
-              Logger.error("Failed to fetch channel agent: #{inspect(reason)}")
-          end
+              {:error, reason} ->
+                Logger.error("Failed to fetch channel agent: #{inspect(reason)}")
+            end
 
-        {:error, reason} ->
-          Logger.error("Failed to fetch channel agents: #{inspect(reason)}")
+          {:error, reason} ->
+            Logger.error("Failed to fetch channel agents: #{inspect(reason)}")
+        end
       end
-      end # if charter_completed
     end)
 
     {:noreply, socket}
