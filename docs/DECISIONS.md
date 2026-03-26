@@ -1495,3 +1495,26 @@ All 10+ callers audited and assigned the correct function.
 **Public callers** (use `getPublicBaseUrl`): `agent-factory.ts`, `bootstrap/route.ts`, `webhooks/route.ts`, `webhooks/[token]/route.ts`, `agents/[id]/messages/route.ts`, `invites/route.ts`
 
 **Consequences**: Internal self-calls never leave the container. SDK agents get correct public URLs. No new env vars needed.
+
+---
+
+## DEC-0073 — Versioned encryption key IDs in ciphertext
+
+**Date**: 2026-03-25
+**Status**: Accepted
+**Relates to**: A4 architecture decision
+
+**Context**: Rotating `ENCRYPTION_KEY` makes all BYOK agent API keys unreadable — there's no way to know which key encrypted a given ciphertext, and no fallback mechanism. This is data loss in production.
+
+**Decision**: Add version prefix to ciphertext format. New format: `v1:iv:authTag:encrypted`. Legacy format (`iv:authTag:data`) is detected by part count (3 vs 4) and handled transparently.
+
+Key rotation flow:
+1. `encrypt()` always produces `v1:...` format with current key
+2. `decrypt()` tries current key first, then falls back to `ENCRYPTION_KEYS_PREV` (comma-separated previous keys)
+3. `needsReEncryption()` returns true for legacy format or old versions
+4. `POST /api/internal/rotate-encryption` re-encrypts all agent keys with current key
+5. After re-encryption completes, `ENCRYPTION_KEYS_PREV` can be removed
+
+**Changes**: `encryption.ts` (versioned format + key fallback chain), `env.ts` (optional `ENCRYPTION_KEYS_PREV`), new `rotate-encryption/route.ts`, `.env.example`.
+
+**Consequences**: Key rotation is safe — old ciphertexts remain readable via fallback chain. Backward compatible — legacy format decrypts correctly. Future key versions can be added by incrementing the prefix. The `needsReEncryption` helper enables automated migration tooling.
