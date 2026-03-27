@@ -24,6 +24,7 @@ defmodule TavokGatewayWeb.RoomChannel do
   alias TavokGateway.ConfigCache
   alias TavokGateway.RateLimiter
   alias TavokGateway.Sequence
+  alias TavokGateway.StreamOrchestrator
   alias TavokGatewayWeb.Presence
   alias TavokGateway.WebClient
 
@@ -480,19 +481,6 @@ defmodule TavokGatewayWeb.RoomChannel do
                 {:ok, sequence} ->
                   seq_str = Integer.to_string(sequence)
 
-                  # Broadcast stream_start for the new resumed stream
-                  Broadcast.endpoint_broadcast!("room:#{channel_id}", "stream_start", %{
-                    messageId: message_id,
-                    agentId: agent_id,
-                    agentName: agent_name,
-                    agentAvatarUrl: agent_avatar_url,
-                    sequence: seq_str,
-                    resumedFrom: original_message_id,
-                    checkpointIndex: checkpoint_index
-                  })
-
-                  StreamWatchdog.register_stream(channel_id, message_id)
-
                   placeholder = %{
                     id: message_id,
                     channelId: channel_id,
@@ -504,30 +492,47 @@ defmodule TavokGatewayWeb.RoomChannel do
                     sequence: seq_str
                   }
 
-                  MessagePersistence.persist_async(placeholder, message_id, channel_id)
+                  case WebClient.start_stream_placeholder(placeholder) do
+                    {:ok, _persisted_placeholder} ->
+                      Broadcast.endpoint_broadcast!("room:#{channel_id}", "stream_start", %{
+                        messageId: message_id,
+                        agentId: agent_id,
+                        agentName: agent_name,
+                        agentAvatarUrl: agent_avatar_url,
+                        sequence: seq_str,
+                        resumedFrom: original_message_id,
+                        checkpointIndex: checkpoint_index
+                      })
 
-                  # Publish stream request to Go Proxy with checkpoint context
-                  stream_request =
-                    Jason.encode!(%{
-                      channelId: channel_id,
-                      messageId: message_id,
-                      agentId: agent_id,
-                      triggerMessageId: original_message_id,
-                      contextMessages: [],
-                      requestId: Ulid.generate(),
-                      traceparent: "",
-                      resumeFromCheckpoint: %{
-                        originalMessageId: original_message_id,
-                        checkpointIndex: checkpoint_index,
-                        partialContent: partial_content
-                      }
-                    })
+                      StreamWatchdog.register_stream(channel_id, message_id)
 
-                  Redix.command(:redix, ["PUBLISH", "hive:stream:request", stream_request])
+                      stream_request =
+                        Jason.encode!(%{
+                          channelId: channel_id,
+                          messageId: message_id,
+                          agentId: agent_id,
+                          triggerMessageId: original_message_id,
+                          contextMessages: [],
+                          requestId: Ulid.generate(),
+                          traceparent: "",
+                          resumeFromCheckpoint: %{
+                            originalMessageId: original_message_id,
+                            checkpointIndex: checkpoint_index,
+                            partialContent: partial_content
+                          }
+                        })
 
-                  Logger.info(
-                    "Stream resume published: channel=#{channel_id} message=#{message_id} agent=#{agent_id} checkpoint=#{checkpoint_index}"
-                  )
+                      Redix.command(:redix, ["PUBLISH", "hive:stream:request", stream_request])
+
+                      Logger.info(
+                        "Stream resume published: channel=#{channel_id} message=#{message_id} agent=#{agent_id} checkpoint=#{checkpoint_index}"
+                      )
+
+                    {:error, reason} ->
+                      Logger.error(
+                        "Stream resume durable start failed: channel=#{channel_id} message=#{message_id} agent=#{agent_id} reason=#{inspect(reason)}"
+                      )
+                  end
 
                 {:error, reason} ->
                   Logger.error("Stream resume sequence failed: #{inspect(reason)}")
@@ -948,16 +953,6 @@ defmodule TavokGatewayWeb.RoomChannel do
       {:ok, sequence} ->
         seq_str = Integer.to_string(sequence)
 
-        # Broadcast stream_start to all clients
-        Broadcast.broadcast_pre_serialized!(socket, "stream_start", %{
-          messageId: message_id,
-          agentId: agent_id,
-          agentName: agent_name,
-          agentAvatarUrl: agent_avatar_url,
-          sequence: seq_str
-        })
-
-        # Persist placeholder message in background
         placeholder = %{
           id: message_id,
           channelId: channel_id,
@@ -969,9 +964,24 @@ defmodule TavokGatewayWeb.RoomChannel do
           sequence: seq_str
         }
 
-        MessagePersistence.persist_async(placeholder, message_id, channel_id)
+        case WebClient.start_stream_placeholder(placeholder) do
+          {:ok, _persisted_placeholder} ->
+            Broadcast.broadcast_pre_serialized!(socket, "stream_start", %{
+              messageId: message_id,
+              agentId: agent_id,
+              agentName: agent_name,
+              agentAvatarUrl: agent_avatar_url,
+              sequence: seq_str
+            })
 
-        {:reply, {:ok, %{messageId: message_id, sequence: seq_str}}, socket}
+            StreamWatchdog.register_stream(channel_id, message_id)
+
+            {:reply, {:ok, %{messageId: message_id, sequence: seq_str}}, socket}
+
+          {:error, reason} ->
+            Logger.error("Failed durable agent stream start: #{inspect(reason)}")
+            {:reply, {:error, %{reason: "stream_start_failed"}}, socket}
+        end
 
       {:error, reason} ->
         Logger.error("Redis INCR failed for agent stream: #{inspect(reason)}")
@@ -1264,87 +1274,23 @@ defmodule TavokGatewayWeb.RoomChannel do
   defp run_byok_trigger_inner(socket, agent_config, trigger_message_id, trigger_content) do
     channel_id = socket.assigns.channel_id
     agent_id = Map.get(agent_config, "id")
-    agent_name = Map.get(agent_config, "name")
-    agent_avatar_url = Map.get(agent_config, "avatarUrl")
 
-    # 1. Generate ULID for the streaming placeholder
-    message_id = Ulid.generate()
-
-    # 2. Get next sequence number with Redis-backed monotonic recovery
-    case next_sequence(channel_id) do
-      {:ok, sequence} ->
-        seq_str = Integer.to_string(sequence)
-
-        # 3. Broadcast stream_start immediately — no DB dependency
-        Broadcast.endpoint_broadcast!("room:#{channel_id}", "stream_start", %{
-          messageId: message_id,
-          agentId: agent_id,
-          agentName: agent_name,
-          agentAvatarUrl: agent_avatar_url,
-          sequence: seq_str
-        })
-
-        # 4. Register fallback watchdog immediately
-        StreamWatchdog.register_stream(channel_id, message_id)
-
-        # 5. Persist placeholder in background (concurrent with context fetch)
-        placeholder = %{
-          id: message_id,
-          channelId: channel_id,
-          authorId: agent_id,
-          authorType: "AGENT",
-          content: "",
-          type: "STREAMING",
-          streamingStatus: "ACTIVE",
-          sequence: seq_str
-        }
-
-        MessagePersistence.persist_async(placeholder, message_id, channel_id)
-
-        # 6. Build context messages for the LLM.
-        # Pass trigger message content to guarantee it's included in context.
-        # The user's message is persisted async (MessagePersistence.persist_async)
-        # and may not be in the DB yet when we fetch context. (ISSUE-027)
-        context_messages = fetch_context_messages(channel_id, trigger_content)
-
-        # 7. Publish stream request to Redis for Go Proxy
-        request_id = Logger.metadata()[:request_id] || Ulid.generate()
-
-        # Extract W3C traceparent from current span for cross-service propagation.
-        # Gracefully no-op when OpenTelemetry SDK is not started (e.g. tests).
-        traceparent =
-          try do
-            :otel_propagator_text_map.inject([], fn acc, key, value ->
-              [{key, value} | acc]
-            end)
-            |> Enum.find_value("", fn {k, v} -> if k == "traceparent", do: v end)
-          rescue
-            _ -> ""
-          end
-
-        stream_request =
-          Jason.encode!(%{
-            channelId: channel_id,
-            messageId: message_id,
-            agentId: agent_id,
-            triggerMessageId: trigger_message_id,
-            contextMessages: context_messages,
-            requestId: request_id,
-            traceparent: traceparent
-          })
-
-        case Redix.command(:redix, ["PUBLISH", "hive:stream:request", stream_request]) do
-          {:ok, _} ->
-            Logger.info(
-              "Stream request published: channel=#{channel_id} message=#{message_id} agent=#{agent_id}"
-            )
-
-          {:error, reason} ->
-            Logger.error("Failed to publish stream request: #{inspect(reason)}")
-        end
+    case StreamOrchestrator.start_byok_stream(
+           channel_id,
+           agent_config,
+           trigger_message_id,
+           trigger_content,
+           context_fetcher: &fetch_context_messages/2
+         ) do
+      {:ok, %{message_id: message_id, sequence: sequence}} ->
+        Logger.info(
+          "BYOK trigger durably started: channel=#{channel_id} message=#{message_id} agent=#{agent_id} sequence=#{sequence}"
+        )
 
       {:error, reason} ->
-        Logger.error("Redis INCR failed for streaming message: #{inspect(reason)}")
+        Logger.error(
+          "BYOK trigger durable start failed: channel=#{channel_id} agent=#{agent_id} reason=#{inspect(reason)}"
+        )
     end
   end
 

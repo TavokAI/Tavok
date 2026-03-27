@@ -76,6 +76,41 @@ defmodule TavokGateway.WebClient do
   end
 
   @doc """
+  Durably persist an ACTIVE stream placeholder via POST /api/internal/streams/start.
+  Returns {:ok, response_body} or {:error, reason}.
+  """
+  def start_stream_placeholder(body) do
+    traced_call(
+      "web_client.start_stream_placeholder",
+      %{"http.method": "POST", "http.url": "/api/internal/streams/start"},
+      fn ->
+        url = "#{web_url()}/api/internal/streams/start"
+
+        case Req.post(url,
+               json: body,
+               headers: req_headers(),
+               receive_timeout: 10_000
+             ) do
+          {:ok, %Req.Response{status: status, body: response_body}}
+          when status in [200, 201] ->
+            {:ok, response_body}
+
+          {:ok, %Req.Response{status: status, body: response_body}} ->
+            Logger.error(
+              "start_stream_placeholder failed: status=#{status} body=#{inspect(response_body)}"
+            )
+
+            {:error, {:http_error, status, response_body}}
+
+          {:error, reason} ->
+            Logger.error("start_stream_placeholder request failed: #{inspect(reason)}")
+            {:error, reason}
+        end
+      end
+    )
+  end
+
+  @doc """
   Get the default agent config for a channel.
   Returns {:ok, agent_config} or {:ok, nil} (no agent) or {:error, reason}.
   """

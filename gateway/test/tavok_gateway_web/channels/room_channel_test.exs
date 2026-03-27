@@ -2,6 +2,7 @@ defmodule TavokGatewayWeb.RoomChannelTest do
   use ExUnit.Case
 
   alias TavokGatewayWeb.RoomChannel
+  alias TavokGateway.StreamOrchestrator
 
   defmodule CharterWebClientStub do
     def charter_control(channel_id, action, user_id) do
@@ -494,24 +495,86 @@ defmodule TavokGatewayWeb.RoomChannelTest do
   end
 
   describe "durable stream lifecycle ordering" do
-    test "BYOK trigger persists ACTIVE placeholder before stream_start broadcast" do
+    test "BYOK trigger delegates durable startup to StreamOrchestrator" do
       function_body = private_function_body!(:run_byok_trigger_inner, 4)
       call_order = remote_call_order(function_body)
 
-      persist_index =
-        remote_call_index(
-          call_order,
-          {"MessagePersistence", :persist_async}
-        )
+      assert remote_call_index(call_order, {"StreamOrchestrator", :start_byok_stream}),
+             "expected BYOK trigger to delegate to StreamOrchestrator, got #{inspect(call_order)}"
 
-      broadcast_index =
-        remote_call_index(
-          call_order,
-          {"Broadcast", :endpoint_broadcast!}
-        )
+      refute {"MessagePersistence", :persist_async} in call_order,
+             "expected RoomChannel BYOK path to stop persisting stream placeholders directly"
 
-      assert persist_index < broadcast_index,
-             "expected BYOK trigger to persist before broadcast, got call order #{inspect(call_order)}"
+      refute {"Broadcast", :endpoint_broadcast!} in call_order,
+             "expected RoomChannel BYOK path to stop broadcasting stream_start directly"
+
+      refute {"Redix", :command} in call_order,
+             "expected RoomChannel BYOK path to stop publishing Redis requests directly"
+    end
+
+    test "BYOK orchestrator persists before broadcast, watchdog registration, and publish" do
+      agent_config = %{
+        "id" => "agent-1",
+        "name" => "Planner",
+        "avatarUrl" => "https://example.com/agent.png"
+      }
+
+      assert {:ok, %{message_id: "msg-1", sequence: "42"}} =
+               StreamOrchestrator.start_byok_stream(
+                 "channel-1",
+                 agent_config,
+                 "trigger-1",
+                 "hello world",
+                 id_generator: fn ->
+                   send(self(), {:step, :message_id})
+                   "msg-1"
+                 end,
+                 sequence_allocator: fn "channel-1" ->
+                   send(self(), {:step, :sequence})
+                   {:ok, 42}
+                 end,
+                 start_placeholder: fn placeholder ->
+                   send(self(), {:step, :persist, placeholder})
+                   {:ok, placeholder}
+                 end,
+                 broadcaster: fn topic, event, payload ->
+                   send(self(), {:step, :broadcast, topic, event, payload})
+                   :ok
+                 end,
+                 register_watchdog: fn channel_id, message_id ->
+                   send(self(), {:step, :watchdog, channel_id, message_id})
+                   :ok
+                 end,
+                 context_fetcher: fn "channel-1", "hello world" ->
+                   [%{"role" => "user", "content" => "hello world"}]
+                 end,
+                 publish_request: fn request ->
+                   send(self(), {:step, :publish, request})
+                   :ok
+                 end,
+                 request_id_generator: fn -> "req-1" end,
+                 traceparent_getter: fn -> "" end
+               )
+
+      assert_receive {:step, :message_id}
+      assert_receive {:step, :sequence}
+
+      assert_receive {:step, :persist, persisted_placeholder}
+      assert persisted_placeholder.type == "STREAMING"
+      assert persisted_placeholder.streamingStatus == "ACTIVE"
+      assert persisted_placeholder.sequence == "42"
+
+      assert_receive {:step, :broadcast, "room:channel-1", "stream_start", broadcast_payload}
+      assert broadcast_payload.messageId == "msg-1"
+      assert broadcast_payload.sequence == "42"
+
+      assert_receive {:step, :watchdog, "channel-1", "msg-1"}
+
+      assert_receive {:step, :publish, published_request}
+      assert published_request.channelId == "channel-1"
+      assert published_request.messageId == "msg-1"
+      assert published_request.triggerMessageId == "trigger-1"
+      assert published_request.requestId == "req-1"
     end
   end
 
