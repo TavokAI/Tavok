@@ -200,33 +200,35 @@ function listChannels(jar, serverId) {
 }
 
 // ---------------------------------------------------------------------------
-// Main VU scenario
+// Setup — authenticate once, share JWT + channel info across all VUs
 // ---------------------------------------------------------------------------
 
-export default function () {
-  // 1. Authenticate and get JWT
+export function setup() {
   const jar = authenticate();
   const jwt = getJwt(jar);
 
-  // 2. Discover servers and channels via REST API
   const servers = listServers(jar);
   if (servers.length === 0) {
-    console.warn("No servers found for user — skipping WS test");
-    sleep(1);
-    return;
+    fail("No servers found for user — cannot run load test");
   }
 
   const server = servers[0];
   const channels = listChannels(jar, server.id);
   if (channels.length === 0) {
-    console.warn(`No channels in server ${server.name} — skipping WS test`);
-    sleep(1);
-    return;
+    fail(`No channels in server ${server.name} — cannot run load test`);
   }
 
-  // Pick the first channel (usually #general)
   const channel = channels[0];
-  const channelTopic = `room:${channel.id}`;
+  return { jwt, channelId: channel.id };
+}
+
+// ---------------------------------------------------------------------------
+// Main VU scenario
+// ---------------------------------------------------------------------------
+
+export default function (data) {
+  const jwt = data.jwt;
+  const channelTopic = `room:${data.channelId}`;
 
   // 3. Connect WebSocket to the Phoenix Gateway
   const wsUrl = `${WS_URL}/socket/websocket?token=${jwt}&vsn=2.0.0`;

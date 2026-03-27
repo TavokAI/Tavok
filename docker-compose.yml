@@ -78,6 +78,7 @@ services:
       REDIS_URL: redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required - see .env.example}@redis:6379
       NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:5555}
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required - see .env.example}
+      NEXTAUTH_SECRET: ${JWT_SECRET:?JWT_SECRET is required - see .env.example}
       INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:?INTERNAL_API_SECRET is required - see .env.example}
       NEXT_PUBLIC_GATEWAY_URL: ${NEXT_PUBLIC_GATEWAY_URL:-ws://localhost:4001/socket}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:?ENCRYPTION_KEY is required - see .env.example}
