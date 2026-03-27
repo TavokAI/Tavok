@@ -38,6 +38,7 @@ make lint
 make db-migrate-test
 ```
 
+- [ ] Script auto-loads `.env` and validates `POSTGRES_PASSWORD` before running migrations
 - [ ] All migrations apply cleanly on fresh database
 - [ ] Key tables and enums verified
 - [ ] Reapply is idempotent
@@ -50,7 +51,11 @@ make db-migrate-test
 make regression-harness
 ```
 
+- [ ] Script auto-loads `.env` and validates `JWT_SECRET` plus `INTERNAL_API_SECRET`
 - [ ] All 22 regression scenarios pass (K-001 through K-022)
+- [ ] `stream_start` is emitted only after durable `ACTIVE` state exists and advertises `status="active"`
+- [ ] Terminal transport events are emitted only after durable `COMPLETE` / `ERROR`
+- [ ] Watchdog recovery remains a fallback path, not the primary state propagation path
 - [ ] Playwright E2E tests pass
 
 ---

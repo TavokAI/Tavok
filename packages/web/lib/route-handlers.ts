@@ -39,6 +39,9 @@ interface RequestLike {
   searchParams?: URLSearchParams;
 }
 
+type RouteRequest = Request | NextRequest;
+type JsonRequest = RequestLike | RouteRequest;
+
 // Next.js App Router context for route handlers with dynamic params
 interface RouteContext {
   params: Promise<Record<string, string>>;
@@ -97,7 +100,7 @@ interface ServerAgentPatchDeps extends SessionDeps {
   encrypt: (value: string) => string;
 }
 
-function assertInternalSecret(request: RequestLike | NextRequest) {
+function assertInternalSecret(request: JsonRequest) {
   if (!validateInternalSecretValue(request.headers.get("x-internal-secret"))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -106,7 +109,7 @@ function assertInternalSecret(request: RequestLike | NextRequest) {
 }
 
 async function parseJsonObjectBody(
-  request: RequestLike | NextRequest,
+  request: JsonRequest,
 ): Promise<Record<string, unknown> | NextResponse> {
   try {
     const parsedBody = await request.json();
@@ -376,7 +379,7 @@ export function createInternalStreamStartHandler({
   const streamLifecycle = createStreamLifecycleService({ prismaClient });
 
   return async function internalStreamStartHandler(
-    request: RequestLike | NextRequest,
+    request: RouteRequest,
   ) {
     const unauthorizedResponse = assertInternalSecret(request);
     if (unauthorizedResponse) {
@@ -446,7 +449,7 @@ export function createInternalStreamCompleteHandler({
   const streamLifecycle = createStreamLifecycleService({ prismaClient });
 
   return async function internalStreamCompleteHandler(
-    request: RequestLike | NextRequest,
+    request: RouteRequest,
     { params }: RouteContext,
   ) {
     const unauthorizedResponse = assertInternalSecret(request);
@@ -511,7 +514,7 @@ export function createInternalStreamErrorHandler({
   const streamLifecycle = createStreamLifecycleService({ prismaClient });
 
   return async function internalStreamErrorHandler(
-    request: RequestLike | NextRequest,
+    request: RouteRequest,
     { params }: RouteContext,
   ) {
     const unauthorizedResponse = assertInternalSecret(request);

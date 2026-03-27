@@ -35,8 +35,7 @@ defmodule TavokGateway.StreamWatchdogTest do
                     {:ok,
                      Map.merge(message, %{
                        "streamingStatus" => "ERROR",
-                       "content" =>
-                         Map.get(body, "content") || Map.get(body, :content) || ""
+                       "content" => Map.get(body, "content") || Map.get(body, :content) || ""
                      })}
 
                   other ->

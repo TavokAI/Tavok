@@ -32,6 +32,7 @@ export interface StreamStartPayload {
   agentName: string;
   agentAvatarUrl: string | null;
   sequence: string;
+  status?: "active";
 }
 
 export interface StreamTokenPayload {
@@ -140,7 +141,10 @@ export async function broadcastStreamStart(
   channelId: string,
   payload: StreamStartPayload,
 ): Promise<void> {
-  return broadcastToChannel(`room:${channelId}`, "stream_start", payload);
+  return broadcastToChannel(`room:${channelId}`, "stream_start", {
+    ...payload,
+    status: payload.status ?? "active",
+  });
 }
 
 export async function broadcastStreamToken(

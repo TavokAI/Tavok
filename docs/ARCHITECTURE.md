@@ -2,7 +2,7 @@
 
 > Updated after each structural change. Reflects what is actually built and shipped.
 
-**Last updated**: 2026-03-12 (DEC-0064 — boundary clarification)
+**Last updated**: 2026-03-27 (DEC-0080 - durable-first stream lifecycle)
 
 **Platform identity**: Agent-first workspace with humans in the loop. Not an LLM wrapper — agents do their own reasoning; Tavok handles the transport. The communication layer for humans and agents across all platforms, completely agnostic.
 
@@ -54,15 +54,22 @@ Three languages, three jobs, zero overlap:
               └──────────┘ └──────┘ └──────────┘
 ```
 
-### Key Architectural Boundary (DEC-0019, clarified DEC-0064)
+### Key Architectural Boundary (DEC-0019, clarified by DEC-0064 and DEC-0080)
 
-**Go owns stream lifecycle. Elixir owns transport and trigger dispatch. Next.js owns state.**
+**Next.js owns durable stream lifecycle state. Elixir owns transport and trigger dispatch. Go owns provider execution and token production.**
 
-- **Go Proxy** manages: LLM stream lifecycle, provider routing, tool execution loops, charter turn enforcement (via Next.js), token batching and delivery.
-- **Elixir Gateway** handles: WebSocket connections, presence, message fan-out, agent trigger evaluation (ALWAYS/MENTION), connection method dispatch (BYOK/webhook/REST poll/SSE), stream relay.
-- **Next.js** owns: persistent state, auth, agent configuration, charter turn arbitration, API surface.
+- **Next.js** owns: persistent state, auth, agent configuration, charter turn arbitration, the durable `ACTIVE -> COMPLETE|ERROR` stream lifecycle contract, and the internal `/api/internal/streams/*` endpoints.
+- **Elixir Gateway** handles: WebSocket connections, presence, message fan-out, agent trigger evaluation (ALWAYS/MENTION), connection method dispatch (BYOK/webhook/REST poll/SSE), durable-first stream start orchestration, and recovery-only watchdog behavior.
+- **Go Proxy** manages: provider routing, tool execution loops, charter turn enforcement (via Next.js), token batching and delivery, and terminal publish-after-commit sequencing.
 
 Go never decides which agent to run — the Gateway evaluates triggers. The Gateway never calls LLM APIs — Go handles all provider communication.
+
+### Durable Stream Lifecycle (DEC-0080)
+
+1. `stream_start` is emitted only after Next.js durably commits the placeholder row with `type=STREAMING` and `streamingStatus=ACTIVE`.
+2. Terminal success and failure are committed through explicit lifecycle endpoints before any `stream_complete`, `stream_error`, or Redis terminal status publish occurs.
+3. Gateway BYOK startup runs off the hot channel process so the socket stays responsive while the supervised orchestrator performs durable start, broadcast, watchdog registration, and downstream dispatch scheduling.
+4. `StreamWatchdog` is a recovery path only: it rebroadcasts already-committed terminal state or durably forces `ERROR` for a stuck `ACTIVE` stream before emitting a synthetic timeout event.
 
 ---
 
@@ -70,9 +77,9 @@ Go never decides which agent to run — the Gateway evaluates triggers. The Gate
 
 | Service        | Language                           | Port            | Role                                                           |
 | -------------- | ---------------------------------- | --------------- | -------------------------------------------------------------- |
-| **Web**        | TypeScript (Next.js 15 / React 19) | 5555            | UI, auth, REST API, database, agent management                 |
-| **Gateway**    | Elixir (Phoenix Channels)          | 4001            | WebSocket, presence, real-time messaging, stream relay, trigger dispatch |
-| **Streaming**  | Go                                 | 4002 (internal) | LLM streaming, provider routing, tool execution, charter enforcement |
+| **Web**        | TypeScript (Next.js 15 / React 19) | 5555            | UI, auth, REST API, database, agent management, durable stream lifecycle state |
+| **Gateway**    | Elixir (Phoenix Channels)          | 4001            | WebSocket, presence, real-time messaging, durable-first stream orchestration, relay, trigger dispatch |
+| **Streaming**  | Go                                 | 4002 (internal) | LLM streaming, provider routing, tool execution, terminal publish-after-commit coordination |
 | **PostgreSQL** | -                                  | 5432            | All persistent data                                            |
 | **Redis**      | -                                  | 6379            | Pub/sub, sequence counters, caching                            |
 
@@ -97,7 +104,7 @@ Go never decides which agent to run — the Gateway evaluates triggers. The Gate
 - Thinking timeline: visible reasoning phases
 - Multi-stream: multiple agents streaming simultaneously per channel
 - Provider abstraction: OpenAI, Anthropic, Ollama, OpenRouter, any OpenAI-compatible endpoint
-- Stream watchdog with two-layer terminal convergence
+- Durable-first stream lifecycle with recovery-only watchdog fallback
 
 **Agent-First Features**
 

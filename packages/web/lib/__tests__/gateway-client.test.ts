@@ -190,6 +190,10 @@ describe("gateway-client", () => {
 
       const body = JSON.parse(mockFetch.mock.calls[0][1].body);
       expect(body.event).toBe("stream_start");
+      expect(body.payload).toMatchObject({
+        messageId: "msg-1",
+        status: "active",
+      });
     });
 
     it("broadcastStreamToken sends stream_token event", async () => {

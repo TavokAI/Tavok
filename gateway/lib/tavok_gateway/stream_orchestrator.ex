@@ -14,6 +14,8 @@ defmodule TavokGateway.StreamOrchestrator do
   alias TavokGateway.StreamWatchdog
   alias TavokGateway.WebClient
 
+  @dispatch_failure_error "Stream failed before request dispatch"
+
   def start_byok_stream(
         channel_id,
         agent_config,
@@ -31,8 +33,14 @@ defmodule TavokGateway.StreamOrchestrator do
 
     broadcaster = Keyword.get(opts, :broadcaster, &default_broadcaster/3)
     register_watchdog = Keyword.get(opts, :register_watchdog, &StreamWatchdog.register_stream/2)
+
+    deregister_watchdog =
+      Keyword.get(opts, :deregister_watchdog, &StreamWatchdog.deregister_stream/1)
+
     context_fetcher = Keyword.get(opts, :context_fetcher, &fetch_context_messages/2)
     publish_request = Keyword.get(opts, :publish_request, &default_publish_request/1)
+    fail_stream = Keyword.get(opts, :fail_stream, &WebClient.fail_stream/2)
+    task_starter = Keyword.get(opts, :task_starter, &default_task_starter/1)
     request_id_generator = Keyword.get(opts, :request_id_generator, &default_request_id/0)
     traceparent_getter = Keyword.get(opts, :traceparent_getter, &current_traceparent/0)
 
@@ -58,13 +66,22 @@ defmodule TavokGateway.StreamOrchestrator do
 
         case start_placeholder.(placeholder) do
           {:ok, _persisted_placeholder} ->
+            Logger.info(
+              "Durable stream start committed: channel=#{channel_id} message=#{message_id} agent=#{agent_id} sequence=#{sequence_str}"
+            )
+
             broadcaster.("room:#{channel_id}", "stream_start", %{
               messageId: message_id,
               agentId: agent_id,
               agentName: agent_name,
               agentAvatarUrl: agent_avatar_url,
-              sequence: sequence_str
+              sequence: sequence_str,
+              status: "active"
             })
+
+            Logger.info(
+              "stream_start broadcast queued: channel=#{channel_id} message=#{message_id} agent=#{agent_id} sequence=#{sequence_str}"
+            )
 
             register_watchdog.(channel_id, message_id)
 
@@ -78,17 +95,43 @@ defmodule TavokGateway.StreamOrchestrator do
               traceparent: traceparent_getter.()
             }
 
-            case publish_request.(stream_request) do
-              :ok ->
+            case task_starter.(fn ->
+                   dispatch_stream_request(
+                     channel_id,
+                     message_id,
+                     agent_id,
+                     stream_request,
+                     publish_request,
+                     fail_stream,
+                     deregister_watchdog,
+                     broadcaster
+                   )
+                 end) do
+              {:ok, _task} ->
                 Logger.info(
-                  "Stream request published: channel=#{channel_id} message=#{message_id} agent=#{agent_id}"
+                  "Stream request dispatch scheduled: channel=#{channel_id} message=#{message_id} agent=#{agent_id}"
                 )
 
                 {:ok, %{message_id: message_id, sequence: sequence_str}}
 
               {:error, reason} ->
-                Logger.error("Failed to publish stream request: #{inspect(reason)}")
-                {:error, {:publish_failed, reason}}
+                Logger.error(
+                  "Failed to schedule stream request dispatch: channel=#{channel_id} message=#{message_id} agent=#{agent_id} reason=#{inspect(reason)}"
+                )
+
+                deregister_watchdog.(message_id)
+
+                case recover_dispatch_failure(
+                       channel_id,
+                       message_id,
+                       agent_id,
+                       fail_stream,
+                       broadcaster,
+                       reason
+                     ) do
+                  :ok -> {:error, {:publish_failed, reason}}
+                  {:error, recovery_reason} -> {:error, {:publish_failed, recovery_reason}}
+                end
             end
 
           {:error, reason} ->
@@ -157,6 +200,82 @@ defmodule TavokGateway.StreamOrchestrator do
     case Redix.command(:redix, ["PUBLISH", "hive:stream:request", Jason.encode!(stream_request)]) do
       {:ok, _} -> :ok
       {:error, reason} -> {:error, reason}
+    end
+  end
+
+  defp default_task_starter(fun) do
+    Task.Supervisor.start_child(TavokGateway.TaskSupervisor, fun)
+  end
+
+  defp dispatch_stream_request(
+         channel_id,
+         message_id,
+         agent_id,
+         stream_request,
+         publish_request,
+         fail_stream,
+         deregister_watchdog,
+         broadcaster
+       ) do
+    case publish_request.(stream_request) do
+      :ok ->
+        Logger.info(
+          "Stream request published: channel=#{channel_id} message=#{message_id} agent=#{agent_id}"
+        )
+
+        :ok
+
+      {:error, reason} ->
+        Logger.error(
+          "Failed to publish stream request: channel=#{channel_id} message=#{message_id} agent=#{agent_id} reason=#{inspect(reason)}"
+        )
+
+        deregister_watchdog.(message_id)
+
+        recover_dispatch_failure(
+          channel_id,
+          message_id,
+          agent_id,
+          fail_stream,
+          broadcaster,
+          reason
+        )
+    end
+  end
+
+  defp recover_dispatch_failure(
+         channel_id,
+         message_id,
+         agent_id,
+         fail_stream,
+         broadcaster,
+         reason
+       ) do
+    case fail_stream.(message_id, %{"content" => "[Error: #{@dispatch_failure_error}]"}) do
+      {:ok, _response} ->
+        Logger.info(
+          "Durably failed stream after dispatch error: channel=#{channel_id} message=#{message_id} agent=#{agent_id}"
+        )
+
+        broadcaster.("room:#{channel_id}", "stream_error", %{
+          messageId: message_id,
+          status: "error",
+          error: @dispatch_failure_error,
+          partialContent: nil
+        })
+
+        Logger.info(
+          "stream_error broadcast queued after dispatch failure: channel=#{channel_id} message=#{message_id} agent=#{agent_id}"
+        )
+
+        :ok
+
+      {:error, fail_reason} ->
+        Logger.error(
+          "Failed to durably fail stream after dispatch error: channel=#{channel_id} message=#{message_id} agent=#{agent_id} publish_reason=#{inspect(reason)} fail_reason=#{inspect(fail_reason)}"
+        )
+
+        {:error, fail_reason}
     end
   end
 

@@ -500,6 +500,7 @@ defmodule TavokGatewayWeb.RoomChannel do
                         agentName: agent_name,
                         agentAvatarUrl: agent_avatar_url,
                         sequence: seq_str,
+                        status: "active",
                         resumedFrom: original_message_id,
                         checkpointIndex: checkpoint_index
                       })
@@ -971,7 +972,8 @@ defmodule TavokGatewayWeb.RoomChannel do
               agentId: agent_id,
               agentName: agent_name,
               agentAvatarUrl: agent_avatar_url,
-              sequence: seq_str
+              sequence: seq_str,
+              status: "active"
             })
 
             StreamWatchdog.register_stream(channel_id, message_id)
@@ -1267,12 +1269,13 @@ defmodule TavokGatewayWeb.RoomChannel do
         "[run_byok_trigger] Empty trigger content, skipping: channel=#{channel_id} agent=#{agent_id}"
       )
     else
-      run_byok_trigger_inner(socket, agent_config, trigger_message_id, trigger_content)
+      Task.Supervisor.async_nolink(TavokGateway.TaskSupervisor, fn ->
+        run_byok_trigger_inner(channel_id, agent_config, trigger_message_id, trigger_content)
+      end)
     end
   end
 
-  defp run_byok_trigger_inner(socket, agent_config, trigger_message_id, trigger_content) do
-    channel_id = socket.assigns.channel_id
+  defp run_byok_trigger_inner(channel_id, agent_config, trigger_message_id, trigger_content) do
     agent_id = Map.get(agent_config, "id")
 
     case StreamOrchestrator.start_byok_stream(
