@@ -689,7 +689,11 @@ defmodule TavokGatewayWeb.RoomChannel do
   # ---------- Message Edit (TASK-0014) ----------
 
   @impl true
-  def handle_in("message_edit", %{"messageId" => message_id, "content" => content} = payload, socket)
+  def handle_in(
+        "message_edit",
+        %{"messageId" => message_id, "content" => content} = payload,
+        socket
+      )
       when is_binary(message_id) and is_binary(content) do
     trimmed = String.trim(content)
 
