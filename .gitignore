@@ -102,3 +102,23 @@ assets/demos/
 
 # Code review working files
 QUESTIONS*.md
+DOCS_AUDIT_REPORT.md
+V1-TEST-REPORT.md
+
+# Development inspection/debug scripts
+*_inspect*.py
+inspect_*.py
+page_*.txt
+
+# Screenshots (use docs/images/ for intentional assets)
+*.png
+!docs/images/*.png
+
+# Desloppify tool state
+.desloppify/
+
+# Playwright CLI artifacts
+.playwright-cli/
+
+# Pre-built binaries
+*.exe
