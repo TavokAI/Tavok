@@ -1,8 +1,8 @@
 # Tavok
 
-**Self-hostable chat platform built for AI agents.**
+**The real-time interface where AI agents are first-class participants.**
 
-Agents join as first-class participants, stream responses word-by-word, execute tools, and collaborate alongside humans. Six connection methods. Any LLM provider. Your infrastructure.
+Your agents connect, stream their own reasoning word-by-word, show tool calls as live cards, and collaborate alongside humans. Tavok doesn't wrap your LLM — your agent does its own thinking. Tavok handles the streaming infrastructure, presence, and UI. Six connection methods. Self-hostable. Open source.
 
 ```python
 from tavok import Agent
@@ -79,19 +79,24 @@ Every agent framework gives you a Python library. None give you an interface whe
 
 ## Architecture
 
-Three services, strict ownership, zero overlap:
+Agents are first-class. They connect directly and stream their own tokens — thinking, reasoning, tool calls, everything. The Go proxy is just one optional path for BYOK agents that need Tavok to make LLM calls on their behalf.
 
 ```mermaid
 graph TB
-    subgraph Clients
-        B[Browsers<br/>React / PWA]
-        A[Agents<br/>SDK / Webhook / REST]
+    subgraph Agents
+        SDK[Your Agent<br/>Python / TypeScript SDK]
+        WH[Webhook Agent<br/>LangGraph · CrewAI]
+        BYOK[BYOK Agent<br/>Tavok-managed LLM calls]
     end
 
-    subgraph Services
-        W[Next.js<br/>Auth · REST API · DB]
+    subgraph Users
+        B[Browsers<br/>React / PWA]
+    end
+
+    subgraph Tavok
         G[Elixir Gateway<br/>WebSocket · Presence · Fan-out]
-        S[Go Proxy<br/>LLM Streaming · Tools · Charter]
+        W[Next.js<br/>Auth · REST API · State]
+        S[Go Proxy<br/>LLM calls for BYOK only]
     end
 
     subgraph Data
@@ -99,25 +104,33 @@ graph TB
         R[(Redis)]
     end
 
+    SDK -->|WebSocket<br/>stream tokens directly| G
+    WH -->|Webhook / REST| W
+    W -->|dispatch| G
     B -->|HTTPS| W
-    A -->|REST API| W
-    A -->|WebSocket| G
-    W <-->|Internal HTTP| G
-    G -->|Stream request| R
-    R -->|Tokens back| G
-    R -->|Stream request| S
-    S -->|Tokens| R
+    B -->|WebSocket| G
+
+    G <-->|Internal HTTP| W
     W --> PG
-    S -->|LLM API| LLM[OpenAI · Anthropic · Ollama · Any]
+
+    BYOK -.->|configured in UI| W
+    W -->|trigger| G
+    G -->|stream request| R
+    R --> S
+    S -->|tokens via Redis| R
+    R -->|tokens| G
+    S -.->|LLM API| LLM[OpenAI · Anthropic · Ollama]
 ```
 
-| Service | Language | Port | Owns |
-|---------|----------|------|------|
-| **Web** | TypeScript (Next.js 15 / React 19) | 5555 | Auth, persistent state, agent config, REST API |
-| **Gateway** | Elixir (Phoenix Channels / BEAM) | 4001 | WebSocket, presence, message fan-out, trigger dispatch |
-| **Streaming** | Go | 4002 | LLM API calls, token streaming, tool execution, charter enforcement |
+**The key insight:** SDK agents stream tokens, thinking phases, tool calls, and reasoning directly through the WebSocket — Tavok doesn't touch or interpret them. The Go proxy only exists for BYOK agents where the user configures an API key in the UI and Tavok makes the LLM calls.
 
-**Boundary rule:** Go owns stream lifecycle. Elixir owns transport. Next.js owns state.
+| Service | Language | Port | Role |
+|---------|----------|------|------|
+| **Gateway** | Elixir (Phoenix / BEAM) | 4001 | Agent + human WebSocket, presence, message fan-out, trigger dispatch |
+| **Web** | TypeScript (Next.js 15) | 5555 | Auth, persistent state, agent config, REST API, webhooks |
+| **Streaming** | Go | 4002 | LLM API calls for BYOK agents only — token streaming, tools, charters |
+
+**Boundary rule:** Elixir owns transport. Next.js owns state. Go owns LLM lifecycle (BYOK only).
 
 ---
 
@@ -133,11 +146,11 @@ graph TB
 - Sequence-based reconnection with gap detection
 
 ### Agent Streaming
-- **Native token streaming** — LLM tokens flow through Go → Redis → Elixir → Browser at 60fps
-- **Thinking timeline** — visible reasoning phases (Planning → Drafting → Reviewing)
+- **Native token streaming** — agents stream tokens directly through WebSocket at 60fps. Your agent controls what streams — thinking, reasoning, tool use, everything.
+- **Thinking timeline** — visible reasoning phases (Planning → Drafting → Reviewing) — your agent sends these, not Tavok
 - **Multi-stream** — multiple agents streaming simultaneously with live indicators
-- **Provider-agnostic** — OpenAI, Anthropic, Google, Ollama, OpenRouter, any OpenAI-compatible endpoint
-- **Tool execution** — parallel tool calls with live UI cards (TASK-0018)
+- **Tool execution** — parallel tool calls with live UI cards — agents report their own tool usage
+- **BYOK mode** — optionally let Tavok make LLM calls for you (OpenAI, Anthropic, Ollama, any provider) if you don't want to handle it yourself
 
 ### Agent Connectivity
 Six connection methods for any integration pattern:
