@@ -115,6 +115,57 @@ describe("POST /api/v1/webhooks/[token]/stream", () => {
     });
   });
 
+  it("does not emit stream_complete when the durable COMPLETE transition fails", async () => {
+    mockUpdateMessage.mockRejectedValueOnce(new Error("write failed"));
+
+    const response = await POST(
+      makeRequest({
+        messageId: "message-1",
+        done: true,
+        finalContent: "done",
+      }),
+      {
+        params: Promise.resolve({ token: "whk_test" }),
+      },
+    );
+
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toEqual({
+      error: "Failed to process stream",
+    });
+
+    expect(mockUpdateMessage).toHaveBeenCalledWith("message-1", {
+      content: "done",
+      streamingStatus: "COMPLETE",
+    });
+    expect(mockBroadcastStreamComplete).not.toHaveBeenCalled();
+  });
+
+  it("does not emit stream_error when the durable ERROR transition fails", async () => {
+    mockUpdateMessage.mockRejectedValueOnce(new Error("write failed"));
+
+    const response = await POST(
+      makeRequest({
+        messageId: "message-1",
+        error: "Agent failed",
+      }),
+      {
+        params: Promise.resolve({ token: "whk_test" }),
+      },
+    );
+
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toEqual({
+      error: "Failed to process stream",
+    });
+
+    expect(mockUpdateMessage).toHaveBeenCalledWith("message-1", {
+      streamingStatus: "ERROR",
+      content: "*[Error: Agent failed]*",
+    });
+    expect(mockBroadcastStreamError).not.toHaveBeenCalled();
+  });
+
   it("rejects non-object metadata before broadcasting or persisting", async () => {
     const response = await POST(
       makeRequest({

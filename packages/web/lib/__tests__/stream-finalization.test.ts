@@ -2,6 +2,26 @@ import { describe, expect, it, vi } from "vitest";
 import { finalizeStreamCompletion } from "../stream-finalization";
 
 describe("finalizeStreamCompletion", () => {
+  it("persists COMPLETE before broadcasting stream_complete", async () => {
+    const callOrder: string[] = [];
+    const broadcastStreamCompleteFn = vi.fn().mockImplementation(async () => {
+      callOrder.push("broadcast");
+    });
+    const updateMessageFn = vi.fn().mockImplementation(async () => {
+      callOrder.push("persist");
+    });
+
+    await finalizeStreamCompletion({
+      channelId: "channel-0",
+      messageId: "message-0",
+      finalContent: "done",
+      broadcastStreamCompleteFn,
+      updateMessageFn,
+    });
+
+    expect(callOrder).toEqual(["persist", "broadcast"]);
+  });
+
   it("uses the same metadata object for broadcast and persistence", async () => {
     const broadcastStreamCompleteFn = vi.fn().mockResolvedValue(undefined);
     const updateMessageFn = vi.fn().mockResolvedValue(undefined);

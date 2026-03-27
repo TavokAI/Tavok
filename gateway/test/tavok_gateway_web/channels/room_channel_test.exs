@@ -492,4 +492,77 @@ defmodule TavokGatewayWeb.RoomChannelTest do
       assert_received {:charter_control_called, "channel-1", "pause", "user-1"}
     end
   end
+
+  describe "durable stream lifecycle ordering" do
+    test "BYOK trigger persists ACTIVE placeholder before stream_start broadcast" do
+      function_body = private_function_body!(:run_byok_trigger_inner, 4)
+      call_order = remote_call_order(function_body)
+
+      persist_index =
+        remote_call_index(
+          call_order,
+          {"MessagePersistence", :persist_async}
+        )
+
+      broadcast_index =
+        remote_call_index(
+          call_order,
+          {"Broadcast", :endpoint_broadcast!}
+        )
+
+      assert persist_index < broadcast_index,
+             "expected BYOK trigger to persist before broadcast, got call order #{inspect(call_order)}"
+    end
+  end
+
+  defp private_function_body!(name, arity) do
+    room_channel_path =
+      Path.expand(Path.join(__DIR__, "../../../lib/tavok_gateway_web/channels/room_channel.ex"))
+
+    source = File.read!(room_channel_path)
+    {:ok, ast} = Code.string_to_quoted(source)
+
+    {_ast, function_body} =
+      Macro.prewalk(ast, nil, fn
+        {:defp, _, [{^name, _, args}, [do: body]]} = node, nil ->
+          if length(args || []) == arity do
+            {node, body}
+          else
+            {node, nil}
+          end
+
+        node, acc ->
+          {node, acc}
+      end)
+
+    function_body || flunk("could not find #{name}/#{arity} in room_channel.ex")
+  end
+
+  defp remote_call_order(ast) do
+    {_ast, calls} =
+      Macro.prewalk(ast, [], fn
+        {{:., _, [module_ast, fun]}, _, _args} = node, acc ->
+          case module_ast do
+            {:__aliases__, _, parts} ->
+              module_name = parts |> List.last() |> Atom.to_string()
+              {node, [{module_name, fun} | acc]}
+
+            atom when is_atom(atom) ->
+              {node, [{Atom.to_string(atom), fun} | acc]}
+
+            _ ->
+              {node, acc}
+          end
+
+        node, acc ->
+          {node, acc}
+      end)
+
+    Enum.reverse(calls)
+  end
+
+  defp remote_call_index(call_order, expected_call) do
+    Enum.find_index(call_order, &(&1 == expected_call)) ||
+      flunk("could not find #{inspect(expected_call)} in call order #{inspect(call_order)}")
+  end
 end
