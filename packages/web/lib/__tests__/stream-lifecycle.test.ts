@@ -47,7 +47,9 @@ function makeService(tx: ReturnType<typeof makeTx>) {
   };
 
   return {
-    service: createStreamLifecycleService({ prismaClient: prismaClient as never }),
+    service: createStreamLifecycleService({
+      prismaClient: prismaClient as never,
+    }),
     prismaClient,
   };
 }

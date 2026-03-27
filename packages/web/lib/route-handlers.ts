@@ -378,9 +378,7 @@ export function createInternalStreamStartHandler({
 }: PrismaClientDep) {
   const streamLifecycle = createStreamLifecycleService({ prismaClient });
 
-  return async function internalStreamStartHandler(
-    request: RouteRequest,
-  ) {
+  return async function internalStreamStartHandler(request: RouteRequest) {
     const unauthorizedResponse = assertInternalSecret(request);
     if (unauthorizedResponse) {
       return unauthorizedResponse;
@@ -396,8 +394,7 @@ export function createInternalStreamStartHandler({
     const authorId = parsedBody.authorId;
     const authorType = parsedBody.authorType;
     const sequence = parsedBody.sequence;
-    const content =
-      parsedBody.content === undefined ? "" : parsedBody.content;
+    const content = parsedBody.content === undefined ? "" : parsedBody.content;
 
     if (
       typeof id !== "string" ||

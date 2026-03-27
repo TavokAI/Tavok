@@ -2,10 +2,7 @@ import {
   broadcastStreamComplete,
   broadcastStreamError,
 } from "@/lib/gateway-client";
-import {
-  completeStream,
-  failStream,
-} from "@/lib/internal-api-client";
+import { completeStream, failStream } from "@/lib/internal-api-client";
 import type { MessageMetadata } from "@/lib/message-metadata-contract";
 
 interface FinalizeStreamCompletionArgs {

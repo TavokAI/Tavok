@@ -1,10 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { authenticateAgentRequest } from "@/lib/agent-auth";
-import {
-  broadcastStreamToken,
-  broadcastToChannel,
-} from "@/lib/gateway-client";
+import { broadcastStreamToken, broadcastToChannel } from "@/lib/gateway-client";
 import { checkAgentRateLimit } from "@/lib/rate-limit";
 import { logAgentAction } from "@/lib/agent-audit";
 import { validateOptionalMessageMetadata } from "@/lib/message-metadata-contract";

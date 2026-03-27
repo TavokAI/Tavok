@@ -1,9 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import {
-  broadcastStreamToken,
-  broadcastToChannel,
-} from "@/lib/gateway-client";
+import { broadcastStreamToken, broadcastToChannel } from "@/lib/gateway-client";
 import { validateOptionalMessageMetadata } from "@/lib/message-metadata-contract";
 import {
   finalizeStreamCompletion,

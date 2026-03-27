@@ -108,9 +108,7 @@ export async function startStreamPlaceholder(
 
   if (!response.ok) {
     const errorBody = await readErrorBody(response);
-    throw new Error(
-      `Stream start failed: ${response.status} ${errorBody}`,
-    );
+    throw new Error(`Stream start failed: ${response.status} ${errorBody}`);
   }
 
   return response.json();
