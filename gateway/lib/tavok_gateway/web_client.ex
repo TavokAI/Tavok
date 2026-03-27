@@ -111,6 +111,40 @@ defmodule TavokGateway.WebClient do
   end
 
   @doc """
+  Durably commit an ERROR terminal state via POST /api/internal/streams/{messageId}/error.
+  Returns {:ok, response_body} or {:error, reason}.
+  """
+  def fail_stream(message_id, body) do
+    traced_call(
+      "web_client.fail_stream",
+      %{"http.method": "POST", "http.url": "/api/internal/streams/:message_id/error"},
+      fn ->
+        url = "#{web_url()}/api/internal/streams/#{message_id}/error"
+
+        case Req.post(url,
+               json: body,
+               headers: req_headers(),
+               receive_timeout: 10_000
+             ) do
+          {:ok, %Req.Response{status: 200, body: response_body}} ->
+            {:ok, response_body}
+
+          {:ok, %Req.Response{status: status, body: response_body}} ->
+            Logger.error(
+              "fail_stream failed: message=#{message_id} status=#{status} body=#{inspect(response_body)}"
+            )
+
+            {:error, {:http_error, status, response_body}}
+
+          {:error, reason} ->
+            Logger.error("fail_stream request failed: #{inspect(reason)}")
+            {:error, reason}
+        end
+      end
+    )
+  end
+
+  @doc """
   Get the default agent config for a channel.
   Returns {:ok, agent_config} or {:ok, nil} (no agent) or {:error, reason}.
   """

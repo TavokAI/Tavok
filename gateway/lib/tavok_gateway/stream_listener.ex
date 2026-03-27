@@ -4,10 +4,11 @@ defmodule TavokGateway.StreamListener do
   and status updates, then broadcasts them to the appropriate Phoenix Channel rooms.
 
   Redis patterns:
-  - hive:stream:tokens:{channelId}:{messageId} → broadcast stream_token to room:{channelId}
-  - hive:stream:status:{channelId}:{messageId} → broadcast stream_complete or stream_error
+  - hive:stream:tokens:{channelId}:{messageId} -> broadcast stream_token to room:{channelId}
+  - hive:stream:status:{channelId}:{messageId} -> broadcast stream_complete or stream_error
 
-  See docs/PROTOCOL.md §2 for payload contracts.
+  Terminal status events represent already-committed database state, not
+  best-effort forecasts. See docs/PROTOCOL.md section 2 for payload contracts.
   """
   use GenServer
 
@@ -56,7 +57,7 @@ defmodule TavokGateway.StreamListener do
           Redix.PubSub.psubscribe(pubsub, "hive:stream:charter_status:*", self())
 
         Logger.info(
-          "[StreamListener] Started — listening for stream tokens, status, thinking, tool_call, tool_result, checkpoint, charter_status"
+          "[StreamListener] Started - listening for stream tokens, status, thinking, tool_call, tool_result, checkpoint, charter_status"
         )
 
         {:ok, %{pubsub: pubsub}}
@@ -94,9 +95,9 @@ defmodule TavokGateway.StreamListener do
 
   @impl true
   def handle_info({:redix_pubsub, _pubsub, _ref, :reconnected, _}, state) do
-    # Redix.PubSub auto-resubscribes on reconnect — no manual re-subscribe
+    # Redix.PubSub auto-resubscribes on reconnect; no manual re-subscribe
     # needed. Previous explicit re-subscribe caused duplicate message delivery.
-    Logger.info("[StreamListener] Redis reconnected — Redix auto-resubscription active")
+    Logger.info("[StreamListener] Redis reconnected - Redix auto-resubscription active")
 
     {:noreply, state}
   end
@@ -111,7 +112,7 @@ defmodule TavokGateway.StreamListener do
 
   defp handle_stream_message("hive:stream:tokens:" <> rest, payload) do
     # rest = "{channelId}:{messageId}"
-    # Zero-copy: payload is already valid JSON from Go Proxy — skip decode,
+    # Zero-copy: payload is already valid JSON from Go Proxy; skip decode,
     # wrap raw bytes as Jason.Fragment to avoid 1000x re-encode. (DEC-0030)
     case String.split(rest, ":", parts: 2) do
       [channel_id, _message_id] ->
@@ -124,6 +125,7 @@ defmodule TavokGateway.StreamListener do
 
   defp handle_stream_message("hive:stream:status:" <> rest, payload) do
     # rest = "{channelId}:{messageId}"
+    # Terminal status payloads represent already-committed durable state.
     # Decode to check status field, but broadcast raw JSON bytes. (DEC-0030)
     case String.split(rest, ":", parts: 2) do
       [channel_id, _message_id] ->
@@ -132,14 +134,14 @@ defmodule TavokGateway.StreamListener do
             Broadcast.endpoint_broadcast_raw!("room:#{channel_id}", "stream_complete", payload)
 
             Logger.info(
-              "[StreamListener] Broadcast stream_complete: channel=#{channel_id} messageId=#{Map.get(data, "messageId")}"
+              "[StreamListener] Broadcast committed stream_complete: channel=#{channel_id} messageId=#{Map.get(data, "messageId")}"
             )
 
           {:ok, %{"status" => "error"} = data} ->
             Broadcast.endpoint_broadcast_raw!("room:#{channel_id}", "stream_error", payload)
 
             Logger.info(
-              "[StreamListener] Broadcast stream_error: channel=#{channel_id} messageId=#{Map.get(data, "messageId")}"
+              "[StreamListener] Broadcast committed stream_error: channel=#{channel_id} messageId=#{Map.get(data, "messageId")}"
             )
 
           {:ok, data} ->
@@ -158,7 +160,7 @@ defmodule TavokGateway.StreamListener do
 
   defp handle_stream_message("hive:stream:thinking:" <> rest, payload) do
     # rest = "{channelId}:{messageId}"
-    # Zero-copy: payload is already valid JSON from Go Proxy — broadcast raw. (DEC-0030)
+    # Zero-copy: payload is already valid JSON from Go Proxy; broadcast raw. (DEC-0030)
     case String.split(rest, ":", parts: 2) do
       [channel_id, _message_id] ->
         Broadcast.endpoint_broadcast_raw!("room:#{channel_id}", "stream_thinking", payload)
@@ -170,7 +172,7 @@ defmodule TavokGateway.StreamListener do
     end
   end
 
-  # TASK-0018: Tool call events — broadcast to room for UI display
+  # TASK-0018: Tool call events - broadcast to room for UI display
   defp handle_stream_message("hive:stream:tool_call:" <> rest, payload) do
     case String.split(rest, ":", parts: 2) do
       [channel_id, _message_id] ->
@@ -183,7 +185,7 @@ defmodule TavokGateway.StreamListener do
     end
   end
 
-  # TASK-0018: Tool result events — broadcast to room for UI display
+  # TASK-0018: Tool result events - broadcast to room for UI display
   defp handle_stream_message("hive:stream:tool_result:" <> rest, payload) do
     case String.split(rest, ":", parts: 2) do
       [channel_id, _message_id] ->
@@ -196,7 +198,7 @@ defmodule TavokGateway.StreamListener do
     end
   end
 
-  # TASK-0021: Checkpoint events — broadcast to room for rewind UI
+  # TASK-0021: Checkpoint events - broadcast to room for rewind UI
   defp handle_stream_message("hive:stream:checkpoint:" <> rest, payload) do
     case String.split(rest, ":", parts: 2) do
       [channel_id, _message_id] ->
@@ -209,7 +211,7 @@ defmodule TavokGateway.StreamListener do
     end
   end
 
-  # TASK-0020: Charter status events — broadcast to room for live header updates
+  # TASK-0020: Charter status events - broadcast to room for live header updates
   defp handle_stream_message("hive:stream:charter_status:" <> channel_id, payload) do
     Broadcast.endpoint_broadcast_raw!("room:#{channel_id}", "charter_status", payload)
   end

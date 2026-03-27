@@ -1,6 +1,6 @@
 defmodule TavokGateway.StreamWatchdog do
   @moduledoc """
-  Fallback watchdog for terminal stream events.
+  Recovery-only watchdog for missed terminal stream events.
 
   Redis pub/sub is best-effort. If a terminal stream status is missed during a
   transient subscriber disconnect window, this watchdog polls persisted message
@@ -12,6 +12,7 @@ defmodule TavokGateway.StreamWatchdog do
 
   @default_check_after_ms 45_000
   @max_active_retries 5
+  @timeout_error_reason "Stream timed out - no completion received"
 
   # ---------- Public API ----------
 
@@ -125,7 +126,7 @@ defmodule TavokGateway.StreamWatchdog do
         state.broadcaster.("room:#{channel_id}", "stream_complete", payload)
 
         Logger.info(
-          "[StreamWatchdog] Broadcast synthetic stream_complete: channel=#{channel_id} messageId=#{message_id}"
+          "[StreamWatchdog] Broadcast synthetic stream_complete from durable COMPLETE: channel=#{channel_id} messageId=#{message_id}"
         )
 
         :terminal
@@ -143,45 +144,49 @@ defmodule TavokGateway.StreamWatchdog do
         state.broadcaster.("room:#{channel_id}", "stream_error", payload)
 
         Logger.info(
-          "[StreamWatchdog] Broadcast synthetic stream_error: channel=#{channel_id} messageId=#{message_id}"
+          "[StreamWatchdog] Broadcast synthetic stream_error from durable ERROR: channel=#{channel_id} messageId=#{message_id}"
         )
 
         :terminal
 
       {:ok, %{"streamingStatus" => "ACTIVE"}} when retries >= @max_active_retries ->
-        # Stream has been ACTIVE for too long — force-terminate.
-        # This catches: Go Proxy died, web was down during finalize, or any other
-        # scenario where the DB was never updated to a terminal state.
+        # Stream has been ACTIVE for too long; recover by durably forcing ERROR
+        # before emitting a synthetic terminal event.
         Logger.error(
           "[StreamWatchdog] Forcing stuck stream to ERROR after #{retries} retries: " <>
             "channel=#{channel_id} messageId=#{message_id}"
         )
 
-        update_result =
-          state.web_client.update_message(message_id, %{
-            "content" => "[Error: Stream timed out — no completion received]",
-            "streamingStatus" => "ERROR"
-          })
+        case state.web_client.fail_stream(message_id, %{
+               "content" => "[Error: #{@timeout_error_reason}]"
+             }) do
+          {:ok, _response} ->
+            Logger.info(
+              "[StreamWatchdog] Durably forced ERROR for missed terminal event: channel=#{channel_id} messageId=#{message_id}"
+            )
 
-        case update_result do
-          {:ok, _} ->
-            Logger.info("[StreamWatchdog] Forced DB status to ERROR: messageId=#{message_id}")
+            payload = %{
+              "messageId" => message_id,
+              "status" => "error",
+              "error" => @timeout_error_reason,
+              "partialContent" => nil
+            }
+
+            state.broadcaster.("room:#{channel_id}", "stream_error", payload)
+
+            Logger.info(
+              "[StreamWatchdog] Broadcast synthetic stream_error after durable recovery: channel=#{channel_id} messageId=#{message_id}"
+            )
+
+            :terminal
 
           {:error, reason} ->
-            Logger.error(
-              "[StreamWatchdog] Failed to force DB status: messageId=#{message_id} reason=#{inspect(reason)}"
+            Logger.warning(
+              "[StreamWatchdog] Durable ERROR recovery failed; retrying: channel=#{channel_id} messageId=#{message_id} reason=#{inspect(reason)}"
             )
+
+            :pending
         end
-
-        payload = %{
-          "messageId" => message_id,
-          "status" => "error",
-          "error" => "Stream timed out — no completion received",
-          "partialContent" => nil
-        }
-
-        state.broadcaster.("room:#{channel_id}", "stream_error", payload)
-        :terminal
 
       {:ok, %{"streamingStatus" => "ACTIVE"}} ->
         # Still active, but haven't hit max retries yet. Keep checking.
