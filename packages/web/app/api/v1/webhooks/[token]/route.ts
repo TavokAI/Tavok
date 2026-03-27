@@ -10,7 +10,10 @@ import {
 } from "@/lib/gateway-client";
 import { webhookLimiter } from "@/lib/rate-limit";
 import { getPublicBaseUrl } from "@/lib/internal-auth";
-import { persistMessage } from "@/lib/internal-api-client";
+import {
+  persistMessage,
+  startStreamPlaceholder,
+} from "@/lib/internal-api-client";
 
 /** Valid typed message types for webhook payloads. */
 const VALID_TYPED_TYPES = [
@@ -172,14 +175,12 @@ export async function POST(
     // Handle streaming initiation
     if (streaming) {
       // Persist placeholder
-      await persistMessage({
+      await startStreamPlaceholder({
         id: messageId,
         channelId: webhook.channelId,
         authorId: webhook.agentId,
         authorType: "AGENT",
         content: "",
-        type: "STREAMING",
-        streamingStatus: "ACTIVE",
         sequence,
       });
 

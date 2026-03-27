@@ -351,3 +351,83 @@ func TestFinalizeMessageSetsHeaders(t *testing.T) {
 		t.Fatalf("error = %v", err)
 	}
 }
+
+func TestCommitStreamCompletionUsesLifecycleEndpoint(t *testing.T) {
+	var capturedBody map[string]string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" {
+			t.Errorf("method = %q, want POST", r.Method)
+		}
+		if r.URL.Path != "/api/internal/streams/msg-1/complete" {
+			t.Errorf("path = %q, want /api/internal/streams/msg-1/complete", r.URL.Path)
+		}
+		if r.Header.Get("x-internal-secret") != "secret" {
+			t.Errorf("x-internal-secret = %q, want secret", r.Header.Get("x-internal-secret"))
+		}
+		json.NewDecoder(r.Body).Decode(&capturedBody)
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"id":"msg-1"}`))
+	}))
+	defer srv.Close()
+
+	loader := NewLoader(srv.URL, "secret")
+	err := loader.CommitStreamCompletion(
+		"msg-1",
+		"final content",
+		`[{"phase":"Thinking"}]`,
+		`[{"o":42}]`,
+		`[{"index":1}]`,
+		nil,
+	)
+
+	if err != nil {
+		t.Fatalf("CommitStreamCompletion() error = %v", err)
+	}
+	if capturedBody["content"] != "final content" {
+		t.Errorf("content = %q, want %q", capturedBody["content"], "final content")
+	}
+	if capturedBody["thinkingTimeline"] != `[{"phase":"Thinking"}]` {
+		t.Errorf("thinkingTimeline = %q", capturedBody["thinkingTimeline"])
+	}
+	if capturedBody["tokenHistory"] != `[{"o":42}]` {
+		t.Errorf("tokenHistory = %q", capturedBody["tokenHistory"])
+	}
+	if capturedBody["checkpoints"] != `[{"index":1}]` {
+		t.Errorf("checkpoints = %q", capturedBody["checkpoints"])
+	}
+}
+
+func TestCommitStreamErrorWithRetryUsesLifecycleEndpoint(t *testing.T) {
+	var attempts atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/internal/streams/msg-err/error" {
+			t.Errorf("path = %q, want /api/internal/streams/msg-err/error", r.URL.Path)
+		}
+
+		attempt := attempts.Add(1)
+		if attempt == 1 {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte(`error`))
+			return
+		}
+
+		var capturedBody map[string]string
+		json.NewDecoder(r.Body).Decode(&capturedBody)
+		if capturedBody["content"] != "error content" {
+			t.Errorf("content = %q, want error content", capturedBody["content"])
+		}
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"id":"msg-err"}`))
+	}))
+	defer srv.Close()
+
+	loader := NewLoader(srv.URL, "secret")
+	err := loader.CommitStreamErrorWithRetry("msg-err", "error content", nil)
+
+	if err != nil {
+		t.Fatalf("CommitStreamErrorWithRetry() error = %v", err)
+	}
+	if attempts.Load() != 2 {
+		t.Errorf("attempts = %d, want 2", attempts.Load())
+	}
+}

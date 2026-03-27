@@ -15,7 +15,10 @@ if ($IsWindows -or $env:OS -eq "Windows_NT") {
 
 $RootDir = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $ComposePath = Join-Path $RootDir $ComposeFile
-$EnvPath = Join-Path $RootDir ".env"
+
+. (Join-Path $PSScriptRoot "lib/load-env.ps1")
+
+$EnvPath = Get-TavokEnvPath -RepoRoot $RootDir
 
 $webUrl = "http://localhost:5555"
 $gatewayWsUrl = "ws://localhost:4001"
@@ -55,21 +58,6 @@ function Write-DebugLog {
   catch {
     # no-op: debug logging must never break harness flow
   }
-}
-
-function Load-Env([string]$Path) {
-  $values = @{}
-  if (!(Test-Path $Path)) {
-    return $values
-  }
-
-  Get-Content $Path | ForEach-Object {
-    if ($_ -match "^\s*([A-Za-z0-9_]+)\s*=\s*(.*)\s*$" -and $Matches[1] -ne "" -and -not ($Matches[2].StartsWith("#"))) {
-      $values[$Matches[1]] = $Matches[2]
-    }
-  }
-
-  return $values
 }
 
 function New-TestId([int]$Length = 26) {
@@ -846,16 +834,10 @@ function Close-SocketSafe([System.Net.WebSockets.ClientWebSocket]$Socket) {
   }
 }
 
-$envVars = Load-Env $EnvPath
+$envVars = Import-TavokEnv -Path $EnvPath
+Assert-TavokEnvVars -Values $envVars -Required @("INTERNAL_API_SECRET", "JWT_SECRET") -Path $EnvPath
 $internalSecret = $envVars["INTERNAL_API_SECRET"]
-if ([string]::IsNullOrWhiteSpace($internalSecret)) {
-  $internalSecret = "dev-secret-minimum-16chars"
-}
-
 $jwtSecret = $envVars["JWT_SECRET"]
-if ([string]::IsNullOrWhiteSpace($jwtSecret)) {
-  $jwtSecret = "dev-secret-minimum-16chars"
-}
 
 $testPrefix = ("tc" + (Get-Date -Format "MMddHHmmss"))
 $userAId = New-TestId
@@ -1057,15 +1039,16 @@ COMMIT;
   $streamStart = Wait-StreamStartForSequence -Socket $memberSocket -Topic $topic -ExpectedSequence $expectedK4StartSequence -TimeoutMs 12000
   $streamMessageId = $streamStart.payload.messageId
   Assert "K-004 stream_start broadcast received" (-not [string]::IsNullOrWhiteSpace($streamMessageId))
+  Assert "K-004 stream_start advertises ACTIVE status" ([string]$streamStart.payload.status -eq "active") ("status=" + [string]$streamStart.payload.status)
 
   $postStartFetch = Invoke-CurlJson -Url "$webUrl/api/internal/messages?channelId=$channelId&afterSequence=$triggerSequence&limit=20" -Method GET -Headers @{ "x-internal-secret" = $internalSecret }
   $postStartPayload = $postStartFetch.BodyText | ConvertFrom-Json
   $streamPlaceholder = $postStartPayload.messages | Where-Object { $_.id -eq $streamMessageId }
   Assert "K-004 stream_start placeholder row exists" ($null -ne $streamPlaceholder)
-  Assert "K-004 stream_start placeholder is ACTIVE" (
+  Assert "K-004 stream_start placeholder remains on a valid durable stream lifecycle" (
     $streamPlaceholder.type -eq "STREAMING" -and
-    $streamPlaceholder.streamingStatus -eq "ACTIVE"
-  )
+    @("ACTIVE", "COMPLETE") -contains [string]$streamPlaceholder.streamingStatus
+  ) ("status=" + [string]$streamPlaceholder.streamingStatus)
 
   $streamToken = Wait-TopicEvent -Socket $memberSocket -Topic $topic -Event "stream_token" -TimeoutMs 12000
   Assert "K-004 stream_token belongs to placeholder message" ($streamToken.payload.messageId -eq $streamMessageId)
@@ -1183,9 +1166,6 @@ services:
     docker compose -f $ComposePath stop web
     $webStopped = $true
 
-    $k8Error = Wait-StreamEventForMessage -Socket $memberSocket -Topic $topic -Event "stream_error" -MessageId $k8MessageId -TimeoutMs 120000
-    Assert "K-008 stream_error received by websocket client" ($k8Error.payload.messageId -eq $k8MessageId)
-
     # Extra margin beyond 1s+2s+4s retry backoff to guarantee finalize exhaustion.
     Start-Sleep 15
 
@@ -1197,6 +1177,9 @@ services:
       return $health.StatusCode -eq 200
     }
     Assert "K-008 web service recovers after finalize retry exhaustion window" $webRecoveredForK8
+
+    $k8Error = Wait-StreamEventForMessage -Socket $memberSocket -Topic $topic -Event "stream_error" -MessageId $k8MessageId -TimeoutMs 120000
+    Assert "K-008 stream_error received by websocket client after recovery path resumes" ($k8Error.payload.messageId -eq $k8MessageId)
 
     # Fast watchdog mode: allow 3s x 6 checks for force-terminate convergence.
     $k8Converged = Wait-Until -MaxAttempts 6 -DelayMs 3000 -Action {

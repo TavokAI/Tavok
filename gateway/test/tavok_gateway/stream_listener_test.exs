@@ -9,6 +9,8 @@ defmodule TavokGateway.StreamListenerTest do
   3. Test by sending simulated {:redix_pubsub, ...} messages to a lightweight
      GenServer that captures broadcasts instead of calling the real Endpoint.
 
+  Terminal status events are treated as already-committed durable facts.
+
   The TestStreamRouter module below replicates the exact pattern-matching logic
   from StreamListener.handle_stream_message/2, calling a test-friendly broadcaster
   instead of Broadcast.endpoint_broadcast_raw!/3.
@@ -187,11 +189,11 @@ defmodule TavokGateway.StreamListenerTest do
   end
 
   # ---------------------------------------------------------------------------
-  # Status routing (complete vs error vs unknown)
+  # Status routing (committed terminal state vs unknown)
   # ---------------------------------------------------------------------------
 
   describe "status message routing" do
-    test "complete status broadcasts stream_complete" do
+    test "complete status broadcasts stream_complete for committed state" do
       channel = "hive:stream:status:channel-1:msg-1"
       payload = Jason.encode!(%{messageId: "msg-1", status: "complete", finalContent: "Done"})
 
@@ -200,7 +202,7 @@ defmodule TavokGateway.StreamListenerTest do
       assert_receive {:broadcast, "room:channel-1", "stream_complete", ^payload}
     end
 
-    test "error status broadcasts stream_error" do
+    test "error status broadcasts stream_error for committed state" do
       channel = "hive:stream:status:channel-2:msg-2"
 
       payload =

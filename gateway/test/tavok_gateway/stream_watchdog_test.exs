@@ -12,13 +12,47 @@ defmodule TavokGateway.StreamWatchdogTest do
       end)
     end
 
-    def update_message(message_id, update_body) do
+    def fail_stream(message_id, body) do
       Agent.get_and_update(:stream_watchdog_test_state, fn state ->
-        update_call = %{message_id: message_id, body: update_body}
-        update_calls = [update_call | Map.get(state, :update_calls, [])]
-        result = Map.get(state, :update_result, {:ok, %{}})
+        fail_call = %{message_id: message_id, body: body}
+        fail_calls = [fail_call | Map.get(state, :fail_calls, [])]
+        result = Map.get(state, :fail_result, {:ok, %{}})
 
-        {result, Map.put(state, :update_calls, update_calls)}
+        messages =
+          case result do
+            {:ok, _} ->
+              Map.update(
+                Map.get(state, :messages, %{}),
+                message_id,
+                {:ok,
+                 %{
+                   "id" => message_id,
+                   "streamingStatus" => "ERROR",
+                   "content" => Map.get(body, "content") || Map.get(body, :content) || ""
+                 }},
+                fn
+                  {:ok, message} ->
+                    {:ok,
+                     Map.merge(message, %{
+                       "streamingStatus" => "ERROR",
+                       "content" => Map.get(body, "content") || Map.get(body, :content) || ""
+                     })}
+
+                  other ->
+                    other
+                end
+              )
+
+            _ ->
+              Map.get(state, :messages, %{})
+          end
+
+        {
+          result,
+          state
+          |> Map.put(:fail_calls, fail_calls)
+          |> Map.put(:messages, messages)
+        }
       end)
     end
   end
@@ -33,8 +67,8 @@ defmodule TavokGateway.StreamWatchdogTest do
              fn ->
                %{
                  messages: %{},
-                 update_calls: [],
-                 update_result: {:ok, %{}}
+                 fail_calls: [],
+                 fail_result: {:ok, %{}}
                }
              end,
              [name: :stream_watchdog_test_state]
@@ -116,17 +150,17 @@ defmodule TavokGateway.StreamWatchdogTest do
       "content" => ""
     })
 
-    set_update_result({:ok, %{}})
+    set_fail_result({:ok, %{}})
     StreamWatchdog.register_stream("channel-e", "message-force-error", server)
 
     assert_receive {:broadcast, "room:channel-e", "stream_error", payload}, 500
     assert payload["messageId"] == "message-force-error"
     assert payload["status"] == "error"
-    assert payload["error"] == "Stream timed out — no completion received"
+    assert payload["error"] == "Stream timed out - no completion received"
 
-    [update_call | _] = update_calls()
-    assert update_call.message_id == "message-force-error"
-    assert update_call.body["streamingStatus"] == "ERROR"
+    [fail_call | _] = fail_calls()
+    assert fail_call.message_id == "message-force-error"
+    assert String.contains?(fail_call.body["content"], "no completion received")
   end
 
   test "resets retry count when stream is re-registered", %{server: server} do
@@ -156,24 +190,34 @@ defmodule TavokGateway.StreamWatchdogTest do
     assert retries_after < retries_before
   end
 
-  test "force-update failure still broadcasts stream_error", %{server: server} do
+  test "retries recovery and withholds synthetic stream_error until durable ERROR commit succeeds",
+       %{
+         server: server
+       } do
     put_message("message-force-failure", %{
       "id" => "message-force-failure",
       "streamingStatus" => "ACTIVE",
       "content" => ""
     })
 
-    set_update_result({:error, :nxdomain})
+    set_fail_result({:error, :nxdomain})
     StreamWatchdog.register_stream("channel-g", "message-force-failure", server)
 
-    assert_receive {:broadcast, "room:channel-g", "stream_error", payload}, 500
+    refute_receive {:broadcast, "room:channel-g", "stream_error", _payload}, 180
+
+    [first_fail_call | _] = fail_calls()
+    assert first_fail_call.message_id == "message-force-failure"
+
+    set_fail_result({:ok, %{}})
+
+    assert_receive {:broadcast, "room:channel-g", "stream_error", payload}, 300
     assert payload["messageId"] == "message-force-failure"
     assert payload["status"] == "error"
-    assert payload["error"] == "Stream timed out — no completion received"
+    assert payload["error"] == "Stream timed out - no completion received"
     assert payload["partialContent"] == nil
 
-    [update_call | _] = update_calls()
-    assert update_call.message_id == "message-force-failure"
+    [latest_fail_call | _] = fail_calls()
+    assert latest_fail_call.message_id == "message-force-failure"
   end
 
   test "deregistered streams do not emit fallback events", %{server: server} do
@@ -196,16 +240,16 @@ defmodule TavokGateway.StreamWatchdogTest do
     end)
   end
 
-  defp set_update_result(result) do
+  defp set_fail_result(result) do
     Agent.update(:stream_watchdog_test_state, fn state ->
-      Map.put(state, :update_result, result)
+      Map.put(state, :fail_result, result)
     end)
   end
 
-  defp update_calls do
+  defp fail_calls do
     Agent.get(:stream_watchdog_test_state, fn state ->
       state
-      |> Map.get(:update_calls, [])
+      |> Map.get(:fail_calls, [])
       |> Enum.reverse()
     end)
   end

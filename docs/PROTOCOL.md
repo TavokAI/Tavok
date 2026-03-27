@@ -1,8 +1,8 @@
 # PROTOCOL.md — Tavok Cross-Service Message Contracts
 
-> **Version**: Protocol v4.2
+> **Version**: Protocol v4.6
 > **Status**: Active
-> **Last updated**: 2026-03-14
+> **Last updated**: 2026-03-27
 
 This document is the single source of truth for every message that crosses a service boundary.
 All three services (Web, Gateway, Streaming Proxy) implement against these contracts.
@@ -103,10 +103,10 @@ On failure: socket connection is rejected.
 | Event                 | Payload                                               | Description                                     |
 | --------------------- | ----------------------------------------------------- | ----------------------------------------------- |
 | `message_new`         | [MessagePayload](#messagepayload)                     | New message (human or agent, non-streaming)     |
-| `stream_start`        | [StreamStartPayload](#streamstartpayload)             | AI streaming response begins                    |
+| `stream_start`        | [StreamStartPayload](#streamstartpayload)             | AI streaming response begins after durable ACTIVE commit |
 | `stream_token`        | [StreamTokenPayload](#streamtokenpayload)             | Single token from LLM                           |
-| `stream_complete`     | [StreamCompletePayload](#streamcompletepayload)       | Streaming finished successfully                 |
-| `stream_error`        | [StreamErrorPayload](#streamerrorpayload)             | Streaming failed                                |
+| `stream_complete`     | [StreamCompletePayload](#streamcompletepayload)       | Streaming finished after durable COMPLETE commit |
+| `stream_error`        | [StreamErrorPayload](#streamerrorpayload)             | Streaming failed after durable ERROR commit     |
 | `stream_thinking`     | [StreamThinkingPayload](#streamthinkingpayload)       | Agent thinking phase changed (TASK-0011)        |
 | `stream_tool_call`    | [StreamToolCallPayload](#streamtoolcallpayload)       | Agent requested tool execution (TASK-0018)      |
 | `stream_tool_result`  | [StreamToolResultPayload](#streamtoolresultpayload)   | Tool execution completed (TASK-0018)            |
@@ -159,9 +159,12 @@ On failure: socket connection is rejected.
   "agentId": "01HXY...",
   "agentName": "Claude Assistant",
   "agentAvatarUrl": null,
-  "sequence": "43"
+  "sequence": "43",
+  "status": "active"
 }
 ```
+
+Emitted only after Next.js durably commits the placeholder row with `type=STREAMING` and `streamingStatus=ACTIVE`.
 
 #### StreamTokenPayload
 
@@ -194,6 +197,8 @@ On failure: socket connection is rejected.
 }
 ```
 
+Emitted only after Next.js durably commits `streamingStatus=COMPLETE` for the same `messageId`.
+
 #### StreamErrorPayload
 
 ```json
@@ -204,6 +209,8 @@ On failure: socket connection is rejected.
   "code": "CAPACITY_EXCEEDED"
 }
 ```
+
+Emitted only after Next.js durably commits `streamingStatus=ERROR` for the same `messageId`.
 
 `code` is optional. Known codes:
 - `CAPACITY_EXCEEDED` — all stream slots are full (DEC-0075). Client should show a user-friendly "agents busy" message instead of the raw error.
@@ -220,7 +227,7 @@ On failure: socket connection is rejected.
 
 Lifecycle: Go Proxy emits phase[0] from agent config's `thinkingSteps` after loading agent config (about to call LLM), then phase[1] when the first token arrives. Default phases: `["Thinking","Writing"]`. Custom phases (e.g. `["Planning","Researching","Drafting","Reviewing"]`) are configurable per agent. The frontend clears the phase on `stream_complete` or `stream_error`. See DEC-0037.
 
-The Go Proxy accumulates all phase transitions into a `thinkingTimeline` array and includes it in the `PUT /api/internal/messages/{messageId}` finalization payload for post-completion replay.
+The Go Proxy accumulates all phase transitions into a `thinkingTimeline` array and includes it in the terminal stream lifecycle commit payload (`POST /api/internal/streams/{messageId}/complete` or `/error`) for post-completion replay.
 
 #### StreamToolCallPayload
 
@@ -268,7 +275,7 @@ Published at semantically meaningful points during streaming: thinking phase tra
 1. **Stream Rewind** — After completion, the client can replay token history and jump to checkpoint positions on the scrub slider. Token history (`[{o: contentOffset, t: relativeMs}]`) and checkpoints are persisted on the Message record.
 2. **Checkpoint Resume** — On stream error, the user can select a checkpoint and a different agent/model to resume generation from that point. Resume creates a new message with context up to the checkpoint's `contentOffset`.
 
-The Go Proxy accumulates all checkpoints and includes them in the `PUT /api/internal/messages/{messageId}` finalization payload alongside `tokenHistory`. (TASK-0021, DEC-0053)
+The Go Proxy accumulates all checkpoints and includes them in the terminal stream lifecycle commit payload alongside `tokenHistory`. (TASK-0021, DEC-0053)
 
 #### TypedMessagePush
 
@@ -460,7 +467,7 @@ All Redis messages are JSON-encoded strings.
 | `hive:channel:{channelId}:messages`               | Gateway   | (future: indexer, analytics) | New persisted message notification              |
 | `hive:stream:request`                             | Gateway   | Go Proxy                     | Request AI response for a message               |
 | `hive:stream:tokens:{channelId}:{messageId}`      | Go Proxy  | Gateway                      | Individual tokens from LLM                      |
-| `hive:stream:status:{channelId}:{messageId}`      | Go Proxy  | Gateway                      | Stream completion or error                      |
+| `hive:stream:status:{channelId}:{messageId}`      | Go Proxy  | Gateway                      | Committed stream completion or error            |
 | `hive:stream:thinking:{channelId}:{messageId}`    | Go Proxy  | Gateway                      | Agent thinking phase change (TASK-0011)         |
 | `hive:stream:tool_call:{channelId}:{messageId}`   | Go Proxy  | Gateway                      | Tool call requested by LLM (TASK-0018)          |
 | `hive:stream:tool_result:{channelId}:{messageId}` | Go Proxy  | Gateway                      | Tool execution result (TASK-0018)               |
@@ -506,7 +513,7 @@ Published by Go Proxy for each token received from LLM:
 
 ### Stream Status Payload
 
-Published by Go Proxy on stream completion or error:
+Published by Go Proxy only after Next.js durably commits the terminal state via the explicit stream lifecycle endpoint:
 
 ```json
 {
@@ -529,9 +536,12 @@ For errors:
   "error": "Provider returned 429: rate limited",
   "partialContent": "Hello! How can I",
   "tokenCount": 4,
-  "durationMs": 800
+  "durationMs": 800,
+  "code": "CAPACITY_EXCEEDED"
 }
 ```
+
+`code` is optional. When present it is a machine-readable terminal error code from the producer.
 
 ### Stream Thinking Payload
 
@@ -580,6 +590,8 @@ For Redis-bridged calls (Gateway → Go Streaming Proxy), trace context is propa
 
 Requests missing `X-Internal-Secret` or with an invalid secret receive `401 Unauthorized`.
 
+Streaming lifecycle commands use explicit internal endpoints. Generic message create/update routes are not the source of truth for stream state transitions.
+
 ### Gateway → Next.js (Web)
 
 Base URL: `http://web:5555` (Docker internal network)
@@ -604,6 +616,98 @@ Persist a new message.
 ```
 
 **Response:** `201 Created` with the persisted message.
+
+#### POST /api/internal/streams/start
+
+Durably create a stream placeholder and advance `Channel.lastSequence` in the same transaction.
+
+Duplicate requests with the same canonical payload are idempotent.
+
+**Request body:**
+
+```json
+{
+  "id": "01HXY...",
+  "channelId": "01HXY...",
+  "authorId": "01HXY...",
+  "authorType": "AGENT",
+  "content": "",
+  "sequence": "43"
+}
+```
+
+**Response:** `200 OK` or `201 Created`
+
+```json
+{
+  "id": "01HXY...",
+  "channelId": "01HXY...",
+  "authorId": "01HXY...",
+  "authorType": "AGENT",
+  "content": "",
+  "type": "STREAMING",
+  "streamingStatus": "ACTIVE",
+  "sequence": "43",
+  "metadata": null,
+  "thinkingTimeline": null,
+  "tokenHistory": null,
+  "checkpoints": null,
+  "createdAt": "2026-03-27T12:00:00.000Z",
+  "updatedAt": "2026-03-27T12:00:00.000Z"
+}
+```
+
+**Errors:** `400` (bad input), `409` (conflicting placeholder already exists)
+
+#### POST /api/internal/streams/{messageId}/complete
+
+Durably commit an `ACTIVE -> COMPLETE` transition for a streaming message.
+
+Idempotent when the message is already `COMPLETE`.
+
+**Request body:**
+
+```json
+{
+  "content": "Hello! How can I help you today?",
+  "thinkingTimeline": "[{\"phase\":\"Thinking\",\"timestamp\":\"...\"},{\"phase\":\"Writing\",\"timestamp\":\"...\"}]",
+  "tokenHistory": "[{\"o\":5,\"t\":40}]",
+  "checkpoints": "[{\"index\":0,\"label\":\"Intro\",\"contentOffset\":5,\"timestamp\":\"...\"}]",
+  "metadata": {
+    "model": "claude-sonnet-4-20250514",
+    "tokensOut": 843,
+    "latencyMs": 2300
+  }
+}
+```
+
+**Response:** `200 OK` with the canonical persisted stream row.
+
+**Errors:** `400` (bad input), `404` (message not found), `409` (invalid transition)
+
+#### POST /api/internal/streams/{messageId}/error
+
+Durably commit an `ACTIVE -> ERROR` transition for a streaming message.
+
+Idempotent when the message is already `ERROR`.
+
+**Request body:**
+
+```json
+{
+  "content": "Hello! How can I",
+  "thinkingTimeline": "[{\"phase\":\"Thinking\",\"timestamp\":\"...\"}]",
+  "tokenHistory": "[{\"o\":5,\"t\":40}]",
+  "checkpoints": "[{\"index\":0,\"label\":\"Intro\",\"contentOffset\":5,\"timestamp\":\"...\"}]",
+  "metadata": {
+    "provider": "anthropic"
+  }
+}
+```
+
+**Response:** `200 OK` with the canonical persisted stream row.
+
+**Errors:** `400` (bad input), `404` (message not found), `409` (invalid transition)
 
 #### GET /api/internal/messages
 
@@ -928,44 +1032,19 @@ Full agent configuration including decrypted API key.
 
 **Response:** Same as channel agent endpoint above.
 
-#### PUT /api/internal/messages/{messageId}
+#### POST /api/internal/streams/{messageId}/complete
 
-Update a streaming message on completion or error. Used by Go Proxy to finalize placeholder messages.
+Durably commit terminal `COMPLETE` state before any `hive:stream:status:*` publish or `stream_complete` fan-out.
 
-**Request body:**
+Go Proxy, webhook stream adapters, and internal dispatch routes all use this endpoint for successful terminal commits.
 
-```json
-{
-  "content": "Hello! How can I help you today?",
-  "streamingStatus": "COMPLETE",
-  "thinkingTimeline": "[{\"phase\":\"Thinking\",\"timestamp\":\"...\"},{\"phase\":\"Writing\",\"timestamp\":\"...\"}]",
-  "metadata": {
-    "model": "claude-sonnet-4-20250514",
-    "tokensOut": 843,
-    "latencyMs": 2300
-  }
-}
-```
+The `thinkingTimeline`, `metadata`, `tokenHistory`, and `checkpoints` fields remain optional. When provided they are persisted on the Message row as part of the same terminal commit.
 
-For errors:
+#### POST /api/internal/streams/{messageId}/error
 
-```json
-{
-  "content": "Hello! How can I",
-  "streamingStatus": "ERROR",
-  "thinkingTimeline": "[{\"phase\":\"Thinking\",\"timestamp\":\"...\"}]"
-}
-```
+Durably commit terminal `ERROR` state before any `hive:stream:status:*` publish or `stream_error` fan-out.
 
-The `thinkingTimeline` field is optional. If provided, it is a JSON string containing an array of `{phase, timestamp}` objects. Stored in Message.thinkingTimeline for post-completion replay.
-
-The `metadata` field is optional (TASK-0039). If provided, it is a JSON object containing agent execution info (model, provider, tokensIn, tokensOut, latencyMs, costUsd). It must be sent as an object, never a pre-serialized JSON string. Stored in `Message.metadata` for frontend display.
-
-The `tokenHistory` field is optional (TASK-0021). If provided, it is a JSON string containing an array of `{o: contentOffset, t: relativeMs}` objects. Each entry marks where a token batch ends in the final content and when it arrived. Stored in Message.tokenHistory for stream rewind replay.
-
-The `checkpoints` field is optional (TASK-0021). If provided, it is a JSON string containing an array of `{index, label, contentOffset, timestamp}` objects. Stored in Message.checkpoints for checkpoint resume.
-
-**Response:** `200 OK` with updated message fields (`id`, `content`, `streamingStatus`).
+Go Proxy, webhook stream adapters, and internal dispatch routes all use this endpoint for error terminal commits.
 
 #### POST /api/internal/stream/resume
 
@@ -1053,10 +1132,10 @@ Get unread state for all channels in a server. Compares each channel's `lastSequ
          |   IDLE   |
          +----+-----+
               |
-              | Gateway receives trigger message
-              | Gateway publishes stream request to Redis
-              | Gateway creates placeholder message (type=STREAMING, status=ACTIVE)
-              | Gateway broadcasts stream_start to room
+              | Gateway allocates messageId + sequence
+              | Web commits STREAMING + ACTIVE placeholder
+              | Gateway broadcasts stream_start (status=active)
+              | Gateway registers watchdog and schedules stream request
               |
               v
          +----------+
@@ -1065,7 +1144,7 @@ Get unread state for all channels in a server. Compares each channel's `lastSequ
               |
          +----+-----+
          |           |
-    stream_complete  stream_error
+  durable COMPLETE   durable ERROR
          |           |
          v           v
     +----------+ +----------+
@@ -1075,30 +1154,34 @@ Get unread state for all channels in a server. Compares each channel's `lastSequ
 
 ### Invariants (MUST NOT be violated)
 
-1. **Placeholder persisted before first token**: A message row with `type=STREAMING, streamingStatus=ACTIVE` MUST be persisted before the first `stream_token` arrives. The Gateway broadcasts `stream_start` and spawns background persistence concurrently. Go Proxy startup latency (~100ms+) provides natural timing margin. See DEC-0028.
+1. **Durable start before advertisement**: `stream_start` MUST be emitted only after Next.js durably commits a placeholder row with `type=STREAMING` and `streamingStatus=ACTIVE`.
 
 2. **Token ordering**: Tokens carry a monotonically increasing `index` starting at 0. The client MUST render tokens in order. If a token arrives out of order, buffer and apply in sequence.
 
-3. **Single writer**: Only one stream can be active per `messageId`. The Go Proxy owns the stream lifecycle for a given message.
+3. **Web owns durable lifecycle state**: Next.js is the state owner for `ACTIVE`, `COMPLETE`, and `ERROR`. Gateway and Go are transport/orchestration layers and MUST NOT advertise a lifecycle transition before Web commits it.
 
-4. **Completion persistence**: On `stream_complete`, the Go Proxy calls `PUT /api/internal/messages/{messageId}` to update the message with `streamingStatus=COMPLETE` and `content=finalContent`.
+4. **Explicit terminal commits**: Successful completion MUST commit through `POST /api/internal/streams/{messageId}/complete`. Failure MUST commit through `POST /api/internal/streams/{messageId}/error`.
 
-5. **Error persistence**: On `stream_error`, the Go Proxy calls `PUT /api/internal/messages/{messageId}` to update the message with `streamingStatus=ERROR` and `content=partialContent` (may be empty string).
+5. **Terminal publish-after-commit**: `hive:stream:status:*`, `stream_complete`, and `stream_error` represent already-committed durable state, not forecasts.
 
-6. **Client cleanup**: When a user switches channels, the client MUST stop rendering any active streams from the previous channel. On rejoin, stream state is reconstructed from the persisted message.
+6. **Watchdog is recovery-only**: The watchdog exists to recover from missed terminal delivery. It may rebroadcast from already-committed `COMPLETE` or `ERROR`, or durably force `ERROR` for a stuck `ACTIVE` stream before emitting a synthetic `stream_error`.
 
-7. **Timeout**: If no token arrives for 30 seconds during an active stream, the Gateway publishes a `stream_error` and transitions to ERROR state.
+7. **Client cleanup**: When a user switches channels, the client MUST stop rendering any active streams from the previous channel. On rejoin, stream state is reconstructed from the persisted message.
 
 ---
 
-## 4b. Message Delivery Semantics
+## 4b. Durable-First Delivery Semantics
 
-### Broadcast-First with Background Persistence (DEC-0028)
+All message and stream lifecycle delivery follows a durable-first contract:
 
-The Gateway uses a **broadcast-first** pattern for all messages:
+1. **User and typed messages**: persist first, then broadcast.
+2. **Streaming placeholders**: commit `ACTIVE` first via `POST /api/internal/streams/start`, then broadcast `stream_start`.
+3. **Terminal stream events**: commit `COMPLETE` or `ERROR` first via the explicit lifecycle endpoint, then publish Redis status and/or broadcast to clients.
+4. **Recovery**: if a terminal transport event is missed after the durable commit, the watchdog rebroadcasts from the committed row. If a stream remains `ACTIVE` beyond the recovery window, the watchdog first durably forces `ERROR`, then emits a synthetic terminal event.
 
-1. **User messages**: Gateway generates ULID + Redis sequence, broadcasts `message_new` to all clients immediately, then persists to PostgreSQL in a background task.
-2. **Streaming placeholders**: Gateway generates ULID + Redis sequence, broadcasts `stream_start` immediately, then persists the placeholder in a background task concurrently with LLM context fetch.
+The remaining notes in this subsection are historical background from DEC-0028 and are superseded by the durable-first contract above.
+
+There are no timing assumptions, sleeps, or eventual placeholder gaps in the current release contract.
 
 **Why**: The broadcast payload is built entirely from in-memory data (socket assigns, ULID, Redis sequence, `DateTime.utc_now()`). There is zero dependency on the database response. Persisting first added 5-60ms of blocking latency per message — at 1000 users in one channel, this would queue all messages behind each HTTP call, freezing the Elixir channel process.
 
@@ -1903,3 +1986,4 @@ When a message is rate-limited, the Gateway replies with an error instead of bro
 | 2026-03-25 | v4.3    | Selective channel assignment: agent creation APIs accept optional `channelIds[]` parameter (DEC-0074). GET agents endpoint returns `channels` array. Channel picker in all agent creation UI forms. |
 | 2026-03-25 | v4.4    | Tagged stream error codes: StreamErrorPayload gains optional `code` field. `CAPACITY_EXCEEDED` code for concurrency limit errors with user-friendly client handling (DEC-0075). |
 | 2026-03-26 | v4.5    | Documentation: completions endpoint author semantics (DEC-0076), charter turn claim-time semantics (DEC-0077), NextAuth v5 migration plan (DEC-0078). |
+| 2026-03-27 | v4.6    | Durable-first stream lifecycle contract: explicit `/api/internal/streams/*` start/complete/error endpoints, `stream_start.status="active"`, terminal publish-after-commit semantics, and recovery-only watchdog documentation (DEC-0080). |

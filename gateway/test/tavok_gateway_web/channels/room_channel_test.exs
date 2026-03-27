@@ -2,6 +2,7 @@ defmodule TavokGatewayWeb.RoomChannelTest do
   use ExUnit.Case
 
   alias TavokGatewayWeb.RoomChannel
+  alias TavokGateway.StreamOrchestrator
 
   defmodule CharterWebClientStub do
     def charter_control(channel_id, action, user_id) do
@@ -491,5 +492,213 @@ defmodule TavokGatewayWeb.RoomChannelTest do
 
       assert_received {:charter_control_called, "channel-1", "pause", "user-1"}
     end
+  end
+
+  describe "durable stream lifecycle ordering" do
+    test "BYOK trigger delegates durable startup to StreamOrchestrator" do
+      function_body = private_function_body!(:run_byok_trigger_inner, 4)
+      call_order = remote_call_order(function_body)
+
+      assert remote_call_index(call_order, {"StreamOrchestrator", :start_byok_stream}),
+             "expected BYOK trigger to delegate to StreamOrchestrator, got #{inspect(call_order)}"
+
+      refute {"MessagePersistence", :persist_async} in call_order,
+             "expected RoomChannel BYOK path to stop persisting stream placeholders directly"
+
+      refute {"Broadcast", :endpoint_broadcast!} in call_order,
+             "expected RoomChannel BYOK path to stop broadcasting stream_start directly"
+
+      refute {"Redix", :command} in call_order,
+             "expected RoomChannel BYOK path to stop publishing Redis requests directly"
+    end
+
+    test "BYOK trigger offloads orchestration from the channel hot path" do
+      function_body = private_function_body!(:run_byok_trigger, 4)
+      call_order = remote_call_order(function_body)
+
+      assert remote_call_index(call_order, {"Supervisor", :async_nolink}),
+             "expected BYOK trigger to hand orchestration to Task.Supervisor, got #{inspect(call_order)}"
+    end
+
+    test "BYOK orchestrator persists before broadcast, watchdog registration, and publish" do
+      agent_config = %{
+        "id" => "agent-1",
+        "name" => "Planner",
+        "avatarUrl" => "https://example.com/agent.png"
+      }
+
+      assert {:ok, %{message_id: "msg-1", sequence: "42"}} =
+               StreamOrchestrator.start_byok_stream(
+                 "channel-1",
+                 agent_config,
+                 "trigger-1",
+                 "hello world",
+                 id_generator: fn ->
+                   send(self(), {:step, :message_id})
+                   "msg-1"
+                 end,
+                 sequence_allocator: fn "channel-1" ->
+                   send(self(), {:step, :sequence})
+                   {:ok, 42}
+                 end,
+                 start_placeholder: fn placeholder ->
+                   send(self(), {:step, :persist, placeholder})
+                   {:ok, placeholder}
+                 end,
+                 broadcaster: fn topic, event, payload ->
+                   send(self(), {:step, :broadcast, topic, event, payload})
+                   :ok
+                 end,
+                 register_watchdog: fn channel_id, message_id ->
+                   send(self(), {:step, :watchdog, channel_id, message_id})
+                   :ok
+                 end,
+                 context_fetcher: fn "channel-1", "hello world" ->
+                   [%{"role" => "user", "content" => "hello world"}]
+                 end,
+                 publish_request: fn request ->
+                   send(self(), {:step, :publish, request})
+                   :ok
+                 end,
+                 task_starter: fn fun ->
+                   send(self(), {:step, :task_started})
+                   fun.()
+                   {:ok, self()}
+                 end,
+                 request_id_generator: fn -> "req-1" end,
+                 traceparent_getter: fn -> "" end
+               )
+
+      assert_receive {:step, :message_id}
+      assert_receive {:step, :sequence}
+
+      assert_receive {:step, :persist, persisted_placeholder}
+      assert persisted_placeholder.type == "STREAMING"
+      assert persisted_placeholder.streamingStatus == "ACTIVE"
+      assert persisted_placeholder.sequence == "42"
+
+      assert_receive {:step, :broadcast, "room:channel-1", "stream_start", broadcast_payload}
+      assert broadcast_payload.messageId == "msg-1"
+      assert broadcast_payload.sequence == "42"
+      assert broadcast_payload.status == "active"
+
+      assert_receive {:step, :watchdog, "channel-1", "msg-1"}
+      assert_receive {:step, :task_started}
+
+      assert_receive {:step, :publish, published_request}
+      assert published_request.channelId == "channel-1"
+      assert published_request.messageId == "msg-1"
+      assert published_request.triggerMessageId == "trigger-1"
+      assert published_request.requestId == "req-1"
+    end
+
+    test "BYOK orchestrator durably fails the stream if request publish fails" do
+      agent_config = %{
+        "id" => "agent-1",
+        "name" => "Planner"
+      }
+
+      assert {:ok, %{message_id: "msg-2", sequence: "7"}} =
+               StreamOrchestrator.start_byok_stream(
+                 "channel-2",
+                 agent_config,
+                 "trigger-2",
+                 "hello again",
+                 id_generator: fn -> "msg-2" end,
+                 sequence_allocator: fn "channel-2" -> {:ok, 7} end,
+                 start_placeholder: fn _placeholder -> {:ok, %{}} end,
+                 broadcaster: fn topic, event, payload ->
+                   send(self(), {:step, :broadcast, topic, event, payload})
+                   :ok
+                 end,
+                 register_watchdog: fn channel_id, message_id ->
+                   send(self(), {:step, :watchdog, channel_id, message_id})
+                   :ok
+                 end,
+                 deregister_watchdog: fn message_id ->
+                   send(self(), {:step, :deregister_watchdog, message_id})
+                   :ok
+                 end,
+                 context_fetcher: fn "channel-2", "hello again" ->
+                   [%{"role" => "user", "content" => "hello again"}]
+                 end,
+                 publish_request: fn _request -> {:error, :nxdomain} end,
+                 fail_stream: fn message_id, body ->
+                   send(self(), {:step, :fail_stream, message_id, body})
+                   {:ok, %{}}
+                 end,
+                 task_starter: fn fun ->
+                   fun.()
+                   {:ok, self()}
+                 end,
+                 request_id_generator: fn -> "req-2" end,
+                 traceparent_getter: fn -> "" end
+               )
+
+      assert_receive {:step, :broadcast, "room:channel-2", "stream_start", start_payload}
+      assert start_payload.messageId == "msg-2"
+      assert start_payload.status == "active"
+
+      assert_receive {:step, :watchdog, "channel-2", "msg-2"}
+      assert_receive {:step, :deregister_watchdog, "msg-2"}
+      assert_receive {:step, :fail_stream, "msg-2", fail_body}
+      assert fail_body["content"] == "[Error: Stream failed before request dispatch]"
+
+      assert_receive {:step, :broadcast, "room:channel-2", "stream_error", error_payload}
+      assert error_payload.messageId == "msg-2"
+      assert error_payload.status == "error"
+      assert error_payload.error == "Stream failed before request dispatch"
+    end
+  end
+
+  defp private_function_body!(name, arity) do
+    room_channel_path =
+      Path.expand(Path.join(__DIR__, "../../../lib/tavok_gateway_web/channels/room_channel.ex"))
+
+    source = File.read!(room_channel_path)
+    {:ok, ast} = Code.string_to_quoted(source)
+
+    {_ast, function_body} =
+      Macro.prewalk(ast, nil, fn
+        {:defp, _, [{^name, _, args}, [do: body]]} = node, nil ->
+          if length(args || []) == arity do
+            {node, body}
+          else
+            {node, nil}
+          end
+
+        node, acc ->
+          {node, acc}
+      end)
+
+    function_body || flunk("could not find #{name}/#{arity} in room_channel.ex")
+  end
+
+  defp remote_call_order(ast) do
+    {_ast, calls} =
+      Macro.prewalk(ast, [], fn
+        {{:., _, [module_ast, fun]}, _, _args} = node, acc ->
+          case module_ast do
+            {:__aliases__, _, parts} ->
+              module_name = parts |> List.last() |> Atom.to_string()
+              {node, [{module_name, fun} | acc]}
+
+            atom when is_atom(atom) ->
+              {node, [{Atom.to_string(atom), fun} | acc]}
+
+            _ ->
+              {node, acc}
+          end
+
+        node, acc ->
+          {node, acc}
+      end)
+
+    Enum.reverse(calls)
+  end
+
+  defp remote_call_index(call_order, expected_call) do
+    Enum.find_index(call_order, &(&1 == expected_call)) ||
+      flunk("could not find #{inspect(expected_call)} in call order #{inspect(call_order)}")
   end
 end

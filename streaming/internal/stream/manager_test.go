@@ -2,8 +2,12 @@ package stream
 
 import (
 	"encoding/json"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"io"
 	"log/slog"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -825,4 +829,87 @@ func TestEmptyResponseGuard_PlaceholderIsNonEmpty(t *testing.T) {
 	if strings.TrimSpace(placeholder) == "" {
 		t.Fatal("placeholder itself should not be considered empty")
 	}
+}
+
+func TestHandleStreamFinalizesBeforePublishingCompletionStatus(t *testing.T) {
+	callOrder := selectorCallOrderForFunc(t, "handleStream")
+
+	finalizeIdx := selectorCallIndex(t, callOrder, "CommitStreamCompletion")
+	publishIdx := selectorCallIndex(t, callOrder, "PublishStatus")
+
+	if finalizeIdx >= publishIdx {
+		t.Fatalf(
+			"expected handleStream to durably finalize before publishing completion status, call order was %v",
+			callOrder,
+		)
+	}
+}
+
+func TestPublishErrorFinalizesBeforePublishingErrorStatus(t *testing.T) {
+	callOrder := selectorCallOrderForFunc(t, "publishError")
+
+	finalizeIdx := selectorCallIndex(t, callOrder, "CommitStreamErrorWithRetry")
+	publishIdx := selectorCallIndex(t, callOrder, "PublishStatus")
+
+	if finalizeIdx >= publishIdx {
+		t.Fatalf(
+			"expected publishError to durably finalize before publishing error status, call order was %v",
+			callOrder,
+		)
+	}
+}
+
+func selectorCallOrderForFunc(t *testing.T, funcName string) []string {
+	t.Helper()
+
+	fset := token.NewFileSet()
+	path := filepath.Join(".", "manager.go")
+	file, err := parser.ParseFile(fset, path, nil, 0)
+	if err != nil {
+		t.Fatalf("parse manager.go: %v", err)
+	}
+
+	var fn *ast.FuncDecl
+	for _, decl := range file.Decls {
+		candidate, ok := decl.(*ast.FuncDecl)
+		if ok && candidate.Name.Name == funcName {
+			fn = candidate
+			break
+		}
+	}
+
+	if fn == nil || fn.Body == nil {
+		t.Fatalf("function %s not found in manager.go", funcName)
+	}
+
+	var calls []string
+	ast.Inspect(fn.Body, func(n ast.Node) bool {
+		call, ok := n.(*ast.CallExpr)
+		if !ok {
+			return true
+		}
+
+		selector, ok := call.Fun.(*ast.SelectorExpr)
+		if !ok {
+			return true
+		}
+
+		calls = append(calls, selector.Sel.Name)
+		return true
+	})
+
+	return calls
+}
+
+func selectorCallIndex(t *testing.T, callOrder []string, target string) int {
+	t.Helper()
+
+	for idx, call := range callOrder {
+		if call == target {
+			return idx
+		}
+	}
+
+	t.Fatalf("call %s not found in %v", target, callOrder)
+	return -1
 }

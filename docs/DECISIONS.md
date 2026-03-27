@@ -1631,3 +1631,28 @@ Fields using this pattern:
 The `Message.metadata` field uses Prisma `Json?` type because it's queried for token counts in analytics.
 
 **Consequences**: No schema change. Pattern is documented. Future normalization (e.g., separate `TokenHistory` table) can be done if querying these fields becomes necessary.
+
+## DEC-0080 â€” Durable-first stream lifecycle ordering
+
+**Date**: 2026-03-27
+**Status**: Accepted
+**Relates to**: release-readiness hardening
+
+**Context**: Release regression K-004 exposed a real race in the stream start path: the Gateway BYOK flow could broadcast `stream_start` before the placeholder row existed durably. Additional review found the same architectural smell on terminal paths: some completion/error flows emitted transport events before Next.js had committed `streamingStatus=COMPLETE|ERROR`. This left the system with multiple inconsistent lifecycle implementations and made fast streams violate the durable-state contract.
+
+**Decision**: Make Next.js the durable state owner for all stream lifecycle edges and require transport layers to advertise only committed state.
+
+1. Stream start uses an explicit `POST /api/internal/streams/start` endpoint that creates the `STREAMING + ACTIVE` placeholder and advances `Channel.lastSequence` transactionally.
+2. `stream_start` is emitted only after that durable `ACTIVE` commit succeeds and now carries `status: "active"` as part of the contract.
+3. Terminal success and failure use explicit `POST /api/internal/streams/{messageId}/complete` and `/error` endpoints. Go, webhook adapters, and internal dispatch routes must commit through those endpoints before publishing `stream_complete`, `stream_error`, or Redis terminal status.
+4. Gateway BYOK orchestration moves off the channel hot path. The channel process acknowledges the user message quickly, while a supervised task performs durable start, broadcast, watchdog registration, and downstream dispatch scheduling.
+5. StreamWatchdog is narrowed to recovery-only behavior: it rebroadcasts already-committed terminal state or durably forces `ERROR` for a stuck `ACTIVE` stream before emitting a synthetic timeout event.
+
+**Rationale**: Durable-first ordering restores a single contract across all entry points, removes timing-sensitive placeholder assumptions, and makes Redis/WebSocket events trustworthy reflections of persisted state instead of best-effort forecasts. It also keeps the Phoenix channel responsive by offloading orchestration instead of blocking the hot path on multi-step work.
+
+**Consequences**:
+
+- The system now has one canonical lifecycle contract: `ACTIVE` is committed before `stream_start`; `COMPLETE` and `ERROR` are committed before any terminal transport event.
+- Fast streams are valid even when the database has already advanced to `COMPLETE` by the time a consumer reacts to `stream_start`; the correctness check is the durable start commit itself, not a timing window.
+- Terminal transport loss is handled by recovery, not by deliberately broadcasting ahead of persistence.
+- Protocol, architecture, and release-gate docs now treat the explicit `/api/internal/streams/*` endpoints as the source of truth for stream lifecycle state.

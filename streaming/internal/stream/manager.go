@@ -581,26 +581,18 @@ func (m *Manager) handleStream(ctx context.Context, req streamRequest) {
 		"checkpoints":      checkpoints,
 	})
 
-	if err := m.gwClient.PublishStatus(ctx, req.ChannelID, req.MessageID, string(statusPayload)); err != nil {
-		m.logger.Error("Failed to publish completion status",
+	if err := m.loader.CommitStreamCompletion(
+		req.MessageID,
+		finalContent,
+		string(timelineJSON),
+		string(tokenHistoryJSON),
+		string(checkpointsJSON),
+		m.logger,
+	); err != nil {
+		m.logger.Error("CommitStreamCompletion exhausted retries; suppressing completion publish until recovery",
 			"messageId", req.MessageID,
 			"error", err,
 		)
-	} else {
-		m.logger.Info("Completion status published to Redis",
-			"messageId", req.MessageID,
-			"channelId", req.ChannelID,
-			"status", "complete",
-		)
-	}
-
-	// 7. Persist final message content with thinking timeline, token history, and checkpoints (with retry — DEC-0018, TASK-0011, TASK-0021)
-	if err := m.loader.FinalizeMessageFull(req.MessageID, finalContent, "COMPLETE", string(timelineJSON), string(tokenHistoryJSON), string(checkpointsJSON), m.logger); err != nil {
-		m.logger.Error("FinalizeMessage exhausted retries — DB may be ACTIVE, watchdog will recover",
-			"messageId", req.MessageID,
-			"error", err,
-		)
-		// L27: Push to dead letter queue for later inspection
 		dlqPayload, _ := json.Marshal(map[string]interface{}{
 			"messageId":   req.MessageID,
 			"channelId":   req.ChannelID,
@@ -616,6 +608,22 @@ func (m *Manager) handleStream(ctx context.Context, req streamRequest) {
 				"error", dlqErr,
 			)
 		}
+		return
+	} else {
+		m.logger.Info("Stream completion durably committed",
+			"messageId", req.MessageID,
+			"channelId", req.ChannelID,
+			"status", "complete",
+		)
+	}
+
+	// 7. Persist final message content with thinking timeline, token history, and checkpoints (with retry — DEC-0018, TASK-0011, TASK-0021)
+	if err := m.gwClient.PublishStatus(ctx, req.ChannelID, req.MessageID, string(statusPayload)); err != nil {
+		m.logger.Error("FinalizeMessage exhausted retries — DB may be ACTIVE, watchdog will recover",
+			"messageId", req.MessageID,
+			"error", err,
+		)
+		// Terminal state is already durable; watchdog can recover the missed event.
 	}
 
 	// 8. Publish charter status event (TASK-0020, P1-Fix 4)
@@ -948,33 +956,19 @@ func (m *Manager) publishError(ctx context.Context, req streamRequest, partialCo
 	if len(errorCode) > 0 && errorCode[0] != "" {
 		payload["code"] = errorCode[0]
 	}
-	statusPayload, _ := json.Marshal(payload)
 
-	if err := m.gwClient.PublishStatus(ctx, req.ChannelID, req.MessageID, string(statusPayload)); err != nil {
-		m.logger.Error("Failed to publish error status",
-			"messageId", req.MessageID,
-			"error", err,
-		)
-	} else {
-		m.logger.Info("Error status published to Redis",
-			"messageId", req.MessageID,
-			"channelId", req.ChannelID,
-			"status", "error",
-		)
-	}
-
-	// Persist the error state — use partial content if available
 	content := partialContent
 	if content == "" {
 		content = "[Error: " + errMsg + "]"
 	}
 
-	if err := m.loader.FinalizeMessageWithRetry(req.MessageID, content, "ERROR", m.logger); err != nil {
-		m.logger.Error("FinalizeMessage (error path) exhausted retries — DB may be ACTIVE, watchdog will recover",
+	statusPayload, _ := json.Marshal(payload)
+
+	if err := m.loader.CommitStreamErrorWithRetry(req.MessageID, content, m.logger); err != nil {
+		m.logger.Error("CommitStreamErrorWithRetry exhausted retries; suppressing error publish until recovery",
 			"messageId", req.MessageID,
 			"error", err,
 		)
-		// L27: Push to dead letter queue for later inspection
 		dlqPayload, _ := json.Marshal(map[string]interface{}{
 			"messageId":   req.MessageID,
 			"channelId":   req.ChannelID,
@@ -990,6 +984,22 @@ func (m *Manager) publishError(ctx context.Context, req streamRequest, partialCo
 				"error", dlqErr,
 			)
 		}
+		return
+	} else {
+		m.logger.Info("Stream error durably committed",
+			"messageId", req.MessageID,
+			"channelId", req.ChannelID,
+			"status", "error",
+		)
+	}
+
+	// Persist the error state — use partial content if available
+	if err := m.gwClient.PublishStatus(ctx, req.ChannelID, req.MessageID, string(statusPayload)); err != nil {
+		m.logger.Error("FinalizeMessage (error path) exhausted retries — DB may be ACTIVE, watchdog will recover",
+			"messageId", req.MessageID,
+			"error", err,
+		)
+		// Terminal state is already durable; watchdog can recover the missed event.
 	}
 }
 

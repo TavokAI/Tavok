@@ -8,6 +8,11 @@ import {
 } from "./api-safety";
 import { parseMentionedUserIds } from "./mention-parser";
 import { validateOptionalMessageMetadata } from "./message-metadata-contract";
+import {
+  createStreamLifecycleService,
+  StreamLifecycleConflictError,
+  StreamLifecycleNotFoundError,
+} from "./stream-lifecycle";
 import { generateId } from "./ulid";
 import { validateInternalSecretValue } from "./internal-auth";
 import type { PrismaClient } from "@prisma/client";
@@ -33,6 +38,9 @@ interface RequestLike {
   json: () => Promise<unknown>;
   searchParams?: URLSearchParams;
 }
+
+type RouteRequest = Request | NextRequest;
+type JsonRequest = RequestLike | RouteRequest;
 
 // Next.js App Router context for route handlers with dynamic params
 interface RouteContext {
@@ -90,6 +98,29 @@ interface SessionDeps {
 
 interface ServerAgentPatchDeps extends SessionDeps {
   encrypt: (value: string) => string;
+}
+
+function assertInternalSecret(request: JsonRequest) {
+  if (!validateInternalSecretValue(request.headers.get("x-internal-secret"))) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  return null;
+}
+
+async function parseJsonObjectBody(
+  request: JsonRequest,
+): Promise<Record<string, unknown> | NextResponse> {
+  try {
+    const parsedBody = await request.json();
+    if (!isJsonObjectBody(parsedBody)) {
+      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    }
+
+    return parsedBody;
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
 }
 
 export function createInternalMessagesPostHandler({
@@ -340,6 +371,207 @@ export function createInternalMessagesPostHandler({
       );
     }
   };
+}
+
+export function createInternalStreamStartHandler({
+  prismaClient,
+}: PrismaClientDep) {
+  const streamLifecycle = createStreamLifecycleService({ prismaClient });
+
+  return async function internalStreamStartHandler(request: RouteRequest) {
+    const unauthorizedResponse = assertInternalSecret(request);
+    if (unauthorizedResponse) {
+      return unauthorizedResponse;
+    }
+
+    const parsedBody = await parseJsonObjectBody(request);
+    if (parsedBody instanceof NextResponse) {
+      return parsedBody;
+    }
+
+    const id = parsedBody.id;
+    const channelId = parsedBody.channelId;
+    const authorId = parsedBody.authorId;
+    const authorType = parsedBody.authorType;
+    const sequence = parsedBody.sequence;
+    const content = parsedBody.content === undefined ? "" : parsedBody.content;
+
+    if (
+      typeof id !== "string" ||
+      typeof channelId !== "string" ||
+      typeof authorId !== "string" ||
+      !isAuthorType(authorType) ||
+      typeof content !== "string" ||
+      (typeof sequence !== "string" &&
+        typeof sequence !== "number" &&
+        typeof sequence !== "bigint")
+    ) {
+      return NextResponse.json(
+        { error: "Missing required fields" },
+        { status: 400 },
+      );
+    }
+
+    try {
+      const message = await streamLifecycle.startStreamPlaceholder({
+        id,
+        channelId,
+        authorId,
+        authorType,
+        sequence,
+        content,
+      });
+
+      return NextResponse.json(message, { status: 201 });
+    } catch (error) {
+      if (error instanceof TypeError) {
+        return NextResponse.json({ error: error.message }, { status: 400 });
+      }
+      if (error instanceof StreamLifecycleConflictError) {
+        return NextResponse.json({ error: error.message }, { status: 409 });
+      }
+
+      console.error("[route-handlers] Failed to start stream:", error);
+      return NextResponse.json(
+        { error: "Failed to start stream" },
+        { status: 500 },
+      );
+    }
+  };
+}
+
+export function createInternalStreamCompleteHandler({
+  prismaClient,
+}: PrismaClientDep) {
+  const streamLifecycle = createStreamLifecycleService({ prismaClient });
+
+  return async function internalStreamCompleteHandler(
+    request: RouteRequest,
+    { params }: RouteContext,
+  ) {
+    const unauthorizedResponse = assertInternalSecret(request);
+    if (unauthorizedResponse) {
+      return unauthorizedResponse;
+    }
+
+    const parsedBody = await parseJsonObjectBody(request);
+    if (parsedBody instanceof NextResponse) {
+      return parsedBody;
+    }
+
+    const { messageId } = await params;
+    const content = parsedBody.content;
+    const metadataResult = validateOptionalMessageMetadata(parsedBody.metadata);
+
+    if (typeof content !== "string") {
+      return NextResponse.json(
+        { error: "content is required" },
+        { status: 400 },
+      );
+    }
+
+    if (!metadataResult.ok) {
+      return NextResponse.json(
+        { error: metadataResult.error },
+        { status: 400 },
+      );
+    }
+
+    try {
+      const message = await streamLifecycle.completeStream({
+        messageId,
+        content,
+        metadata: metadataResult.metadata,
+        thinkingTimeline: coerceOptionalString(parsedBody.thinkingTimeline),
+        tokenHistory: coerceOptionalString(parsedBody.tokenHistory),
+        checkpoints: coerceOptionalString(parsedBody.checkpoints),
+      });
+
+      return NextResponse.json(message);
+    } catch (error) {
+      if (error instanceof StreamLifecycleNotFoundError) {
+        return NextResponse.json({ error: error.message }, { status: 404 });
+      }
+      if (error instanceof StreamLifecycleConflictError) {
+        return NextResponse.json({ error: error.message }, { status: 409 });
+      }
+
+      console.error("[route-handlers] Failed to complete stream:", error);
+      return NextResponse.json(
+        { error: "Failed to complete stream" },
+        { status: 500 },
+      );
+    }
+  };
+}
+
+export function createInternalStreamErrorHandler({
+  prismaClient,
+}: PrismaClientDep) {
+  const streamLifecycle = createStreamLifecycleService({ prismaClient });
+
+  return async function internalStreamErrorHandler(
+    request: RouteRequest,
+    { params }: RouteContext,
+  ) {
+    const unauthorizedResponse = assertInternalSecret(request);
+    if (unauthorizedResponse) {
+      return unauthorizedResponse;
+    }
+
+    const parsedBody = await parseJsonObjectBody(request);
+    if (parsedBody instanceof NextResponse) {
+      return parsedBody;
+    }
+
+    const { messageId } = await params;
+    const content = parsedBody.content;
+    const metadataResult = validateOptionalMessageMetadata(parsedBody.metadata);
+
+    if (typeof content !== "string") {
+      return NextResponse.json(
+        { error: "content is required" },
+        { status: 400 },
+      );
+    }
+
+    if (!metadataResult.ok) {
+      return NextResponse.json(
+        { error: metadataResult.error },
+        { status: 400 },
+      );
+    }
+
+    try {
+      const message = await streamLifecycle.failStream({
+        messageId,
+        content,
+        metadata: metadataResult.metadata,
+        thinkingTimeline: coerceOptionalString(parsedBody.thinkingTimeline),
+        tokenHistory: coerceOptionalString(parsedBody.tokenHistory),
+        checkpoints: coerceOptionalString(parsedBody.checkpoints),
+      });
+
+      return NextResponse.json(message);
+    } catch (error) {
+      if (error instanceof StreamLifecycleNotFoundError) {
+        return NextResponse.json({ error: error.message }, { status: 404 });
+      }
+      if (error instanceof StreamLifecycleConflictError) {
+        return NextResponse.json({ error: error.message }, { status: 409 });
+      }
+
+      console.error("[route-handlers] Failed to fail stream:", error);
+      return NextResponse.json(
+        { error: "Failed to fail stream" },
+        { status: 500 },
+      );
+    }
+  };
+}
+
+function coerceOptionalString(value: unknown) {
+  return typeof value === "string" ? value : undefined;
 }
 
 export function createServerAgentPatchHandler({

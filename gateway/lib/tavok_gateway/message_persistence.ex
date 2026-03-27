@@ -83,6 +83,11 @@ defmodule TavokGateway.MessagePersistence do
   Returns the Task reference (for testing), but callers don't need to await it.
   """
   def persist_async(body, message_id, channel_id) do
+    if Map.get(body, :type) == "STREAMING" or Map.get(body, "type") == "STREAMING" do
+      raise ArgumentError,
+            "STREAMING placeholders must use durable stream lifecycle endpoints"
+    end
+
     Task.Supervisor.async_nolink(TavokGateway.TaskSupervisor, fn ->
       persist_with_retry(body, message_id, channel_id)
     end)

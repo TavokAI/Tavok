@@ -1,5 +1,8 @@
-import { broadcastStreamComplete } from "@/lib/gateway-client";
-import { updateMessage } from "@/lib/internal-api-client";
+import {
+  broadcastStreamComplete,
+  broadcastStreamError,
+} from "@/lib/gateway-client";
+import { completeStream, failStream } from "@/lib/internal-api-client";
 import type { MessageMetadata } from "@/lib/message-metadata-contract";
 
 interface FinalizeStreamCompletionArgs {
@@ -7,31 +10,83 @@ interface FinalizeStreamCompletionArgs {
   messageId: string;
   finalContent: string;
   metadata?: MessageMetadata;
+  thinkingTimeline?: string;
+  tokenHistory?: string;
+  checkpoints?: string;
   broadcastStreamCompleteFn?: typeof broadcastStreamComplete;
-  updateMessageFn?: typeof updateMessage;
+  completeStreamFn?: typeof completeStream;
+}
+
+interface FinalizeStreamErrorArgs {
+  channelId: string;
+  messageId: string;
+  error: string;
+  partialContent?: string | null;
+  metadata?: MessageMetadata;
+  thinkingTimeline?: string;
+  tokenHistory?: string;
+  checkpoints?: string;
+  broadcastStreamErrorFn?: typeof broadcastStreamError;
+  failStreamFn?: typeof failStream;
 }
 
 /**
- * Broadcast and persist a completed stream using the same metadata shape for
- * both real-time delivery and Prisma JSON persistence.
+ * Durably commit a completed stream before advertising `stream_complete`.
  */
 export async function finalizeStreamCompletion({
   channelId,
   messageId,
   finalContent,
   metadata,
+  thinkingTimeline,
+  tokenHistory,
+  checkpoints,
   broadcastStreamCompleteFn = broadcastStreamComplete,
-  updateMessageFn = updateMessage,
+  completeStreamFn = completeStream,
 }: FinalizeStreamCompletionArgs): Promise<void> {
+  await completeStreamFn(messageId, {
+    content: finalContent,
+    ...(metadata !== undefined ? { metadata } : {}),
+    ...(thinkingTimeline !== undefined ? { thinkingTimeline } : {}),
+    ...(tokenHistory !== undefined ? { tokenHistory } : {}),
+    ...(checkpoints !== undefined ? { checkpoints } : {}),
+  });
+
   await broadcastStreamCompleteFn(channelId, {
     messageId,
     finalContent,
     metadata: metadata ?? null,
   });
+}
 
-  await updateMessageFn(messageId, {
-    content: finalContent,
-    streamingStatus: "COMPLETE",
+/**
+ * Durably commit a failed stream before advertising `stream_error`.
+ */
+export async function finalizeStreamError({
+  channelId,
+  messageId,
+  error,
+  partialContent,
+  metadata,
+  thinkingTimeline,
+  tokenHistory,
+  checkpoints,
+  broadcastStreamErrorFn = broadcastStreamError,
+  failStreamFn = failStream,
+}: FinalizeStreamErrorArgs): Promise<void> {
+  const resolvedContent = partialContent ?? `*[Error: ${error}]*`;
+
+  await failStreamFn(messageId, {
+    content: resolvedContent,
     ...(metadata !== undefined ? { metadata } : {}),
+    ...(thinkingTimeline !== undefined ? { thinkingTimeline } : {}),
+    ...(tokenHistory !== undefined ? { tokenHistory } : {}),
+    ...(checkpoints !== undefined ? { checkpoints } : {}),
+  });
+
+  await broadcastStreamErrorFn(channelId, {
+    messageId,
+    error,
+    partialContent: partialContent ?? null,
   });
 }

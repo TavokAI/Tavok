@@ -1,16 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { authenticateAgentRequest } from "@/lib/agent-auth";
-import {
-  broadcastStreamToken,
-  broadcastStreamError,
-  broadcastToChannel,
-} from "@/lib/gateway-client";
-import { updateMessage } from "@/lib/internal-api-client";
+import { broadcastStreamToken, broadcastToChannel } from "@/lib/gateway-client";
 import { checkAgentRateLimit } from "@/lib/rate-limit";
 import { logAgentAction } from "@/lib/agent-audit";
 import { validateOptionalMessageMetadata } from "@/lib/message-metadata-contract";
-import { finalizeStreamCompletion } from "@/lib/stream-finalization";
+import {
+  finalizeStreamCompletion,
+  finalizeStreamError,
+} from "@/lib/stream-finalization";
 
 /**
  * POST /api/v1/agents/{id}/messages/{messageId}/stream — Stream tokens (DEC-0043)
@@ -141,15 +139,11 @@ export async function POST(
         messageId,
         metadata: { error },
       });
-      await broadcastStreamError(resolvedChannelId, {
+      await finalizeStreamError({
+        channelId: resolvedChannelId,
         messageId,
         error,
         partialContent: finalContent || null,
-      });
-
-      await updateMessage(messageId, {
-        streamingStatus: "ERROR",
-        content: finalContent || `*[Error: ${error}]*`,
       });
 
       return NextResponse.json({ ok: true });
