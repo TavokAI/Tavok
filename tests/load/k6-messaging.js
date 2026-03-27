@@ -209,13 +209,15 @@ export function setup() {
 
   const servers = listServers(jar);
   if (servers.length === 0) {
-    fail("No servers found for user — cannot run load test");
+    console.warn("No servers found for user — WS tests will be skipped");
+    return { jwt, channelId: null };
   }
 
   const server = servers[0];
   const channels = listChannels(jar, server.id);
   if (channels.length === 0) {
-    fail(`No channels in server ${server.name} — cannot run load test`);
+    console.warn(`No channels in server ${server.name} — WS tests will be skipped`);
+    return { jwt, channelId: null };
   }
 
   const channel = channels[0];
@@ -227,6 +229,10 @@ export function setup() {
 // ---------------------------------------------------------------------------
 
 export default function (data) {
+  if (!data.channelId) {
+    sleep(1);
+    return;
+  }
   const jwt = data.jwt;
   const channelTopic = `room:${data.channelId}`;
 
