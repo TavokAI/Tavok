@@ -9,7 +9,13 @@ vi.mock("@/lib/internal-auth", () => ({
 const mockFetch = vi.fn();
 vi.stubGlobal("fetch", mockFetch);
 
-import { persistMessage, updateMessage } from "../internal-api-client";
+import {
+  completeStream,
+  failStream,
+  persistMessage,
+  startStreamPlaceholder,
+  updateMessage,
+} from "../internal-api-client";
 
 const TEST_SECRET = "test-internal-secret";
 
@@ -182,6 +188,117 @@ describe("updateMessage", () => {
 
     await expect(updateMessage("msg-123", { content: "x" })).rejects.toThrow(
       "Message update failed: 500 unknown",
+    );
+  });
+});
+
+describe("stream lifecycle calls", () => {
+  beforeEach(() => {
+    process.env.INTERNAL_API_SECRET = TEST_SECRET;
+    mockFetch.mockReset();
+  });
+
+  afterEach(() => {
+    delete process.env.INTERNAL_API_SECRET;
+  });
+
+  it("sends POST to /api/internal/streams/start", async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      status: 201,
+      json: () =>
+        Promise.resolve({
+          id: "msg-1",
+          streamingStatus: "ACTIVE",
+          sequence: "42",
+        }),
+    });
+
+    const data = {
+      id: "msg-1",
+      channelId: "ch-1",
+      authorId: "agent-1",
+      authorType: "AGENT",
+      sequence: "42",
+    };
+
+    await expect(startStreamPlaceholder(data)).resolves.toMatchObject({
+      id: "msg-1",
+      streamingStatus: "ACTIVE",
+    });
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      "http://localhost:3000/api/internal/streams/start",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-internal-secret": TEST_SECRET,
+        },
+        body: JSON.stringify(data),
+      },
+    );
+  });
+
+  it("sends POST to /api/internal/streams/{messageId}/complete", async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () =>
+        Promise.resolve({
+          id: "msg-1",
+          streamingStatus: "COMPLETE",
+          content: "done",
+        }),
+    });
+
+    const data = { content: "done" };
+    await expect(completeStream("msg-1", data)).resolves.toMatchObject({
+      id: "msg-1",
+      streamingStatus: "COMPLETE",
+    });
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      "http://localhost:3000/api/internal/streams/msg-1/complete",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-internal-secret": TEST_SECRET,
+        },
+        body: JSON.stringify(data),
+      },
+    );
+  });
+
+  it("sends POST to /api/internal/streams/{messageId}/error", async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () =>
+        Promise.resolve({
+          id: "msg-1",
+          streamingStatus: "ERROR",
+          content: "*[Error]*",
+        }),
+    });
+
+    const data = { content: "*[Error]*" };
+    await expect(failStream("msg-1", data)).resolves.toMatchObject({
+      id: "msg-1",
+      streamingStatus: "ERROR",
+    });
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      "http://localhost:3000/api/internal/streams/msg-1/error",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-internal-secret": TEST_SECRET,
+        },
+        body: JSON.stringify(data),
+      },
     );
   });
 });

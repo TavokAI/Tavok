@@ -2,6 +2,9 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import {
   createInternalMessagesPostHandler,
+  createInternalStreamCompleteHandler,
+  createInternalStreamErrorHandler,
+  createInternalStreamStartHandler,
   createServerAgentPatchHandler,
   createServerChannelPatchHandler,
 } from "../route-handlers";
@@ -47,6 +50,26 @@ function makeRequest({
       if (throwOnJson) throw new Error("bad json");
       return body;
     },
+  };
+}
+
+function makeStreamingMessage(overrides = {} as any) {
+  return {
+    id: "msg-1",
+    channelId: "channel-1",
+    authorId: "agent-1",
+    authorType: "AGENT",
+    content: "",
+    type: "STREAMING",
+    streamingStatus: "ACTIVE",
+    sequence: BigInt(42),
+    metadata: null,
+    thinkingTimeline: null,
+    tokenHistory: null,
+    checkpoints: null,
+    createdAt: new Date("2026-03-27T12:00:00.000Z"),
+    updatedAt: new Date("2026-03-27T12:00:00.000Z"),
+    ...overrides,
   };
 }
 
@@ -415,6 +438,152 @@ describe("createServerAgentPatchHandler", () => {
     );
 
     expect(capturedUpdate.apiKeyEncrypted).toBe("encrypted:sk-secret-key");
+  });
+});
+
+describe("internal stream lifecycle handlers", () => {
+  beforeEach(() => {
+    process.env.INTERNAL_API_SECRET = "test-secret";
+  });
+
+  afterEach(() => {
+    process.env.INTERNAL_API_SECRET = ORIGINAL_SECRET;
+  });
+
+  it("creates an ACTIVE placeholder through the dedicated stream start handler", async () => {
+    const handler = createInternalStreamStartHandler({
+      prismaClient: {
+        $transaction: async (callback: any) =>
+          callback({
+            message: {
+              findUnique: async () => null,
+              create: async ({ data }: any) => makeStreamingMessage(data),
+            },
+            channel: {
+              updateMany: async () => ({ count: 1 }),
+            },
+          }),
+      },
+    });
+
+    const res = await handler(
+      makeRequest({
+        body: {
+          id: "msg-1",
+          channelId: "channel-1",
+          authorId: "agent-1",
+          authorType: "AGENT",
+          sequence: "42",
+        },
+      }),
+    );
+
+    expect(res.status).toBe(201);
+    await expect(res.json()).resolves.toMatchObject({
+      id: "msg-1",
+      channelId: "channel-1",
+      streamingStatus: "ACTIVE",
+      sequence: "42",
+    });
+  });
+
+  it("returns 409 when the dedicated stream start handler sees a conflicting placeholder", async () => {
+    const handler = createInternalStreamStartHandler({
+      prismaClient: {
+        $transaction: async (callback: any) =>
+          callback({
+            message: {
+              findUnique: async () =>
+                makeStreamingMessage({ sequence: BigInt(7) }),
+              create: async () => {
+                throw new Error("should not create");
+              },
+            },
+            channel: {
+              updateMany: async () => ({ count: 1 }),
+            },
+          }),
+      },
+    });
+
+    const res = await handler(
+      makeRequest({
+        body: {
+          id: "msg-1",
+          channelId: "channel-1",
+          authorId: "agent-1",
+          authorType: "AGENT",
+          sequence: "42",
+        },
+      }),
+    );
+
+    expect(res.status).toBe(409);
+    await expect(res.json()).resolves.toEqual({
+      error: "Stream placeholder already exists with different state",
+    });
+  });
+
+  it("returns 409 when the complete handler is asked to finalize a non-ACTIVE stream", async () => {
+    const handler = createInternalStreamCompleteHandler({
+      prismaClient: {
+        $transaction: async (callback: any) =>
+          callback({
+            message: {
+              findUnique: async () =>
+                makeStreamingMessage({ streamingStatus: "ERROR" }),
+              update: async () => {
+                throw new Error("should not update");
+              },
+            },
+          }),
+      },
+    });
+
+    const res = await handler(
+      makeRequest({
+        body: { content: "done" },
+      }),
+      { params: Promise.resolve({ messageId: "msg-1" }) },
+    );
+
+    expect(res.status).toBe(409);
+    await expect(res.json()).resolves.toEqual({
+      error: "Invalid stream transition ERROR -> COMPLETE",
+    });
+  });
+
+  it("returns the canonical message payload from the dedicated error handler", async () => {
+    const handler = createInternalStreamErrorHandler({
+      prismaClient: {
+        $transaction: async (callback: any) =>
+          callback({
+            message: {
+              findUnique: async () => makeStreamingMessage(),
+              update: async ({ data }: any) =>
+                makeStreamingMessage({
+                  content: data.content,
+                  streamingStatus: data.streamingStatus,
+                }),
+            },
+          }),
+      },
+    });
+
+    const res = await handler(
+      makeRequest({
+        body: { content: "*[Error]*" },
+      }),
+      { params: Promise.resolve({ messageId: "msg-1" }) },
+    );
+
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toMatchObject({
+      id: "msg-1",
+      content: "*[Error]*",
+      streamingStatus: "ERROR",
+      sequence: "42",
+    });
   });
 });
 
