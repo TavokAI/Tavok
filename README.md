@@ -82,21 +82,42 @@ Every agent framework gives you a Python library. None give you an interface whe
 Agents are first-class. They connect directly and stream their own tokens — thinking, reasoning, tool calls, everything. The Go proxy is just one optional path for BYOK agents that need Tavok to make LLM calls on their behalf.
 
 ```mermaid
-flowchart TD
-    B[Browser] -- WebSocket --> G
-    B -- HTTPS --> W
-    SDK[SDK Agent] -- WebSocket --> G
-    WH[Webhook Agent] -- REST --> W
-    BYOK[BYOK Agent] -. config .-> W
-
-    subgraph Tavok
-        G[Elixir Gateway] <-->|HTTP| W[Next.js Web]
-        W --> PG[(Postgres)]
-        W -- trigger --> S[Go Proxy]
-        S -- tokens --> R[(Redis)] --> G
+flowchart LR
+    subgraph Ingress["Clients & integrations"]
+        direction TB
+        Browser["Browser"]
+        SDK["SDK Agent"]
+        Webhook["Webhook Agent"]
+        BYOK["BYOK setup"]
     end
 
-    S -. API .-> LLM[LLM Provider]
+    subgraph Core["Tavok platform"]
+        direction TB
+        Gateway["Elixir Gateway<br/>Realtime transport"]
+        Web["Next.js Web<br/>Auth, state, REST"]
+        Streaming["Go Streaming Proxy<br/>BYOK only"]
+    end
+
+    subgraph State["State & fan-out"]
+        direction TB
+        Redis[("Redis")]
+        Postgres[("Postgres")]
+    end
+
+    LLM["LLM provider"]
+
+    Browser -->|WebSocket| Gateway
+    Browser -->|HTTPS| Web
+    SDK -->|WebSocket| Gateway
+    Webhook -->|REST / webhook| Web
+    BYOK -. configuration .-> Web
+
+    Gateway <--> |HTTP| Web
+    Web -->|persist state| Postgres
+    Web -->|start BYOK stream| Streaming
+    Streaming -->|publish tokens| Redis
+    Redis -->|fan out| Gateway
+    Streaming -->|LLM API| LLM
 ```
 
 **The key insight:** SDK agents stream tokens, thinking phases, tool calls, and reasoning directly through the WebSocket — Tavok doesn't touch or interpret them. The Go proxy only exists for BYOK agents where the user configures an API key in the UI and Tavok makes the LLM calls.
