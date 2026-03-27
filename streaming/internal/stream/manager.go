@@ -790,24 +790,20 @@ func (m *Manager) runProviderIteration(
 	return lastContent, tokenCount, pr, false
 }
 
-// executeTools runs all requested tool calls and publishes events. (TASK-0018)
+// executeTools runs all requested tool calls in parallel and publishes events. (TASK-0018, L12)
 func (m *Manager) executeTools(
 	streamCtx, parentCtx context.Context,
 	req streamRequest,
 	toolCalls []provider.ToolCall,
 ) []tools.ToolCallResult {
-	results := make([]tools.ToolCallResult, 0, len(toolCalls))
+	// L12: Execute all tools in parallel — results are collected in order
+	type indexedResult struct {
+		index  int
+		result tools.ToolCallResult
+	}
 
+	// Publish all tool_call events first (so UI shows all pending tools)
 	for _, tc := range toolCalls {
-		_, toolSpan := tracing.Tracer.Start(streamCtx, "tool.execute",
-			trace.WithAttributes(
-				attribute.String("tavok.message_id", req.MessageID),
-				attribute.String("tool.name", tc.Name),
-				attribute.String("tool.call_id", tc.ID),
-			),
-		)
-
-		// Publish tool_call event to frontend
 		callPayload, _ := json.Marshal(map[string]interface{}{
 			"messageId": req.MessageID,
 			"callId":    tc.ID,
@@ -822,35 +818,58 @@ func (m *Manager) executeTools(
 				"error", err,
 			)
 		}
+	}
 
-		// Execute the tool
-		toolReq := tools.ToolCallRequest{
-			ID:        tc.ID,
-			Name:      tc.Name,
-			Arguments: tc.Arguments,
-		}
-		result := m.toolRegistry.Call(streamCtx, toolReq)
-		results = append(results, result)
+	// Execute tools in parallel
+	resultCh := make(chan indexedResult, len(toolCalls))
+	for i, tc := range toolCalls {
+		go func(idx int, tc provider.ToolCall) {
+			_, toolSpan := tracing.Tracer.Start(streamCtx, "tool.execute",
+				trace.WithAttributes(
+					attribute.String("tavok.message_id", req.MessageID),
+					attribute.String("tool.name", tc.Name),
+					attribute.String("tool.call_id", tc.ID),
+				),
+			)
 
-		if result.IsError {
-			toolSpan.SetStatus(codes.Error, "tool execution failed")
-		}
-		toolSpan.End()
+			toolReq := tools.ToolCallRequest{
+				ID:        tc.ID,
+				Name:      tc.Name,
+				Arguments: tc.Arguments,
+			}
+			result := m.toolRegistry.Call(streamCtx, toolReq)
 
-		m.logger.Info("Tool executed",
-			"messageId", req.MessageID,
-			"toolName", tc.Name,
-			"callId", tc.ID,
-			"isError", result.IsError,
-		)
+			if result.IsError {
+				toolSpan.SetStatus(codes.Error, "tool execution failed")
+			}
+			toolSpan.End()
 
-		// Publish tool_result event to frontend
+			m.logger.Info("Tool executed",
+				"messageId", req.MessageID,
+				"toolName", tc.Name,
+				"callId", tc.ID,
+				"isError", result.IsError,
+			)
+
+			resultCh <- indexedResult{index: idx, result: result}
+		}(i, tc)
+	}
+
+	// Collect results in original order
+	results := make([]tools.ToolCallResult, len(toolCalls))
+	for range toolCalls {
+		ir := <-resultCh
+		results[ir.index] = ir.result
+	}
+
+	// Publish tool_result events in order
+	for i, tc := range toolCalls {
 		resultPayload, _ := json.Marshal(map[string]interface{}{
 			"messageId": req.MessageID,
 			"callId":    tc.ID,
 			"toolName":  tc.Name,
-			"content":   result.Content,
-			"isError":   result.IsError,
+			"content":   results[i].Content,
+			"isError":   results[i].IsError,
 			"timestamp": time.Now().UTC().Format(time.RFC3339Nano),
 		})
 		if err := m.gwClient.PublishToolResult(parentCtx, req.ChannelID, req.MessageID, string(resultPayload)); err != nil {

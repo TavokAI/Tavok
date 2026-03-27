@@ -150,7 +150,7 @@ export async function PATCH(
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const { userId, content } = body;
+  const { userId, content, expectedEditedAt } = body;
 
   if (!userId || typeof userId !== "string") {
     return NextResponse.json({ error: "userId is required" }, { status: 400 });
@@ -177,6 +177,7 @@ export async function PATCH(
         authorType: true,
         streamingStatus: true,
         isDeleted: true,
+        editedAt: true,
       },
     });
 
@@ -210,6 +211,23 @@ export async function PATCH(
         { error: "Cannot edit an active streaming message" },
         { status: 409 },
       );
+    }
+
+    // L4: Optimistic locking — reject if message was edited since client last saw it
+    if (expectedEditedAt && message.editedAt) {
+      const expected = new Date(expectedEditedAt).getTime();
+      const actual = message.editedAt.getTime();
+      if (expected !== actual) {
+        return NextResponse.json(
+          {
+            error:
+              "Message was modified by another user. Refresh and try again.",
+            code: "EDIT_CONFLICT",
+            currentEditedAt: message.editedAt.toISOString(),
+          },
+          { status: 409 },
+        );
+      }
     }
 
     const editedAt = new Date();

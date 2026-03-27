@@ -689,7 +689,7 @@ defmodule TavokGatewayWeb.RoomChannel do
   # ---------- Message Edit (TASK-0014) ----------
 
   @impl true
-  def handle_in("message_edit", %{"messageId" => message_id, "content" => content}, socket)
+  def handle_in("message_edit", %{"messageId" => message_id, "content" => content} = payload, socket)
       when is_binary(message_id) and is_binary(content) do
     trimmed = String.trim(content)
 
@@ -703,7 +703,16 @@ defmodule TavokGatewayWeb.RoomChannel do
       true ->
         user_id = socket.assigns.user_id
 
-        case WebClient.edit_message(message_id, %{userId: user_id, content: content}) do
+        # L4: Pass optional expectedEditedAt for optimistic locking
+        edit_body = %{userId: user_id, content: content}
+
+        edit_body =
+          case Map.get(payload, "expectedEditedAt") do
+            ts when is_binary(ts) -> Map.put(edit_body, :expectedEditedAt, ts)
+            _ -> edit_body
+          end
+
+        case WebClient.edit_message(message_id, edit_body) do
           {:ok, response} ->
             # Broadcast the edit to all clients in the room
             Broadcast.broadcast_pre_serialized!(socket, "message_edited", %{
@@ -719,6 +728,9 @@ defmodule TavokGatewayWeb.RoomChannel do
 
           {:error, {:http_error, 404, _body}} ->
             {:reply, {:error, %{reason: "not_found"}}, socket}
+
+          {:error, {:http_error, 409, %{"code" => "EDIT_CONFLICT"}}} ->
+            {:reply, {:error, %{reason: "edit_conflict"}}, socket}
 
           {:error, {:http_error, 409, _body}} ->
             {:reply, {:error, %{reason: "stream_active"}}, socket}
