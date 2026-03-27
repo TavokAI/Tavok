@@ -99,3 +99,6 @@ assets/demos/
 
 # === Windows artifacts ===
 *;C/
+
+# Code review working files
+QUESTIONS*.md
