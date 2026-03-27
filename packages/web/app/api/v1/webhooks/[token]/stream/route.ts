@@ -2,12 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import {
   broadcastStreamToken,
-  broadcastStreamError,
   broadcastToChannel,
 } from "@/lib/gateway-client";
-import { updateMessage } from "@/lib/internal-api-client";
 import { validateOptionalMessageMetadata } from "@/lib/message-metadata-contract";
-import { finalizeStreamCompletion } from "@/lib/stream-finalization";
+import {
+  finalizeStreamCompletion,
+  finalizeStreamError,
+} from "@/lib/stream-finalization";
 
 /**
  * POST /api/v1/webhooks/{token}/stream — Send streaming tokens (DEC-0045)
@@ -101,16 +102,11 @@ export async function POST(
   try {
     // Handle error
     if (error) {
-      await broadcastStreamError(webhook.channelId, {
+      await finalizeStreamError({
+        channelId: webhook.channelId,
         messageId,
         error,
         partialContent: (finalContent as string) || null,
-      });
-
-      // Persist error state
-      await updateMessage(messageId, {
-        streamingStatus: "ERROR",
-        content: (finalContent as string) || `*[Error: ${error}]*`,
       });
 
       return NextResponse.json({ ok: true });

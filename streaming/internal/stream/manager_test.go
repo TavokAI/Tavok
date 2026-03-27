@@ -834,7 +834,7 @@ func TestEmptyResponseGuard_PlaceholderIsNonEmpty(t *testing.T) {
 func TestHandleStreamFinalizesBeforePublishingCompletionStatus(t *testing.T) {
 	callOrder := selectorCallOrderForFunc(t, "handleStream")
 
-	finalizeIdx := selectorCallIndex(t, callOrder, "FinalizeMessageFull")
+	finalizeIdx := selectorCallIndex(t, callOrder, "CommitStreamCompletion")
 	publishIdx := selectorCallIndex(t, callOrder, "PublishStatus")
 
 	if finalizeIdx >= publishIdx {
@@ -848,7 +848,7 @@ func TestHandleStreamFinalizesBeforePublishingCompletionStatus(t *testing.T) {
 func TestPublishErrorFinalizesBeforePublishingErrorStatus(t *testing.T) {
 	callOrder := selectorCallOrderForFunc(t, "publishError")
 
-	finalizeIdx := selectorCallIndex(t, callOrder, "FinalizeMessageWithRetry")
+	finalizeIdx := selectorCallIndex(t, callOrder, "CommitStreamErrorWithRetry")
 	publishIdx := selectorCallIndex(t, callOrder, "PublishStatus")
 
 	if finalizeIdx >= publishIdx {

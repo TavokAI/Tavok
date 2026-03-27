@@ -207,7 +207,7 @@ function buildTerminalUpdateData(
   };
 
   if (input.metadata !== undefined) {
-    updateData.metadata = input.metadata;
+    updateData.metadata = input.metadata as Prisma.InputJsonValue;
   }
   if (input.thinkingTimeline !== undefined) {
     updateData.thinkingTimeline = input.thinkingTimeline;

@@ -6,7 +6,8 @@ const {
   mockBroadcastStreamError,
   mockBroadcastStreamToken,
   mockBroadcastToChannel,
-  mockUpdateMessage,
+  mockCompleteStream,
+  mockFailStream,
 } = vi.hoisted(() => ({
   mockPrisma: {
     inboundWebhook: {
@@ -20,7 +21,8 @@ const {
   mockBroadcastStreamError: vi.fn(),
   mockBroadcastStreamToken: vi.fn(),
   mockBroadcastToChannel: vi.fn(),
-  mockUpdateMessage: vi.fn(),
+  mockCompleteStream: vi.fn(),
+  mockFailStream: vi.fn(),
 }));
 
 vi.mock("@/lib/db", () => ({
@@ -35,7 +37,8 @@ vi.mock("@/lib/gateway-client", () => ({
 }));
 
 vi.mock("@/lib/internal-api-client", () => ({
-  updateMessage: mockUpdateMessage,
+  completeStream: mockCompleteStream,
+  failStream: mockFailStream,
 }));
 
 import { POST } from "@/app/api/v1/webhooks/[token]/stream/route";
@@ -72,7 +75,38 @@ describe("POST /api/v1/webhooks/[token]/stream", () => {
     mockBroadcastStreamError.mockResolvedValue(undefined);
     mockBroadcastStreamToken.mockResolvedValue(undefined);
     mockBroadcastToChannel.mockResolvedValue(undefined);
-    mockUpdateMessage.mockResolvedValue(undefined);
+    mockCompleteStream.mockResolvedValue({
+      id: "message-1",
+      channelId: "channel-1",
+      authorId: "agent-1",
+      authorType: "AGENT",
+      content: "done",
+      type: "STREAMING",
+      streamingStatus: "COMPLETE",
+      sequence: "1",
+      metadata: null,
+      thinkingTimeline: null,
+      tokenHistory: null,
+      checkpoints: null,
+      createdAt: new Date(0).toISOString(),
+      updatedAt: new Date(0).toISOString(),
+    });
+    mockFailStream.mockResolvedValue({
+      id: "message-1",
+      channelId: "channel-1",
+      authorId: "agent-1",
+      authorType: "AGENT",
+      content: "*[Error: Agent failed]*",
+      type: "STREAMING",
+      streamingStatus: "ERROR",
+      sequence: "1",
+      metadata: null,
+      thinkingTimeline: null,
+      tokenHistory: null,
+      checkpoints: null,
+      createdAt: new Date(0).toISOString(),
+      updatedAt: new Date(0).toISOString(),
+    });
   });
 
   it("preserves object metadata on completion for broadcast and persistence", async () => {
@@ -108,15 +142,14 @@ describe("POST /api/v1/webhooks/[token]/stream", () => {
       metadata,
     });
 
-    expect(mockUpdateMessage).toHaveBeenCalledWith("message-1", {
+    expect(mockCompleteStream).toHaveBeenCalledWith("message-1", {
       content: "done",
-      streamingStatus: "COMPLETE",
       metadata,
     });
   });
 
   it("does not emit stream_complete when the durable COMPLETE transition fails", async () => {
-    mockUpdateMessage.mockRejectedValueOnce(new Error("write failed"));
+    mockCompleteStream.mockRejectedValueOnce(new Error("write failed"));
 
     const response = await POST(
       makeRequest({
@@ -134,15 +167,14 @@ describe("POST /api/v1/webhooks/[token]/stream", () => {
       error: "Failed to process stream",
     });
 
-    expect(mockUpdateMessage).toHaveBeenCalledWith("message-1", {
+    expect(mockCompleteStream).toHaveBeenCalledWith("message-1", {
       content: "done",
-      streamingStatus: "COMPLETE",
     });
     expect(mockBroadcastStreamComplete).not.toHaveBeenCalled();
   });
 
   it("does not emit stream_error when the durable ERROR transition fails", async () => {
-    mockUpdateMessage.mockRejectedValueOnce(new Error("write failed"));
+    mockFailStream.mockRejectedValueOnce(new Error("write failed"));
 
     const response = await POST(
       makeRequest({
@@ -159,8 +191,7 @@ describe("POST /api/v1/webhooks/[token]/stream", () => {
       error: "Failed to process stream",
     });
 
-    expect(mockUpdateMessage).toHaveBeenCalledWith("message-1", {
-      streamingStatus: "ERROR",
+    expect(mockFailStream).toHaveBeenCalledWith("message-1", {
       content: "*[Error: Agent failed]*",
     });
     expect(mockBroadcastStreamError).not.toHaveBeenCalled();
@@ -185,6 +216,7 @@ describe("POST /api/v1/webhooks/[token]/stream", () => {
     });
 
     expect(mockBroadcastStreamComplete).not.toHaveBeenCalled();
-    expect(mockUpdateMessage).not.toHaveBeenCalled();
+    expect(mockCompleteStream).not.toHaveBeenCalled();
+    expect(mockFailStream).not.toHaveBeenCalled();
   });
 });

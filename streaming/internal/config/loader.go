@@ -222,6 +222,33 @@ func (l *Loader) FinalizeMessageFullCtx(ctx context.Context, messageID, content,
 	return lastErr
 }
 
+// CommitStreamCompletion durably commits a COMPLETE terminal state via the
+// explicit stream lifecycle endpoint. The commit must succeed before any
+// transport-layer completion event is emitted.
+func (l *Loader) CommitStreamCompletion(messageID, content, thinkingTimeline, tokenHistory, checkpoints string, logger *slog.Logger) error {
+	return l.CommitStreamCompletionCtx(context.Background(), messageID, content, thinkingTimeline, tokenHistory, checkpoints, logger)
+}
+
+// CommitStreamCompletionCtx is the context-aware version of CommitStreamCompletion with retry logic.
+func (l *Loader) CommitStreamCompletionCtx(ctx context.Context, messageID, content, thinkingTimeline, tokenHistory, checkpoints string, logger *slog.Logger) error {
+	body := map[string]string{
+		"content": content,
+	}
+	if thinkingTimeline != "" && thinkingTimeline != "null" {
+		body["thinkingTimeline"] = thinkingTimeline
+	}
+	if tokenHistory != "" && tokenHistory != "null" {
+		body["tokenHistory"] = tokenHistory
+	}
+	if checkpoints != "" && checkpoints != "null" {
+		body["checkpoints"] = checkpoints
+	}
+
+	return l.retryStreamLifecycleCommit(ctx, "CommitStreamCompletion", messageID, "COMPLETE", logger, func(attemptCtx context.Context) error {
+		return l.postStreamLifecycle(attemptCtx, messageID, "complete", body)
+	})
+}
+
 // finalizeWithFullData sends the finalize PUT with all optional fields. (TASK-0021)
 func (l *Loader) finalizeWithFullData(ctx context.Context, messageID, content, streamingStatus, thinkingTimeline, tokenHistory, checkpoints string) error {
 	url := fmt.Sprintf("%s/api/internal/messages/%s", l.webURL, url.PathEscape(messageID))
@@ -262,6 +289,86 @@ func (l *Loader) finalizeWithFullData(ctx context.Context, messageID, content, s
 	}
 
 	return nil
+}
+
+func (l *Loader) postStreamLifecycle(ctx context.Context, messageID, action string, body map[string]string) error {
+	url := fmt.Sprintf("%s/api/internal/streams/%s/%s", l.webURL, url.PathEscape(messageID), action)
+
+	bodyJSON, err := json.Marshal(body)
+	if err != nil {
+		return fmt.Errorf("marshal body: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(bodyJSON))
+	if err != nil {
+		return fmt.Errorf("create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("x-internal-secret", l.internalSecret)
+
+	resp, err := l.client.Do(req)
+	if err != nil {
+		return fmt.Errorf("http request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		return fmt.Errorf("web API returned %d: %s", resp.StatusCode, string(respBody))
+	}
+
+	return nil
+}
+
+func (l *Loader) retryStreamLifecycleCommit(ctx context.Context, operationName, messageID, streamingStatus string, logger *slog.Logger, commit func(context.Context) error) error {
+	const maxRetries = 3
+	backoffs := []time.Duration{1 * time.Second, 2 * time.Second, 4 * time.Second}
+
+	if logger == nil {
+		logger = slog.Default()
+	}
+
+	var lastErr error
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		if attempt > 0 {
+			wait := backoffs[attempt-1]
+			logger.Warn("Retrying terminal stream commit",
+				"operation", operationName,
+				"messageId", messageID,
+				"status", streamingStatus,
+				"attempt", attempt,
+				"backoff", wait.String(),
+				"lastError", lastErr.Error(),
+			)
+			select {
+			case <-time.After(wait):
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		}
+
+		lastErr = commit(ctx)
+		if lastErr == nil {
+			if attempt > 0 {
+				logger.Info("Terminal stream commit succeeded on retry",
+					"operation", operationName,
+					"messageId", messageID,
+					"status", streamingStatus,
+					"attempt", attempt,
+				)
+			}
+			return nil
+		}
+	}
+
+	logger.Error("Terminal stream commit failed after all retries",
+		"operation", operationName,
+		"messageId", messageID,
+		"status", streamingStatus,
+		"attempts", maxRetries+1,
+		"lastError", lastErr.Error(),
+	)
+	return lastErr
 }
 
 // FinalizeMessageWithRetry attempts FinalizeMessage up to maxRetries times
@@ -319,6 +426,21 @@ func (l *Loader) FinalizeMessageWithRetryCtx(ctx context.Context, messageID, con
 		"lastError", lastErr.Error(),
 	)
 	return lastErr
+}
+
+// CommitStreamErrorWithRetry durably commits an ERROR terminal state via the
+// explicit stream lifecycle endpoint before any error event is emitted.
+func (l *Loader) CommitStreamErrorWithRetry(messageID, content string, logger *slog.Logger) error {
+	return l.CommitStreamErrorWithRetryCtx(context.Background(), messageID, content, logger)
+}
+
+// CommitStreamErrorWithRetryCtx is the context-aware version of CommitStreamErrorWithRetry.
+func (l *Loader) CommitStreamErrorWithRetryCtx(ctx context.Context, messageID, content string, logger *slog.Logger) error {
+	return l.retryStreamLifecycleCommit(ctx, "CommitStreamErrorWithRetry", messageID, "ERROR", logger, func(attemptCtx context.Context) error {
+		return l.postStreamLifecycle(attemptCtx, messageID, "error", map[string]string{
+			"content": content,
+		})
+	})
 }
 
 // GetChannelCharter fetches channel charter config from the internal API.

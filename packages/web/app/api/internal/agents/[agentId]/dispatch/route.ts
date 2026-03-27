@@ -3,7 +3,10 @@ import { prisma } from "@/lib/db";
 import { generateId } from "@/lib/ulid";
 import crypto from "crypto";
 import { validateInternalSecret } from "@/lib/internal-auth";
-import { persistMessage, updateMessage } from "@/lib/internal-api-client";
+import {
+  persistMessage,
+  startStreamPlaceholder,
+} from "@/lib/internal-api-client";
 import {
   broadcastMessageNew,
   broadcastStreamStart,
@@ -14,7 +17,10 @@ import {
 import { parseSseChunk } from "@/lib/parse-sse-chunk";
 import type { SseTokenEvent } from "@/lib/parse-sse-chunk";
 import { validateOptionalMessageMetadata } from "@/lib/message-metadata-contract";
-import { finalizeStreamCompletion } from "@/lib/stream-finalization";
+import {
+  finalizeStreamCompletion,
+  finalizeStreamError,
+} from "@/lib/stream-finalization";
 
 /**
  * POST /api/internal/agents/{agentId}/dispatch — Webhook dispatch (DEC-0043)
@@ -151,14 +157,12 @@ export async function POST(
       const sequence = await fetchChannelSequence(channelId);
 
       // Persist streaming placeholder before broadcasting
-      await persistMessage({
+      await startStreamPlaceholder({
         id: messageId,
         channelId,
         authorId: agentId,
         authorType: "AGENT",
         content: "",
-        type: "STREAMING",
-        streamingStatus: "ACTIVE",
         sequence,
       });
 
@@ -231,12 +235,14 @@ export async function POST(
         // Stream read error — persist error state
         console.error("[internal/dispatch] SSE stream read error:", streamErr);
         if (!streamCompleted) {
-          await updateMessage(messageId, {
-            streamingStatus: "ERROR",
-            content: fullContent || "*[Error: Stream read failed]*",
+          await finalizeStreamError({
+            channelId,
+            messageId,
+            error: "Stream read failed",
+            partialContent: fullContent || null,
           }).catch((e) =>
             console.error(
-              "[internal/dispatch] Failed to persist stream error:",
+              "[internal/dispatch] Failed to finalize stream error:",
               e,
             ),
           );
