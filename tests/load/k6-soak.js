@@ -1,22 +1,17 @@
 /**
- * k6 Soak Test — Sustained load over time to detect memory leaks and degradation.
+ * k6-soak.js - Sustained Tavok messaging load for leak and degradation checks.
  *
- * Usage: k6 run tests/load/k6-soak.js
- *
- * Prerequisites:
- *   - Services running (make up)
- *   - Test user registered (demo@tavok.ai / DemoPass123!)
- *
- * Duration: 10 minutes at steady 10 VUs
- * Watches for: latency degradation, error rate increase, memory growth
+ * Each VU gets a dedicated channel in a reusable load-test server so the soak
+ * exercises real persistence and recovery paths without triggering the
+ * intentional per-user-per-channel rate limiter.
  */
 
 import http from "k6/http";
 import ws from "k6/ws";
-import { check, sleep } from "k6";
+import { check, sleep, fail } from "k6";
 import { Counter, Trend, Rate } from "k6/metrics";
+import { setupLoadFixture } from "./lib/tavok-session.js";
 
-// Custom metrics
 const msgLatency = new Trend("msg_delivery_latency", true);
 const wsConnectTime = new Trend("ws_connect_time", true);
 const errorRate = new Rate("error_rate");
@@ -25,180 +20,158 @@ const messagesSent = new Counter("messages_sent");
 
 export const options = {
   stages: [
-    { duration: "30s", target: 5 },   // Ramp up
-    { duration: "9m", target: 10 },    // Sustain
-    { duration: "30s", target: 0 },    // Ramp down
+    { duration: "30s", target: 5 },
+    { duration: "9m", target: 10 },
+    { duration: "30s", target: 0 },
   ],
   thresholds: {
-    msg_delivery_latency: ["p(95)<2000"],    // p95 message delivery < 2s
-    ws_connect_time: ["p(95)<3000"],          // p95 WS connect < 3s
-    error_rate: ["rate<0.05"],                // Error rate < 5%
-    health_check_fails: ["count<10"],         // Max 10 health check failures
+    msg_delivery_latency: ["p(95)<2000"],
+    ws_connect_time: ["p(95)<3000"],
+    error_rate: ["rate<0.05"],
+    health_check_fails: ["count<10"],
   },
 };
 
 const BASE_URL = __ENV.BASE_URL || "http://localhost:5555";
 const WS_URL = __ENV.WS_URL || "ws://localhost:4001";
+const GATEWAY_HEALTH_URL =
+  __ENV.GATEWAY_HEALTH_URL || "http://localhost:4001/api/health";
+const STREAMING_HEALTH_URL =
+  __ENV.STREAMING_HEALTH_URL || "http://localhost:4002/health";
+const INTERNAL_API_SECRET = __ENV.INTERNAL_API_SECRET || "";
+const CREDENTIALS = {
+  email: __ENV.USER_EMAIL || "demo@tavok.ai",
+  password: __ENV.USER_PASSWORD || "DemoPass123!",
+};
 
-function login() {
-  // Get CSRF
-  const csrfRes = http.get(`${BASE_URL}/api/auth/csrf`);
-  if (csrfRes.status !== 200) return null;
+const MAX_VUS = 10;
+const JOIN_WAIT_MS = 3000;
+const DURABLE_WAIT_MS = 5000;
 
-  const csrfToken = JSON.parse(csrfRes.body).csrfToken;
-  const cookies = csrfRes.cookies;
-
-  // Login
-  const jar = http.cookieJar();
-  for (const [name, vals] of Object.entries(cookies)) {
-    for (const v of vals) {
-      jar.set(BASE_URL, name, v.value);
-    }
+export function setup() {
+  if (!INTERNAL_API_SECRET) {
+    fail("INTERNAL_API_SECRET is required for durable soak verification");
   }
 
-  const authRes = http.post(
-    `${BASE_URL}/api/auth/callback/credentials`,
-    { email: "demo@tavok.ai", password: "DemoPass123!", csrfToken, json: "true" },
-    { redirects: 0 }
-  );
-
-  return authRes.status === 200 || authRes.status === 302;
+  return setupLoadFixture({
+    baseUrl: BASE_URL,
+    credentials: CREDENTIALS,
+    channelCount: MAX_VUS,
+  });
 }
 
 function healthCheck() {
   const checks = [
-    http.get(`${BASE_URL}/api/health`),
-    http.get("http://localhost:4001/api/health"),
-    http.get("http://localhost:4002/health"),
+    http.get(BASE_URL + "/api/health"),
+    http.get(GATEWAY_HEALTH_URL),
+    http.get(STREAMING_HEALTH_URL),
   ];
 
-  for (const res of checks) {
-    if (res.status !== 200) {
+  for (let i = 0; i < checks.length; i += 1) {
+    if (checks[i].status !== 200) {
       healthCheckFails.add(1);
       return false;
     }
   }
+
   return true;
 }
 
-export default function () {
+export default function (data) {
   const iteration = __ITER;
+  const channelId = pickChannelId(data);
 
-  // Health check every 10 iterations
   if (iteration % 10 === 0) {
     healthCheck();
   }
 
-  // Login
-  const loggedIn = login();
-  errorRate.add(!loggedIn);
-  if (!loggedIn) {
-    sleep(2);
-    return;
-  }
-
-  // Discover a server and channel
-  const serversRes = http.get(`${BASE_URL}/api/servers`);
-  if (serversRes.status !== 200 || !serversRes.body) {
-    errorRate.add(true);
+  if (!channelId) {
     sleep(1);
     return;
   }
 
-  let servers;
-  try {
-    servers = JSON.parse(serversRes.body);
-  } catch {
-    errorRate.add(true);
-    sleep(1);
-    return;
-  }
-
-  if (!servers.length) {
-    sleep(1);
-    return;
-  }
-
-  const server = servers[0];
-
-  // Get channels
-  const channelsRes = http.get(`${BASE_URL}/api/servers/${server.id}/channels`);
-  if (channelsRes.status !== 200) {
-    errorRate.add(true);
-    sleep(1);
-    return;
-  }
-
-  let channels;
-  try {
-    channels = JSON.parse(channelsRes.body);
-  } catch {
-    errorRate.add(true);
-    sleep(1);
-    return;
-  }
-
-  if (!channels.length) {
-    sleep(1);
-    return;
-  }
-
-  const channel = channels[0];
-
-  // WebSocket phase — connect, send message, wait for ack
+  const channelTopic = "room:" + channelId;
+  const wsUrl = WS_URL + "/socket/websocket?token=" + data.jwt + "&vsn=2.0.0";
   const wsStart = Date.now();
+  let connectSuccess = false;
+  let refCounter = 1;
+  let messageContent = "";
+  let sendTime = 0;
 
-  const wsRes = ws.connect(
-    `${WS_URL}/socket/websocket?vsn=1.0.0`,
-    {},
-    function (socket) {
-      const connectTime = Date.now() - wsStart;
-      wsConnectTime.add(connectTime);
+  function nextRef() {
+    return String(refCounter++);
+  }
 
-      // Join channel
-      socket.send(
-        JSON.stringify([null, null, `room:${channel.id}`, "phx_join", {}])
-      );
+  const wsRes = ws.connect(wsUrl, {}, function (socket) {
+    wsConnectTime.add(Date.now() - wsStart);
+    connectSuccess = true;
 
-      socket.on("message", function (msg) {
-        // Message received — measure delivery
-        try {
-          const parsed = JSON.parse(msg);
-          if (parsed[3] === "message_new") {
-            msgLatency.add(Date.now() - wsStart);
-          }
-        } catch {
-          // Ignore parse errors on heartbeats etc
+    let channelJoinRef = null;
+    let joinStatus = null;
+
+    socket.on("message", function (rawMsg) {
+      try {
+        const msg = JSON.parse(rawMsg);
+        if (!Array.isArray(msg) || msg.length < 5) {
+          return;
         }
-      });
 
-      // Send a message
-      sleep(0.5);
-      const sendTime = Date.now();
-      socket.send(
-        JSON.stringify([
-          null,
-          null,
-          `room:${channel.id}`,
-          "new_message",
-          { content: `soak-test-${__VU}-${iteration}` },
-        ])
-      );
-      messagesSent.add(1);
+        const [, msgRef, , event, payload] = msg;
+        if (event === "phx_reply" && msgRef === channelJoinRef) {
+          joinStatus = payload && payload.status ? payload.status : "error";
+        }
+      } catch (error) {
+        return;
+      }
+    });
 
-      // Wait for delivery
-      sleep(2);
-      socket.close();
+    const joinRef = nextRef();
+    const messageRef = nextRef();
+    messageContent = "soak-test-" + __VU + "-" + iteration + "-" + channelId;
+
+    channelJoinRef = joinRef;
+    socket.send(JSON.stringify([null, joinRef, channelTopic, "phx_join", {}]));
+
+    const joinStartedAt = Date.now();
+    function afterJoin() {
+      if (joinStatus === "ok") {
+        sendTime = Date.now();
+        socket.send(
+          JSON.stringify([
+            channelJoinRef,
+            messageRef,
+            channelTopic,
+            "new_message",
+            { content: messageContent },
+          ])
+        );
+        messagesSent.add(1);
+
+        sleep(1);
+        socket.close();
+        return;
+      }
+
+      if (joinStatus !== null || Date.now() - joinStartedAt >= JOIN_WAIT_MS) {
+        socket.close();
+        return;
+      }
+
+      socket.setTimeout(afterJoin, 50);
     }
-  );
 
-  check(wsRes, {
-    "WebSocket connected": (r) => r && r.status === 101,
+    socket.setTimeout(afterJoin, 50);
   });
 
-  errorRate.add(!wsRes || wsRes.status !== 101);
+  check(wsRes, {
+    "WebSocket connected": function (response) {
+      return response && response.status === 101;
+    },
+  });
 
-  // Brief pause between iterations
+  const deliveryObserved =
+    connectSuccess && waitForDurableMessage(channelId, messageContent, sendTime);
+  errorRate.add(!deliveryObserved);
   sleep(1);
 }
 
@@ -212,14 +185,64 @@ export function handleSummary(data) {
   const totalMsgs = data.metrics.messages_sent
     ? data.metrics.messages_sent.values.count
     : 0;
+  const healthFailures = data.metrics.health_check_fails
+    ? data.metrics.health_check_fails.values.count
+    : 0;
 
   console.log("\n=== SOAK TEST SUMMARY ===");
-  console.log(`Duration: 10 minutes`);
-  console.log(`Messages sent: ${totalMsgs}`);
-  console.log(`p95 delivery latency: ${p95Latency}ms`);
-  console.log(`Error rate: ${errRate}%`);
-  console.log(`Health check failures: ${data.metrics.health_check_fails ? data.metrics.health_check_fails.values.count : 0}`);
+  console.log("Duration: 10 minutes");
+  console.log("Messages sent: " + totalMsgs);
+  console.log("p95 delivery latency: " + p95Latency + "ms");
+  console.log("Error rate: " + errRate + "%");
+  console.log("Health check failures: " + healthFailures);
   console.log("========================\n");
 
   return {};
+}
+
+function pickChannelId(data) {
+  const channelIds = data.channelIds || [];
+  if (channelIds.length > 0) {
+    return channelIds[(__VU - 1) % channelIds.length];
+  }
+
+  return data.channelId || null;
+}
+
+function waitForDurableMessage(channelId, messageContent, sendTime) {
+  if (!messageContent) {
+    return false;
+  }
+
+  const deadline = Date.now() + DURABLE_WAIT_MS;
+  while (Date.now() < deadline) {
+    const historyRes = http.get(
+      BASE_URL + "/api/internal/messages?channelId=" + channelId + "&limit=100",
+      {
+        headers: { "x-internal-secret": INTERNAL_API_SECRET },
+      }
+    );
+
+    if (historyRes.status === 200) {
+      try {
+        const body = JSON.parse(historyRes.body);
+        const messages = body.messages || [];
+
+        for (let i = 0; i < messages.length; i += 1) {
+          if (messages[i].content === messageContent) {
+            msgLatency.add(Date.now() - sendTime);
+            return true;
+          }
+        }
+      } catch (error) {
+        return false;
+      }
+    } else {
+      return false;
+    }
+
+    sleep(0.2);
+  }
+
+  return false;
 }
