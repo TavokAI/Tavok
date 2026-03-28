@@ -115,9 +115,7 @@ jobs:
 
       - name: Load test smoke (messaging)
         run: |
-          set -a
-          source .env
-          set +a
+          INTERNAL_API_SECRET=$(grep '^INTERNAL_API_SECRET=' .env | cut -d= -f2- | tr -d '\r')
           k6 run \
             --duration 15s \
             --vus 3 \
