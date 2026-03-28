@@ -21,6 +21,7 @@ $gatewayWsUrl = "ws://localhost:4001"
 $gatewayHealthUrl = "http://localhost:4001/api/health"
 
 $script:PhxBacklog = @{}
+$script:PhxJoinRefs = @{}
 $script:ScenarioResults = New-Object System.Collections.ArrayList
 $script:Metrics = New-Object System.Collections.ArrayList
 $script:Notes = New-Object System.Collections.ArrayList
@@ -134,7 +135,7 @@ function New-EncryptedApiKey([string]$Plaintext) {
   $script = "const c=require('crypto');const i=Buffer.from(process.env.HIVE_TEST_API_KEY_B64,'base64').toString('utf8');const kHex=process.env.ENCRYPTION_KEY;if(!kHex||kHex.length!==64){process.stderr.write('invalid ENCRYPTION_KEY');process.exit(1);}const k=Buffer.from(kHex,'hex');const iv=c.randomBytes(12);const x=c.createCipheriv('aes-256-gcm',k,iv);let e=x.update(i,'utf8','hex');e+=x.final('hex');process.stdout.write(iv.toString('hex')+':'+x.getAuthTag().toString('hex')+':'+e);"
   $ciphertext = & docker compose -f $ComposePath exec -T -e "HIVE_TEST_API_KEY_B64=$apiKeyB64" web node -e $script
   if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($ciphertext)) {
-    throw "Failed to generate encrypted API key for bot fixture"
+    throw "Failed to generate encrypted API key for agent fixture"
   }
 
   return $ciphertext.Trim()
@@ -332,11 +333,64 @@ function Ensure-ServicesRunning {
 
 function Open-PhxSocket([string]$JwtToken) {
   $encodedToken = [uri]::EscapeDataString($JwtToken)
-  $url = "$gatewayWsUrl/socket/websocket?token=$encodedToken"
+  $url = "$gatewayWsUrl/socket/websocket?token=$encodedToken&vsn=2.0.0"
   $socket = [System.Net.WebSockets.ClientWebSocket]::new()
   $uri = [Uri]$url
   $socket.ConnectAsync($uri, [System.Threading.CancellationToken]::None).Wait()
   return $socket
+}
+
+function Get-SocketKey([System.Net.WebSockets.ClientWebSocket]$Socket) {
+  if ($null -eq $Socket) {
+    return ""
+  }
+
+  return [string]$Socket.GetHashCode()
+}
+
+function Get-JoinRefKey(
+  [System.Net.WebSockets.ClientWebSocket]$Socket,
+  [string]$Topic
+) {
+  return (Get-SocketKey -Socket $Socket) + "|" + $Topic
+}
+
+function Set-SocketJoinRef(
+  [System.Net.WebSockets.ClientWebSocket]$Socket,
+  [string]$Topic,
+  [string]$JoinRef
+) {
+  if ([string]::IsNullOrWhiteSpace($JoinRef)) {
+    return
+  }
+
+  $script:PhxJoinRefs[(Get-JoinRefKey -Socket $Socket -Topic $Topic)] = $JoinRef
+}
+
+function Get-SocketJoinRef(
+  [System.Net.WebSockets.ClientWebSocket]$Socket,
+  [string]$Topic
+) {
+  $key = Get-JoinRefKey -Socket $Socket -Topic $Topic
+  if ($script:PhxJoinRefs.ContainsKey($key)) {
+    return $script:PhxJoinRefs[$key]
+  }
+
+  return $null
+}
+
+function Clear-SocketState([System.Net.WebSockets.ClientWebSocket]$Socket) {
+  $socketKey = Get-SocketKey -Socket $Socket
+  if ([string]::IsNullOrWhiteSpace($socketKey)) {
+    return
+  }
+
+  $script:PhxBacklog.Remove($socketKey) | Out-Null
+  foreach ($joinKey in @($script:PhxJoinRefs.Keys)) {
+    if ($joinKey.StartsWith($socketKey + "|")) {
+      $script:PhxJoinRefs.Remove($joinKey) | Out-Null
+    }
+  }
 }
 
 function Add-SocketBacklog {
@@ -345,7 +399,7 @@ function Add-SocketBacklog {
     [object]$Message
   )
   if ($null -eq $Socket -or $null -eq $Message) { return }
-  $key = [string]$Socket.GetHashCode()
+  $key = Get-SocketKey -Socket $Socket
   if (-not $script:PhxBacklog.ContainsKey($key) -or $null -eq $script:PhxBacklog[$key]) {
     $script:PhxBacklog[$key] = New-Object System.Collections.ArrayList
   }
@@ -358,7 +412,7 @@ function Pop-SocketBacklogMatch {
     [scriptblock]$Predicate
   )
   if ($null -eq $Socket -or $null -eq $Predicate) { return $null }
-  $key = [string]$Socket.GetHashCode()
+  $key = Get-SocketKey -Socket $Socket
   if (-not $script:PhxBacklog.ContainsKey($key) -or $null -eq $script:PhxBacklog[$key]) {
     return $null
   }
@@ -382,13 +436,13 @@ function Send-PhxMessage {
     [object]$Payload = @{},
     [string]$Ref
   )
-  $msg = [ordered]@{
-    topic = $Topic
-    event = $Event
-    payload = $Payload
-    ref = $Ref
+  $joinRef = $null
+  if ($Event -ne "phx_join" -and $Topic -ne "phoenix") {
+    $joinRef = Get-SocketJoinRef -Socket $Socket -Topic $Topic
   }
-  $payloadText = $msg | ConvertTo-Json -Depth 20 -Compress
+
+  $msg = @($joinRef, $Ref, $Topic, $Event, $Payload)
+  $payloadText = ConvertTo-Json -InputObject $msg -Depth 20 -Compress
   $payloadBytes = [Text.Encoding]::UTF8.GetBytes($payloadText)
   $seg = [System.ArraySegment[byte]]::new($payloadBytes)
   $Socket.SendAsync($seg, [System.Net.WebSockets.WebSocketMessageType]::Text, $true, [System.Threading.CancellationToken]::None).Wait()
@@ -432,8 +486,20 @@ function Receive-PhxMessage {
   $rawFrame = $accum.ToString()
   try {
     $parsed = ($rawFrame | ConvertFrom-Json)
-    # Stamp reception time for accurate latency measurement (M-01 fix)
-    $parsed | Add-Member -NotePropertyName "ReceivedAt" -NotePropertyValue ([DateTimeOffset]::UtcNow) -Force
+    $receivedAt = [DateTimeOffset]::UtcNow
+
+    if ($parsed -is [System.Array] -and $parsed.Count -ge 5) {
+      return [pscustomobject]@{
+        joinRef = $parsed[0]
+        ref = $parsed[1]
+        topic = $parsed[2]
+        event = $parsed[3]
+        payload = $parsed[4]
+        ReceivedAt = $receivedAt
+      }
+    }
+
+    $parsed | Add-Member -NotePropertyName "ReceivedAt" -NotePropertyValue $receivedAt -Force
     return $parsed
   }
   catch {
@@ -548,6 +614,7 @@ function Join-Room {
   if ($reply.payload.status -ne "ok") {
     throw "Join failed for ${topic}: $($reply | ConvertTo-Json -Compress -Depth 8)"
   }
+  Set-SocketJoinRef -Socket $Socket -Topic $topic -JoinRef $ref
   return $topic
 }
 
@@ -639,6 +706,9 @@ function Close-SocketSafe([System.Net.WebSockets.ClientWebSocket]$Socket) {
     }
   }
   catch {}
+  finally {
+    Clear-SocketState -Socket $Socket
+  }
 }
 
 $envVars = Load-Env $EnvPath
@@ -712,7 +782,7 @@ VALUES
 ('$channelZId', '$serverId', '$testPrefix-z', 3, '$now'::timestamptz, '$now'::timestamptz),
 ('$channelLoadId', '$serverId', '$testPrefix-load', 4, '$now'::timestamptz, '$now'::timestamptz);
 
-INSERT INTO "Bot" (id, name, "serverId", "llmProvider", "llmModel", "apiEndpoint", "apiKeyEncrypted", "systemPrompt", temperature, "maxTokens", "isActive", "triggerMode", "createdAt", "updatedAt")
+INSERT INTO "Agent" (id, name, "serverId", "llmProvider", "llmModel", "apiEndpoint", "apiKeyEncrypted", "systemPrompt", temperature, "maxTokens", "isActive", "triggerMode", "createdAt", "updatedAt")
 VALUES
 ('$botAlphaId', '$testPrefix-alpha', '$serverId', 'custom', 'gpt-4o-mini', 'http://web:3909/fast', '$apiKeyEncrypted', 'alpha', 0.2, 1024, true, 'ALWAYS', '$now'::timestamptz, '$now'::timestamptz),
 ('$botBetaId', '$testPrefix-beta', '$serverId', 'custom', 'gpt-4o-mini', 'http://web:3909/slow', '$apiKeyEncrypted', 'beta', 0.2, 1024, true, 'ALWAYS', '$now'::timestamptz, '$now'::timestamptz),
@@ -722,9 +792,9 @@ INSERT INTO "Member" (id, "userId", "serverId", "joinedAt")
 VALUES
 $membersSql;
 
-UPDATE "Channel" SET "defaultBotId" = '$botAlphaId' WHERE id = '$channelXId';
-UPDATE "Channel" SET "defaultBotId" = '$botBetaId' WHERE id = '$channelYId';
-UPDATE "Channel" SET "defaultBotId" = '$botGammaId' WHERE id = '$channelZId';
+UPDATE "Channel" SET "defaultAgentId" = '$botAlphaId' WHERE id = '$channelXId';
+UPDATE "Channel" SET "defaultAgentId" = '$botBetaId' WHERE id = '$channelYId';
+UPDATE "Channel" SET "defaultAgentId" = '$botGammaId' WHERE id = '$channelZId';
 COMMIT;
 "@
 
@@ -741,9 +811,19 @@ COMMIT;
 $script:socketA = Open-PhxSocket -JwtToken $jwts["a"]; [void]$allSockets.Add($script:socketA)
 $script:socketD = Open-PhxSocket -JwtToken $jwts["d"]; [void]$allSockets.Add($script:socketD)
 $script:socketE = Open-PhxSocket -JwtToken $jwts["e"]; [void]$allSockets.Add($script:socketE)
+$script:socketB = Open-PhxSocket -JwtToken $jwts["b"]; [void]$allSockets.Add($script:socketB)
+$script:socketC = Open-PhxSocket -JwtToken $jwts["c"]; [void]$allSockets.Add($script:socketC)
+$script:socketF = Open-PhxSocket -JwtToken $jwts["f"]; [void]$allSockets.Add($script:socketF)
+$script:socketG = Open-PhxSocket -JwtToken $jwts["g"]; [void]$allSockets.Add($script:socketG)
+$script:socketH = Open-PhxSocket -JwtToken $jwts["h"]; [void]$allSockets.Add($script:socketH)
   Join-Room -Socket $script:socketA -ChannelId $channelMainId | Out-Null
   Join-Room -Socket $script:socketD -ChannelId $channelMainId | Out-Null
   Join-Room -Socket $script:socketE -ChannelId $channelMainId | Out-Null
+  Join-Room -Socket $script:socketB -ChannelId $channelMainId | Out-Null
+  Join-Room -Socket $script:socketC -ChannelId $channelMainId | Out-Null
+  Join-Room -Socket $script:socketF -ChannelId $channelMainId | Out-Null
+  Join-Room -Socket $script:socketG -ChannelId $channelMainId | Out-Null
+  Join-Room -Socket $script:socketH -ChannelId $channelMainId | Out-Null
 
   $tier1Healthy = Run-Scenario -Id "M-01" -Body {
     $send = Send-UserMessage -Socket $script:socketA -ChannelId $channelMainId -Content "m01-$testPrefix"
@@ -781,14 +861,14 @@ $script:socketE = Open-PhxSocket -JwtToken $jwts["e"]; [void]$allSockets.Add($sc
   }
   else {
     Run-Scenario -Id "M-02" -Body {
-      $sendA = Send-UserMessage -Socket $script:socketA -ChannelId $channelMainId -Content "m02-a-$testPrefix"
-      $sendD = Send-UserMessage -Socket $script:socketD -ChannelId $channelMainId -Content "m02-d-$testPrefix"
-      $sendE = Send-UserMessage -Socket $script:socketE -ChannelId $channelMainId -Content "m02-e-$testPrefix"
+      $sendA = Send-UserMessage -Socket $script:socketB -ChannelId $channelMainId -Content "m02-b-$testPrefix"
+      $sendD = Send-UserMessage -Socket $script:socketC -ChannelId $channelMainId -Content "m02-c-$testPrefix"
+      $sendE = Send-UserMessage -Socket $script:socketF -ChannelId $channelMainId -Content "m02-f-$testPrefix"
       Assert "M-02 all sends accepted" (
         $sendA.Reply.payload.status -eq "ok" -and
         $sendD.Reply.payload.status -eq "ok" -and
         $sendE.Reply.payload.status -eq "ok"
-      )
+      ) ("b=$([string]$sendA.Reply.payload.status) c=$([string]$sendD.Reply.payload.status) f=$([string]$sendE.Reply.payload.status)")
 
       $ids = @(
         [string]$sendA.Reply.payload.response.id,
@@ -814,12 +894,24 @@ $script:socketE = Open-PhxSocket -JwtToken $jwts["e"]; [void]$allSockets.Add($sc
     } | Out-Null
 
     Run-Scenario -Id "M-03" -Body {
+      $burstSenders = @(
+        $script:socketB,
+        $script:socketC,
+        $script:socketF,
+        $script:socketG,
+        $script:socketH,
+        $script:socketB,
+        $script:socketC,
+        $script:socketF,
+        $script:socketG,
+        $script:socketH
+      )
       $batch = @()
-      for ($i = 0; $i -lt 10; $i++) {
-        $batch += Send-UserMessage -Socket $script:socketA -ChannelId $channelMainId -Content ("m03-" + $i + "-" + $testPrefix)
+      for ($i = 0; $i -lt $burstSenders.Count; $i++) {
+        $batch += Send-UserMessage -Socket $burstSenders[$i] -ChannelId $channelMainId -Content ("m03-" + $i + "-" + $testPrefix)
       }
       $ok = @($batch | Where-Object { $_.Reply.payload.status -eq "ok" }).Count -eq 10
-      Assert "M-03 all 10 sends accepted" $ok
+      Assert "M-03 all 10 sends accepted" $ok ("ok=$(@($batch | Where-Object { $_.Reply.payload.status -eq 'ok' }).Count) error=$(@($batch | Where-Object { $_.Reply.payload.status -ne 'ok' }).Count)")
 
       $ids = @($batch | ForEach-Object { [string]$_.Reply.payload.response.id })
       $seqs = @($batch | ForEach-Object { [int64]$_.Reply.payload.response.sequence })
@@ -921,7 +1013,7 @@ $script:socketE = Open-PhxSocket -JwtToken $jwts["e"]; [void]$allSockets.Add($sc
     Add-ScenarioResult -Id "A-02" -Status "not_tested" -Details "Redis request-body context inspection disabled in simplified timed harness" -DurationMs 0
 
     Run-Scenario -Id "A-03" -Body {
-      Invoke-Psql "UPDATE ""Bot"" SET ""apiEndpoint"" = 'http://web:3909/slow' WHERE id = '$botAlphaId';"
+      Invoke-Psql "UPDATE ""Agent"" SET ""apiEndpoint"" = 'http://web:3909/slow' WHERE id = '$botAlphaId';"
 
       $sendResults = @()
       for ($i = 0; $i -lt 3; $i++) {
@@ -942,13 +1034,13 @@ $script:socketE = Open-PhxSocket -JwtToken $jwts["e"]; [void]$allSockets.Add($sc
       $interleaved = ($botSeqs[0] -eq ($userSeqs[0] + 1)) -and ($botSeqs[1] -eq ($userSeqs[1] + 1)) -and ($botSeqs[2] -eq ($userSeqs[2] + 1))
       Assert "A-03 sequence interleaving user->bot preserved" $interleaved ("user=$($userSeqs -join ',') bot=$($botSeqs -join ',')")
 
-      Invoke-Psql "UPDATE ""Bot"" SET ""apiEndpoint"" = 'http://web:3909/fast' WHERE id = '$botAlphaId';"
+      Invoke-Psql "UPDATE ""Agent"" SET ""apiEndpoint"" = 'http://web:3909/fast' WHERE id = '$botAlphaId';"
     } | Out-Null
 
     Add-ScenarioResult -Id "A-04" -Status "skipped" -Details "Concurrency-limit saturation (35+) not executed in this timed run" -DurationMs 0
 
     Run-Scenario -Id "A-05" -Body {
-      Invoke-Psql "UPDATE ""Bot"" SET ""triggerMode"" = 'MENTION' WHERE id = '$botGammaId';"
+      Invoke-Psql "UPDATE ""Agent"" SET ""triggerMode"" = 'MENTION' WHERE id = '$botGammaId';"
       $plain = Send-UserMessage -Socket $script:socketA -ChannelId $channelZId -Content "a05 no mention"
       Assert "A-05 plain send accepted" ($plain.Reply.payload.status -eq "ok")
       $plainSeq = [int64]$plain.Reply.payload.response.sequence
@@ -966,7 +1058,7 @@ $script:socketE = Open-PhxSocket -JwtToken $jwts["e"]; [void]$allSockets.Add($sc
       $done = Wait-StreamEventForMessage -Socket $script:socketA -Topic $topicZ -Event "stream_complete" -MessageId $msgId
       Assert "A-05 mention triggers stream" ($done.payload.messageId -eq $msgId)
 
-      Invoke-Psql "UPDATE ""Bot"" SET ""triggerMode"" = 'ALWAYS' WHERE id = '$botGammaId';"
+      Invoke-Psql "UPDATE ""Agent"" SET ""triggerMode"" = 'ALWAYS' WHERE id = '$botGammaId';"
     } | Out-Null
 
     Add-ScenarioResult -Id "A-06" -Status "not_tested" -Details "Per-endpoint routing proof disabled in simplified timed harness" -DurationMs 0
@@ -1092,7 +1184,15 @@ $script:socketE = Open-PhxSocket -JwtToken $jwts["e"]; [void]$allSockets.Add($sc
   } | Out-Null
 
   Run-Scenario -Id "F-01" -Body {
-    $topicMain = "room:$channelMainId"
+    Close-SocketSafe $script:socketA
+    Close-SocketSafe $script:socketD
+    $script:socketA = Open-PhxSocket -JwtToken $jwts["a"]
+    $script:socketD = Open-PhxSocket -JwtToken $jwts["d"]
+    [void]$allSockets.Add($script:socketA)
+    [void]$allSockets.Add($script:socketD)
+    $topicMain = Join-Room -Socket $script:socketA -ChannelId $channelMainId
+    Join-Room -Socket $script:socketD -ChannelId $channelMainId | Out-Null
+
     $before = Send-UserMessage -Socket $script:socketA -ChannelId $channelMainId -Content "f01-before-redis-restart-$testPrefix"
     Assert "F-01 pre-restart send accepted" ($before.Reply.payload.status -eq "ok")
     $beforeSeq = [int64]$before.Reply.payload.response.sequence
@@ -1107,9 +1207,13 @@ $script:socketE = Open-PhxSocket -JwtToken $jwts["e"]; [void]$allSockets.Add($sc
     Assert "F-01 gateway healthy after redis restart" $healthy
 
     # Reconnect socketD — WebSocket may have been disrupted during Redis restart
+    Close-SocketSafe $script:socketA
     Close-SocketSafe $script:socketD
+    $script:socketA = Open-PhxSocket -JwtToken $jwts["a"]
     $script:socketD = Open-PhxSocket -JwtToken $jwts["d"]
+    [void]$allSockets.Add($script:socketA)
     [void]$allSockets.Add($script:socketD)
+    Join-Room -Socket $script:socketA -ChannelId $channelMainId | Out-Null
     Join-Room -Socket $script:socketD -ChannelId $channelMainId | Out-Null
 
     $after = Send-UserMessage -Socket $script:socketA -ChannelId $channelMainId -Content "f01-after-redis-restart-$testPrefix"
@@ -1138,7 +1242,7 @@ services:
   $infraWatchdogOverrideApplied = $true
 
   Run-Scenario -Id "F-02" -Body {
-    Invoke-Psql "UPDATE ""Bot"" SET ""apiEndpoint"" = 'http://web:3909/infra-slow' WHERE id = '$botBetaId';"
+    Invoke-Psql "UPDATE ""Agent"" SET ""apiEndpoint"" = 'http://web:3909/infra-slow' WHERE id = '$botBetaId';"
     Close-SocketSafe $script:socketA
     $script:socketA = Open-PhxSocket -JwtToken $jwts["a"]
     [void]$allSockets.Add($script:socketA)
@@ -1190,7 +1294,7 @@ services:
   } | Out-Null
 
   Run-Scenario -Id "F-03" -Body {
-    Invoke-Psql "UPDATE ""Bot"" SET ""apiEndpoint"" = 'http://web:3909/infra-slow' WHERE id = '$botBetaId';"
+    Invoke-Psql "UPDATE ""Agent"" SET ""apiEndpoint"" = 'http://web:3909/infra-slow' WHERE id = '$botBetaId';"
     Close-SocketSafe $script:socketA
     $script:socketA = Open-PhxSocket -JwtToken $jwts["a"]
     [void]$allSockets.Add($script:socketA)
@@ -1277,7 +1381,7 @@ services:
     Stop-MockProfileServer $mockPid
     $mockPid = Start-MockProfileServer
 
-    Invoke-Psql "UPDATE ""Bot"" SET ""apiEndpoint"" = 'http://web:3909/infra-slow' WHERE id = '$botBetaId';"
+    Invoke-Psql "UPDATE ""Agent"" SET ""apiEndpoint"" = 'http://web:3909/infra-slow' WHERE id = '$botBetaId';"
     Close-SocketSafe $script:socketA
     $script:socketA = Open-PhxSocket -JwtToken $jwts["a"]
     [void]$allSockets.Add($script:socketA)
@@ -1323,7 +1427,7 @@ services:
     Stop-MockProfileServer $mockPid
     $mockPid = Start-MockProfileServer
 
-    Invoke-Psql "UPDATE ""Bot"" SET ""apiEndpoint"" = 'http://web:3909/infra-slow' WHERE id = '$botBetaId';"
+    Invoke-Psql "UPDATE ""Agent"" SET ""apiEndpoint"" = 'http://web:3909/infra-slow' WHERE id = '$botBetaId';"
     Close-SocketSafe $script:socketA
     Close-SocketSafe $script:socketD
     $script:socketA = Open-PhxSocket -JwtToken $jwts["a"]
@@ -1375,16 +1479,43 @@ services:
   }
 
   $resultPath = Join-Path $artifactsDir "stress-results.json"
+  $requiredReleaseGateScenarioIds = @("F-01", "F-02", "F-03", "F-04")
+  $requiredReleaseGateFailures = @(
+    $script:ScenarioResults | Where-Object {
+      $requiredReleaseGateScenarioIds -contains $_.id -and $_.status -ne "passed"
+    }
+  )
+  $optionalFailures = @(
+    $script:ScenarioResults | Where-Object {
+      $requiredReleaseGateScenarioIds -notcontains $_.id -and $_.status -eq "failed"
+    }
+  )
+
   [pscustomobject]@{
     generatedAt = (Get-Date).ToString("o")
     testPrefix = $testPrefix
     scenarios = $script:ScenarioResults
     metrics = $script:Metrics
     notes = $script:Notes
+    releaseGate = [pscustomobject]@{
+      requiredScenarioIds = $requiredReleaseGateScenarioIds
+      passed = ($requiredReleaseGateFailures.Count -eq 0)
+      failedScenarios = $requiredReleaseGateFailures
+      optionalFailedScenarios = $optionalFailures
+    }
   } | ConvertTo-Json -Depth 20 | Set-Content -Path $resultPath -Encoding UTF8
 
   Write-Header "Stress harness complete"
   Write-Host "Result file: $resultPath" -ForegroundColor Green
+  if ($optionalFailures.Count -gt 0) {
+    $optionalSummary = ($optionalFailures | ForEach-Object { $_.id }) -join ", "
+    Write-Host "Optional scenario failures: $optionalSummary" -ForegroundColor Yellow
+  }
+  if ($requiredReleaseGateFailures.Count -gt 0) {
+    $requiredSummary = ($requiredReleaseGateFailures | ForEach-Object { $_.id }) -join ", "
+    throw "Required release-gate scenarios failed: $requiredSummary"
+  }
+  Write-Host "Required release-gate scenarios passed: $($requiredReleaseGateScenarioIds -join ', ')" -ForegroundColor Green
 }
 finally {
   if ($infraWatchdogOverrideApplied) {
@@ -1403,7 +1534,7 @@ finally {
 DELETE FROM "Message" WHERE "channelId" IN ('$channelMainId', '$channelXId', '$channelYId', '$channelZId', '$channelLoadId');
 DELETE FROM "Member" WHERE "serverId" = '$serverId';
 DELETE FROM "Channel" WHERE id IN ('$channelMainId', '$channelXId', '$channelYId', '$channelZId', '$channelLoadId');
-DELETE FROM "Bot" WHERE id IN ('$botAlphaId', '$botBetaId', '$botGammaId');
+DELETE FROM "Agent" WHERE id IN ('$botAlphaId', '$botBetaId', '$botGammaId');
 DELETE FROM "Server" WHERE id = '$serverId';
 DELETE FROM "User" WHERE id IN ('$($users["a"])', '$($users["b"])', '$($users["c"])', '$($users["d"])', '$($users["e"])', '$($users["f"])', '$($users["g"])', '$($users["h"])');
 "@

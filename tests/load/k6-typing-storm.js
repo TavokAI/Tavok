@@ -1,32 +1,15 @@
 /**
- * k6-typing-storm.js — Typing indicator fanout stress test for Tavok
+ * k6-typing-storm.js - Typing indicator fanout stress test for Tavok.
  *
- * Stress-tests the server-side typing throttle (2000ms window per user,
- * see DEC-0031 in room_channel.ex). Each VU fires typing events every 200ms,
- * which means the Gateway should silently drop ~90% of them. This validates
- * that the server stays responsive under a storm of rapid typing indicators.
- *
- * Stages: Ramp 0 -> 10 -> 50 -> 0 VUs over 30s
- *
- * After the storm completes, the test hits the health endpoint to verify
- * that the server is still responsive.
- *
- * Run:
- *   k6 run tests/load/k6-typing-storm.js
- *
- * Prerequisites:
- *   - Tavok stack running (make up)
- *   - Seed users exist: demo@tavok.ai / DemoPass123!
+ * This script authenticates once in setup() so the load stays focused on the
+ * Gateway typing path instead of repeatedly redoing NextAuth during the storm.
  */
 
 import http from "k6/http";
 import ws from "k6/ws";
-import { check, sleep, fail } from "k6";
+import { check, sleep } from "k6";
 import { Trend, Counter, Rate } from "k6/metrics";
-
-// ---------------------------------------------------------------------------
-// Custom metrics
-// ---------------------------------------------------------------------------
+import { setupLoadFixture } from "./lib/tavok-session.js";
 
 const wsConnectDuration = new Trend("ws_connect_duration", true);
 const typingEventsSent = new Counter("typing_events_sent");
@@ -34,23 +17,16 @@ const typingEventsReceived = new Counter("typing_events_received");
 const wsConnectFailRate = new Rate("ws_connect_fail_rate");
 const healthCheckPass = new Rate("health_check_pass");
 
-// ---------------------------------------------------------------------------
-// Configuration
-// ---------------------------------------------------------------------------
-
 const BASE_URL = __ENV.BASE_URL || "http://localhost:5555";
 const WS_URL = __ENV.WS_URL || "ws://localhost:4001";
-
 const CREDENTIALS = {
   email: __ENV.USER_EMAIL || "demo@tavok.ai",
   password: __ENV.USER_PASSWORD || "DemoPass123!",
 };
 
-// How often each VU sends a typing event (ms)
 const TYPING_INTERVAL_MS = 200;
-
-// How long each VU sustains the typing storm (s)
 const STORM_DURATION_S = 8;
+const JOIN_WAIT_MS = 3000;
 
 export const options = {
   stages: [
@@ -65,189 +41,101 @@ export const options = {
   },
 };
 
-// ---------------------------------------------------------------------------
-// Helpers (shared auth logic)
-// ---------------------------------------------------------------------------
-
-function authenticate() {
-  const jar = http.cookieJar();
-
-  const csrfRes = http.get(`${BASE_URL}/api/auth/csrf`, {
-    redirects: 0,
-    jar,
+export function setup() {
+  return setupLoadFixture({
+    baseUrl: BASE_URL,
+    credentials: CREDENTIALS,
+    channelCount: 1,
   });
-
-  check(csrfRes, {
-    "CSRF endpoint returns 200": (r) => r.status === 200,
-  });
-
-  let csrfToken = "";
-  try {
-    const csrfBody = JSON.parse(csrfRes.body);
-    csrfToken = csrfBody.csrfToken || "";
-  } catch (_) {
-    fail("Failed to parse CSRF response");
-  }
-
-  const loginRes = http.post(
-    `${BASE_URL}/api/auth/callback/credentials`,
-    {
-      email: CREDENTIALS.email,
-      password: CREDENTIALS.password,
-      csrfToken: csrfToken,
-      json: "true",
-    },
-    {
-      redirects: 0,
-      jar,
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    }
-  );
-
-  check(loginRes, {
-    "Login returns 200 or 302": (r) => r.status === 200 || r.status === 302,
-  });
-
-  if (loginRes.status === 302) {
-    const location =
-      loginRes.headers["Location"] || loginRes.headers["location"];
-    if (location) {
-      const redirectUrl = location.startsWith("http")
-        ? location
-        : `${BASE_URL}${location}`;
-      http.get(redirectUrl, { jar, redirects: 5 });
-    }
-  }
-
-  return jar;
 }
 
-function getJwt(jar) {
-  const tokenRes = http.get(`${BASE_URL}/api/auth/token`, { jar });
-
-  const ok = check(tokenRes, {
-    "Token endpoint returns 200": (r) => r.status === 200,
-  });
-
-  if (!ok) {
-    fail(`Token fetch failed: status=${tokenRes.status}`);
-  }
-
-  return JSON.parse(tokenRes.body).token;
-}
-
-function findFirstChannel(jar) {
-  const serversRes = http.get(`${BASE_URL}/api/servers`, { jar });
-  if (serversRes.status !== 200) return null;
-
-  const servers = JSON.parse(serversRes.body).servers || [];
-  if (servers.length === 0) return null;
-
-  const server = servers[0];
-  const channelsRes = http.get(
-    `${BASE_URL}/api/servers/${server.id}/channels`,
-    { jar }
-  );
-  if (channelsRes.status !== 200) return null;
-
-  const channels = JSON.parse(channelsRes.body).channels || [];
-  const general = channels.find((c) => c.name === "general");
-  return general || channels[0] || null;
-}
-
-// ---------------------------------------------------------------------------
-// Main VU scenario
-// ---------------------------------------------------------------------------
-
-export default function () {
-  // 1. Authenticate
-  const jar = authenticate();
-  const jwt = getJwt(jar);
-
-  // 2. Find a channel to storm
-  const channel = findFirstChannel(jar);
-  if (!channel) {
-    console.warn("No channel found — skipping typing storm");
+export default function (data) {
+  if (!data.channelId) {
     sleep(1);
     return;
   }
 
-  const channelTopic = `room:${channel.id}`;
-  const wsUrl = `${WS_URL}/socket/websocket?token=${jwt}&vsn=2.0.0`;
-
+  const channelTopic = "room:" + data.channelId;
+  const wsUrl = WS_URL + "/socket/websocket?token=" + data.jwt + "&vsn=2.0.0";
+  const connectStart = Date.now();
+  let connectSuccess = false;
   let refCounter = 1;
+
   function nextRef() {
     return String(refCounter++);
   }
 
-  const connectStart = Date.now();
-  let connectSuccess = false;
-
-  const res = ws.connect(wsUrl, {}, function (socket) {
-    const connectElapsed = Date.now() - connectStart;
-    wsConnectDuration.add(connectElapsed);
+  ws.connect(wsUrl, {}, function (socket) {
+    wsConnectDuration.add(Date.now() - connectStart);
     connectSuccess = true;
     wsConnectFailRate.add(0);
+    let channelJoinRef = null;
+    let joinStatus = null;
 
     socket.on("message", function (rawMsg) {
       try {
         const msg = JSON.parse(rawMsg);
-        if (!Array.isArray(msg) || msg.length < 5) return;
+        if (!Array.isArray(msg) || msg.length < 5) {
+          return;
+        }
 
-        const [, , , event] = msg;
+        const [, msgRef, , event, payload] = msg;
+        if (event === "phx_reply" && msgRef === channelJoinRef) {
+          joinStatus = payload && payload.status ? payload.status : "error";
+          return;
+        }
 
-        // Count typing events we receive from other VUs (or ourselves via broadcast)
         if (event === "user_typing") {
           typingEventsReceived.add(1);
         }
-      } catch (_) {
-        // Ignore parse errors
+      } catch (error) {
+        return;
       }
     });
 
-    socket.on("error", function (e) {
-      console.error(`WebSocket error: ${e}`);
+    socket.on("error", function (error) {
+      console.error("WebSocket error: " + error);
     });
 
-    // 3. Join the channel
     const joinRef = nextRef();
-    socket.send(
-      JSON.stringify([joinRef, joinRef, channelTopic, "phx_join", {}])
-    );
+    channelJoinRef = joinRef;
+    socket.send(JSON.stringify([null, joinRef, channelTopic, "phx_join", {}]));
 
-    // Wait for join to complete
-    sleep(0.5);
+    const joinStartedAt = Date.now();
+    function afterJoin() {
+      if (joinStatus === "ok") {
+        const stormEnd = Date.now() + STORM_DURATION_S * 1000;
+        let heartbeatCounter = 0;
 
-    // 4. Fire typing events at high frequency for STORM_DURATION_S seconds.
-    // The server-side throttle (2000ms) should drop most of these.
-    // With 200ms interval over 8s, each VU sends ~40 events but only ~4-5
-    // should be broadcast (every 2000ms).
-    const stormEnd = Date.now() + STORM_DURATION_S * 1000;
-    let heartbeatCounter = 0;
+        while (Date.now() < stormEnd) {
+          const ref = nextRef();
+          socket.send(JSON.stringify([channelJoinRef, ref, channelTopic, "typing", {}]));
+          typingEventsSent.add(1);
 
-    while (Date.now() < stormEnd) {
-      const ref = nextRef();
-      socket.send(
-        JSON.stringify([null, ref, channelTopic, "typing", {}])
-      );
-      typingEventsSent.add(1);
+          heartbeatCounter += 1;
+          if (heartbeatCounter % 25 === 0) {
+            const heartbeatRef = nextRef();
+            socket.send(JSON.stringify([null, heartbeatRef, "phoenix", "heartbeat", {}]));
+          }
 
-      // Send heartbeat every ~5 seconds to keep connection alive
-      heartbeatCounter++;
-      if (heartbeatCounter % 25 === 0) {
-        const hbRef = nextRef();
-        socket.send(
-          JSON.stringify([null, hbRef, "phoenix", "heartbeat", {}])
-        );
+          sleep(TYPING_INTERVAL_MS / 1000);
+        }
+
+        sleep(1);
+        socket.close();
+        return;
       }
 
-      sleep(TYPING_INTERVAL_MS / 1000);
+      if (joinStatus !== null || Date.now() - joinStartedAt >= JOIN_WAIT_MS) {
+        console.error("Channel join failed for " + channelTopic + " status=" + joinStatus);
+        socket.close();
+        return;
+      }
+
+      socket.setTimeout(afterJoin, 50);
     }
 
-    // Let events settle
-    sleep(1);
-
-    socket.close();
+    socket.setTimeout(afterJoin, 50);
   });
 
   if (!connectSuccess) {
@@ -255,40 +143,32 @@ export default function () {
     console.error("WebSocket connection failed");
   }
 
-  // 5. Post-storm health check — verify the server is still responsive
   sleep(0.5);
-  const healthRes = http.get(`${BASE_URL}/api/auth/csrf`, { timeout: "5s" });
+  const healthRes = http.get(BASE_URL + "/api/auth/csrf", { timeout: "5s" });
   const healthy = check(healthRes, {
-    "Server responsive after storm": (r) => r.status === 200,
+    "Server responsive after storm": function (response) {
+      return response.status === 200;
+    },
   });
   healthCheckPass.add(healthy ? 1 : 0);
-
   sleep(0.5);
 }
 
-// ---------------------------------------------------------------------------
-// Teardown: Final health check after all VUs complete
-// ---------------------------------------------------------------------------
-
 export function teardown() {
-  const healthRes = http.get(`${BASE_URL}/api/auth/csrf`, { timeout: "10s" });
+  const healthRes = http.get(BASE_URL + "/api/auth/csrf", { timeout: "10s" });
   const ok = check(healthRes, {
-    "Server responsive after full storm (teardown)": (r) => r.status === 200,
+    "Server responsive after full storm (teardown)": function (response) {
+      return response.status === 200;
+    },
   });
 
   if (!ok) {
     console.error(
-      "CRITICAL: Server unresponsive after typing storm — " +
-        "check Gateway logs for OOM or process crashes"
+      "CRITICAL: Server unresponsive after typing storm - check Gateway logs for OOM or process crashes"
     );
   }
 
-  // Log summary of typing throttle effectiveness.
-  // With 50 VUs * 40 events = 2000 sent, only ~200-250 should be broadcast
-  // (each VU gets throttled to 1 event per 2000ms window).
   console.log(
-    "Typing storm complete. Check 'typing_events_sent' vs 'typing_events_received' " +
-      "metrics to verify server-side throttle is working. " +
-      "Expected ratio: received << sent (roughly 10:1 drop rate)."
+    "Typing storm complete. Compare typing_events_sent and typing_events_received to confirm throttling."
   );
 }
