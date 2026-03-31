@@ -118,7 +118,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Generate Prisma client
-        run: pnpm --filter web prisma generate
+        run: pnpm --dir packages/web db:generate
 
       - name: Run Vitest
         run: pnpm --filter web test

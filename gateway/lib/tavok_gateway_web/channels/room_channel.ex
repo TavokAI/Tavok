@@ -177,20 +177,6 @@ defmodule TavokGatewayWeb.RoomChannel do
   end
 
   @impl true
-  def terminate(reason, socket) do
-    Tracer.with_span "presence.leave", %{
-      attributes:
-        trace_attributes(socket, %{
-          "tavok.disconnect_reason": inspect(reason)
-        })
-    } do
-      :ok
-    end
-
-    :ok
-  end
-
-  @impl true
   def handle_info({:sync_on_join, last_sequence}, socket) do
     case parse_sequence(last_sequence) do
       {:ok, parsed_last_sequence} ->
@@ -350,6 +336,20 @@ defmodule TavokGatewayWeb.RoomChannel do
   @impl true
   def handle_info({:DOWN, _ref, :process, _pid, _reason}, socket) do
     {:noreply, socket}
+  end
+
+  @impl true
+  def terminate(reason, socket) do
+    Tracer.with_span "presence.leave", %{
+      attributes:
+        trace_attributes(socket, %{
+          "tavok.disconnect_reason": inspect(reason)
+        })
+    } do
+      :ok
+    end
+
+    :ok
   end
 
   # Maximum message content length (matches PROTOCOL.md constraint)

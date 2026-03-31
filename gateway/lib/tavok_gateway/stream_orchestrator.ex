@@ -252,7 +252,7 @@ defmodule TavokGateway.StreamOrchestrator do
     Task.Supervisor.start_child(TavokGateway.TaskSupervisor, fun)
   end
 
-  defp trace_attributes(channel_id, agent_id, extra \\ %{}) do
+  defp trace_attributes(channel_id, agent_id, extra) do
     %{
       "tavok.channel_id" => channel_id,
       "tavok.agent_id" => agent_id
