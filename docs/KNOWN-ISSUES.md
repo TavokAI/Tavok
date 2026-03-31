@@ -86,12 +86,8 @@
 
 - **Severity**: `LOW`
 - **Description**: Direct server join endpoint remains open; authenticated users can `POST /api/servers/[serverId]/members` without an invite.
-- **Status**: `KNOWN` (v0 deferred)
-- **Repro steps**:
-  1. Authenticate as any user.
-  2. Call `POST /api/servers/{serverId}/members`.
-  3. Membership is created without invite validation.
-- **Notes**: This is legacy MVP behavior used by discover/join flow and is intentionally left in place for v0.
+- **Status**: `RESOLVED` (2026-03-31)
+- **Fix summary**: `POST /api/servers/[serverId]/members` now returns HTTP 410 with `Direct join is disabled. Use an invite link to join servers.` so server membership must flow through invite acceptance.
 
 ## BREAK-0014
 
