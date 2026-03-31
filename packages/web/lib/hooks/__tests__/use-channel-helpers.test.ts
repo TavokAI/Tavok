@@ -341,6 +341,25 @@ describe("orphan token buffering", () => {
     expect(orphanBuffer.has("msg-1")).toBe(false);
   });
 
+  it("replays orphan tokens in index order even when they arrive out of order", () => {
+    const orphanBuffer = new Map();
+    bufferOrphanStreamToken(
+      orphanBuffer,
+      { messageId: "msg-1", token: " world", index: 1 },
+      1_000,
+    );
+    bufferOrphanStreamToken(
+      orphanBuffer,
+      { messageId: "msg-1", token: "Hello", index: 0 },
+      1_200,
+    );
+
+    expect(takeBufferedOrphanTokens(orphanBuffer, "msg-1", 2_000)).toEqual([
+      { messageId: "msg-1", token: "Hello", index: 0 },
+      { messageId: "msg-1", token: " world", index: 1 },
+    ]);
+  });
+
   it("expires orphan token buffers after the ttl", () => {
     const orphanBuffer = new Map();
     bufferOrphanStreamToken(

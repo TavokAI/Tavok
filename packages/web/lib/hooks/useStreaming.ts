@@ -247,7 +247,7 @@ export function takeBufferedOrphanTokens(
     return [];
   }
 
-  return entry.tokens;
+  return [...entry.tokens].sort((left, right) => left.index - right.index);
 }
 
 export function useStreaming({
