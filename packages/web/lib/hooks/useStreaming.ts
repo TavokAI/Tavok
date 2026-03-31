@@ -15,6 +15,40 @@ export const CAPACITY_EXCEEDED_HINT =
   "All agents are busy right now. Try again in a moment.";
 export const STREAM_ORPHAN_TOKEN_TTL_MS = 5000;
 
+export function isCapacityExceededStreamError(code?: string): boolean {
+  return code === "CAPACITY_EXCEEDED";
+}
+
+export function getStreamErrorContent(payload: {
+  error: string;
+  partialContent: string | null;
+  existingContent?: string;
+  code?: string;
+}): string {
+  if (isCapacityExceededStreamError(payload.code)) {
+    return CAPACITY_EXCEEDED_CONTENT;
+  }
+
+  return (
+    payload.partialContent ||
+    payload.existingContent ||
+    `[Error: ${payload.error}]`
+  );
+}
+
+export function getStreamErrorHint(error: string, code?: string): string | null {
+  if (isCapacityExceededStreamError(code)) {
+    return CAPACITY_EXCEEDED_HINT;
+  }
+
+  const errorText = error.trim();
+  if (!errorText) {
+    return null;
+  }
+
+  return `Agent response failed: ${errorText}`;
+}
+
 export interface StreamTokenPayload {
   messageId: string;
   token: string;
@@ -79,14 +113,14 @@ export function applyStreamError(
 ): MessagePayload {
   if (message.id !== payload.messageId) return message;
 
-  const errorContent =
-    payload.code === "CAPACITY_EXCEEDED"
-      ? CAPACITY_EXCEEDED_CONTENT
-      : payload.partialContent || message.content || `[Error: ${payload.error}]`;
-
   return {
     ...message,
-    content: errorContent,
+    content: getStreamErrorContent({
+      error: payload.error,
+      partialContent: payload.partialContent,
+      existingContent: message.content,
+      code: payload.code,
+    }),
     type: "STREAMING",
     streamingStatus: "ERROR",
     thinkingPhase: undefined,
@@ -175,11 +209,6 @@ export function buildStreamErrorFallback(
   streamMeta: PendingStreamMeta | undefined,
   lastSequence: string,
 ): MessagePayload {
-  const errorContent =
-    payload.code === "CAPACITY_EXCEEDED"
-      ? CAPACITY_EXCEEDED_CONTENT
-      : payload.partialContent || `[Error: ${payload.error}]`;
-
   return {
     id: payload.messageId,
     channelId,
@@ -187,7 +216,11 @@ export function buildStreamErrorFallback(
     authorType: "AGENT",
     authorName: streamMeta?.agentName || "Agent",
     authorAvatarUrl: streamMeta?.agentAvatarUrl || null,
-    content: errorContent,
+    content: getStreamErrorContent({
+      error: payload.error,
+      partialContent: payload.partialContent,
+      code: payload.code,
+    }),
     type: "STREAMING",
     streamingStatus: "ERROR",
     sequence: streamMeta?.sequence || lastSequence,
@@ -524,12 +557,8 @@ export function useStreaming({
           );
         });
 
-        const errorText = (payload.error || "").trim();
-        if (errorText) {
-          const hint =
-            payload.code === "CAPACITY_EXCEEDED"
-              ? CAPACITY_EXCEEDED_HINT
-              : `Agent response failed: ${errorText}`;
+        const hint = getStreamErrorHint(payload.error || "", payload.code);
+        if (hint) {
           setAgentTriggerHint(hint);
         }
       });

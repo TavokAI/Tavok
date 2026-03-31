@@ -8,6 +8,8 @@ import {
   buildStreamErrorFallback,
   bufferOrphanStreamToken,
   CAPACITY_EXCEEDED_CONTENT,
+  CAPACITY_EXCEEDED_HINT,
+  getStreamErrorHint,
   takeBufferedOrphanTokens,
 } from "../use-channel";
 import type { MessagePayload } from "../use-channel";
@@ -370,5 +372,23 @@ describe("orphan token buffering", () => {
 
     expect(takeBufferedOrphanTokens(orphanBuffer, "msg-1", 7_000)).toEqual([]);
     expect(orphanBuffer.has("msg-1")).toBe(false);
+  });
+});
+
+describe("getStreamErrorHint", () => {
+  it("uses the terminal capacity hint for capacity errors", () => {
+    expect(getStreamErrorHint("capacity", "CAPACITY_EXCEEDED")).toBe(
+      CAPACITY_EXCEEDED_HINT,
+    );
+  });
+
+  it("formats non-capacity errors as agent failure hints", () => {
+    expect(getStreamErrorHint("timeout")).toBe(
+      "Agent response failed: timeout",
+    );
+  });
+
+  it("skips non-capacity hints when the error is blank", () => {
+    expect(getStreamErrorHint("   ")).toBeNull();
   });
 });
