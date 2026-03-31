@@ -6,6 +6,9 @@ import {
   applyStreamToolCall,
   applyStreamToolResult,
   buildStreamErrorFallback,
+  bufferOrphanStreamToken,
+  CAPACITY_EXCEEDED_CONTENT,
+  takeBufferedOrphanTokens,
 } from "../use-channel";
 import type { MessagePayload } from "../use-channel";
 
@@ -132,6 +135,17 @@ describe("applyStreamError", () => {
       partialContent: null,
     });
     expect(result).toBe(msg);
+  });
+
+  it("uses the terminal capacity copy for capacity errors", () => {
+    const msg = makeMsg({ content: "" });
+    const result = applyStreamError(msg, {
+      messageId: "msg-1",
+      error: "capacity",
+      partialContent: null,
+      code: "CAPACITY_EXCEEDED",
+    });
+    expect(result.content).toBe(CAPACITY_EXCEEDED_CONTENT);
   });
 });
 
@@ -288,5 +302,54 @@ describe("buildStreamErrorFallback", () => {
     expect(result.authorId).toBe("");
     expect(result.authorName).toBe("Agent");
     expect(result.sequence).toBe("99");
+  });
+
+  it("uses the terminal capacity copy in fallback errors", () => {
+    const result = buildStreamErrorFallback(
+      "ch-1",
+      {
+        messageId: "msg-1",
+        error: "capacity",
+        partialContent: null,
+        code: "CAPACITY_EXCEEDED",
+      },
+      undefined,
+      "99",
+    );
+    expect(result.content).toBe(CAPACITY_EXCEEDED_CONTENT);
+  });
+});
+
+describe("orphan token buffering", () => {
+  it("buffers orphan tokens by message id and replays them", () => {
+    const orphanBuffer = new Map();
+    bufferOrphanStreamToken(
+      orphanBuffer,
+      { messageId: "msg-1", token: "Hello", index: 0 },
+      1_000,
+    );
+    bufferOrphanStreamToken(
+      orphanBuffer,
+      { messageId: "msg-1", token: " world", index: 1 },
+      1_500,
+    );
+
+    expect(takeBufferedOrphanTokens(orphanBuffer, "msg-1", 2_000)).toEqual([
+      { messageId: "msg-1", token: "Hello", index: 0 },
+      { messageId: "msg-1", token: " world", index: 1 },
+    ]);
+    expect(orphanBuffer.has("msg-1")).toBe(false);
+  });
+
+  it("expires orphan token buffers after the ttl", () => {
+    const orphanBuffer = new Map();
+    bufferOrphanStreamToken(
+      orphanBuffer,
+      { messageId: "msg-1", token: "late", index: 0 },
+      1_000,
+    );
+
+    expect(takeBufferedOrphanTokens(orphanBuffer, "msg-1", 7_000)).toEqual([]);
+    expect(orphanBuffer.has("msg-1")).toBe(false);
   });
 });
