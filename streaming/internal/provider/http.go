@@ -5,6 +5,7 @@
 package provider
 
 import (
+	"net"
 	"net/http"
 	"time"
 )
@@ -19,9 +20,15 @@ func NewStreamingHTTPClient() *http.Client {
 		Timeout: 5 * time.Minute,
 		Transport: &http.Transport{
 			MaxConnsPerHost:     200,
-			MaxIdleConns:        200,
+			MaxIdleConns:        100,
 			MaxIdleConnsPerHost: 20,
-			IdleConnTimeout:     120 * time.Second,
+			IdleConnTimeout:     90 * time.Second,
+			DialContext: (&net.Dialer{
+				Timeout:   5 * time.Second,
+				KeepAlive: 30 * time.Second,
+			}).DialContext,
+			TLSHandshakeTimeout:   5 * time.Second,
+			ResponseHeaderTimeout: 10 * time.Second,
 		},
 	}
 }

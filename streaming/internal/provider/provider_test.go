@@ -65,16 +65,28 @@ func TestNewStreamingHTTPClient(t *testing.T) {
 		t.Errorf("MaxConnsPerHost = %d, want 200", transport.MaxConnsPerHost)
 	}
 
-	if transport.MaxIdleConns != 200 {
-		t.Errorf("MaxIdleConns = %d, want 200", transport.MaxIdleConns)
+	if transport.MaxIdleConns != 100 {
+		t.Errorf("MaxIdleConns = %d, want 100", transport.MaxIdleConns)
 	}
 
 	if transport.MaxIdleConnsPerHost != 20 {
 		t.Errorf("MaxIdleConnsPerHost = %d, want 20", transport.MaxIdleConnsPerHost)
 	}
 
-	if transport.IdleConnTimeout != 120*time.Second {
-		t.Errorf("IdleConnTimeout = %v, want %v", transport.IdleConnTimeout, 120*time.Second)
+	if transport.IdleConnTimeout != 90*time.Second {
+		t.Errorf("IdleConnTimeout = %v, want %v", transport.IdleConnTimeout, 90*time.Second)
+	}
+
+	if transport.TLSHandshakeTimeout != 5*time.Second {
+		t.Errorf("TLSHandshakeTimeout = %v, want %v", transport.TLSHandshakeTimeout, 5*time.Second)
+	}
+
+	if transport.ResponseHeaderTimeout != 10*time.Second {
+		t.Errorf("ResponseHeaderTimeout = %v, want %v", transport.ResponseHeaderTimeout, 10*time.Second)
+	}
+
+	if transport.DialContext == nil {
+		t.Fatal("DialContext should be configured")
 	}
 }
 

@@ -52,6 +52,46 @@ func TestGetAgentSuccess(t *testing.T) {
 	}
 }
 
+func TestNewLoaderUsesTunedHTTPTransport(t *testing.T) {
+	loader := NewLoader("http://example.com", "secret")
+
+	if loader.client == nil {
+		t.Fatal("loader.client should not be nil")
+	}
+	if loader.client.Timeout != 10*time.Second {
+		t.Fatalf("Timeout = %v, want %v", loader.client.Timeout, 10*time.Second)
+	}
+
+	transport, ok := loader.client.Transport.(*http.Transport)
+	if !ok {
+		t.Fatalf("Transport type = %T, want *http.Transport", loader.client.Transport)
+	}
+
+	if transport.MaxIdleConns != 100 {
+		t.Errorf("MaxIdleConns = %d, want 100", transport.MaxIdleConns)
+	}
+	if transport.MaxIdleConnsPerHost != 20 {
+		t.Errorf("MaxIdleConnsPerHost = %d, want 20", transport.MaxIdleConnsPerHost)
+	}
+	if transport.IdleConnTimeout != 90*time.Second {
+		t.Errorf("IdleConnTimeout = %v, want %v", transport.IdleConnTimeout, 90*time.Second)
+	}
+	if transport.TLSHandshakeTimeout != 5*time.Second {
+		t.Errorf("TLSHandshakeTimeout = %v, want %v", transport.TLSHandshakeTimeout, 5*time.Second)
+	}
+	if transport.ResponseHeaderTimeout != 10*time.Second {
+		t.Errorf("ResponseHeaderTimeout = %v, want %v", transport.ResponseHeaderTimeout, 10*time.Second)
+	}
+	if transport.DialContext == nil {
+		t.Fatal("DialContext should be configured")
+	}
+
+	dialer := transport.DialContext
+	if _, err := dialer(context.Background(), "tcp", "127.0.0.1:1"); err == nil {
+		t.Fatal("expected dial to fail for closed port")
+	}
+}
+
 func TestGetAgentUnauthorized(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
