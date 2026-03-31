@@ -7,6 +7,7 @@ import (
 	"go/token"
 	"io"
 	"log/slog"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -935,6 +936,34 @@ func TestPublishErrorFinalizesBeforePublishingErrorStatus(t *testing.T) {
 	}
 }
 
+func TestHandleStreamRecordsTTFTFromFirstTokenTimestamp(t *testing.T) {
+	source, err := readManagerSource()
+	if err != nil {
+		t.Fatalf("readManagerSource() error = %v", err)
+	}
+
+	if !strings.Contains(source, "RecordTTFT(firstTokenTime.Sub(startTime))") {
+		t.Fatal("expected handleStream to record TTFT from firstTokenTime")
+	}
+	if strings.Contains(source, "RecordTTFT(time.Duration(durationMs) * time.Millisecond)") {
+		t.Fatal("expected legacy total-duration TTFT call to be removed")
+	}
+}
+
+func TestRunProviderIterationCapturesFirstTokenPublishTime(t *testing.T) {
+	source, err := readManagerSource()
+	if err != nil {
+		t.Fatalf("readManagerSource() error = %v", err)
+	}
+
+	if !strings.Contains(source, "if firstTokenTime.IsZero()") {
+		t.Fatal("expected firstTokenTime guard in token publish path")
+	}
+	if !strings.Contains(source, "firstTokenTime = time.Now()") {
+		t.Fatal("expected firstTokenTime to be captured when the first token batch is published")
+	}
+}
+
 func selectorCallOrderForFunc(t *testing.T, funcName string) []string {
 	t.Helper()
 
@@ -988,4 +1017,16 @@ func selectorCallIndex(t *testing.T, callOrder []string, target string) int {
 
 	t.Fatalf("call %s not found in %v", target, callOrder)
 	return -1
+}
+
+func readManagerSource() (string, error) {
+	path, err := filepath.Abs("manager.go")
+	if err != nil {
+		return "", err
+	}
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	return string(content), nil
 }

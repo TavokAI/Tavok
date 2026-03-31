@@ -468,6 +468,7 @@ func (m *Manager) handleStream(ctx context.Context, req streamRequest) {
 	var allContent strings.Builder
 	totalTokenCount := 0
 	firstTokenEverSeen := false
+	var firstTokenTime time.Time
 
 	// Token history + checkpoints for stream rewind (TASK-0021)
 	var tokenHistory []tokenHistoryEntry
@@ -510,10 +511,13 @@ func (m *Manager) handleStream(ctx context.Context, req streamRequest) {
 		}
 
 		// Run one provider iteration
-		iterContent, iterTokens, pr, timedOut := m.runProviderIteration(
+		iterContent, iterTokens, pr, timedOut, iterationFirstTokenTime := m.runProviderIteration(
 			streamCtx, ctx, req, streamReq, agentConfig,
-			&firstTokenEverSeen, &thinkingTimeline, &tokenHistory, startTime,
+			&firstTokenEverSeen, &thinkingTimeline, &tokenHistory, startTime, firstTokenTime,
 		)
+		if firstTokenTime.IsZero() && !iterationFirstTokenTime.IsZero() {
+			firstTokenTime = iterationFirstTokenTime
+		}
 
 		if timedOut {
 			m.recordProviderFailure(p.Name(), time.Now())
@@ -677,7 +681,9 @@ func (m *Manager) handleStream(ctx context.Context, req streamRequest) {
 	streamErrored = false
 	metrics.Get().StreamCompleted()
 	metrics.Get().TokenEmitted(int64(totalTokenCount))
-	metrics.Get().RecordTTFT(time.Duration(durationMs) * time.Millisecond)
+	if !firstTokenTime.IsZero() {
+		metrics.Get().RecordTTFT(firstTokenTime.Sub(startTime))
+	}
 
 	m.logger.Info("Stream completed",
 		"messageId", req.MessageID,
@@ -761,7 +767,8 @@ func (m *Manager) runProviderIteration(
 	thinkingTimeline *[]timelineEntry,
 	tokenHistory *[]tokenHistoryEntry,
 	startTime time.Time,
-) (string, int, providerResult, bool) {
+	firstTokenTime time.Time,
+) (string, int, providerResult, bool, time.Time) {
 	_, llmSpan := tracing.Tracer.Start(streamCtx, "llm.stream",
 		trace.WithAttributes(
 			attribute.String("tavok.message_id", req.MessageID),
@@ -813,6 +820,8 @@ func (m *Manager) runProviderIteration(
 				"messageId", req.MessageID,
 				"error", err,
 			)
+		} else if firstTokenTime.IsZero() {
+			firstTokenTime = time.Now()
 		}
 		// Record token boundary for stream rewind (TASK-0021)
 		*tokenHistory = append(*tokenHistory, tokenHistoryEntry{
@@ -879,17 +888,17 @@ func (m *Manager) runProviderIteration(
 				"messageId", req.MessageID,
 			)
 			m.publishError(parentCtx, req, lastContent, "Stream timed out: no token received for 30 seconds", tokenCount, startTime)
-			return lastContent, tokenCount, providerResult{}, true
+			return lastContent, tokenCount, providerResult{}, true, firstTokenTime
 
 		case <-parentCtx.Done():
 			flushBatch()
 			m.publishError(parentCtx, req, lastContent, "Service shutting down", tokenCount, startTime)
-			return lastContent, tokenCount, providerResult{}, true
+			return lastContent, tokenCount, providerResult{}, true, firstTokenTime
 		}
 	}
 
 	pr := <-resultCh
-	return lastContent, tokenCount, pr, false
+	return lastContent, tokenCount, pr, false, firstTokenTime
 }
 
 // executeTools runs all requested tool calls in parallel and publishes events. (TASK-0018, L12)
