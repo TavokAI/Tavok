@@ -101,10 +101,12 @@ func main() {
 	maxStreamDurationSec := getEnvInt("STREAMING_MAX_DURATION_SEC", 300)
 	batchFlushMs := getEnvInt("STREAMING_BATCH_FLUSH_MS", 50)
 	manager := stream.NewManagerWithConfig(logger, gwClient, loader, registry, toolRegistry, stream.ManagerConfig{
-		MaxConcurrentStreams: getEnvInt("STREAMING_MAX_CONCURRENT_STREAMS", 32),
-		MaxStreamDuration:    time.Duration(maxStreamDurationSec) * time.Second,
-		BatchMaxTokens:       getEnvInt("STREAMING_BATCH_MAX_TOKENS", 10),    // L13
-		BatchFlushInterval:   time.Duration(batchFlushMs) * time.Millisecond, // L13
+		MaxConcurrentStreams:    getEnvInt("STREAMING_MAX_CONCURRENT_STREAMS", 32),
+		MaxStreamDuration:       time.Duration(maxStreamDurationSec) * time.Second,
+		CircuitBreakerThreshold: getEnvInt("STREAMING_CIRCUIT_BREAKER_THRESHOLD", 5),
+		CircuitBreakerCooldown:  time.Duration(getEnvInt("STREAMING_CIRCUIT_BREAKER_COOLDOWN_SEC", 30)) * time.Second,
+		BatchMaxTokens:          getEnvInt("STREAMING_BATCH_MAX_TOKENS", 10),    // L13
+		BatchFlushInterval:      time.Duration(batchFlushMs) * time.Millisecond, // L13
 	})
 
 	// Wire readiness: the health check gates on the subscription being live.

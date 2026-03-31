@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/TavokAI/Tavok/streaming/internal/provider"
 	"github.com/TavokAI/Tavok/streaming/internal/tools"
@@ -47,6 +48,81 @@ func TestNewManagerDefaultsConcurrencyWhenNegative(t *testing.T) {
 
 	if manager.maxConcurrentStreams != 32 {
 		t.Fatalf("expected default maxConcurrentStreams=32, got %d", manager.maxConcurrentStreams)
+	}
+}
+
+func TestNewManagerWithConfigDefaultsCircuitBreaker(t *testing.T) {
+	manager := NewManagerWithConfig(silentLogger(), nil, nil, nil, nil, ManagerConfig{})
+
+	if manager.circuitBreakerThreshold != 5 {
+		t.Fatalf("circuitBreakerThreshold = %d, want 5", manager.circuitBreakerThreshold)
+	}
+	if manager.circuitBreakerCooldown != 30*time.Second {
+		t.Fatalf("circuitBreakerCooldown = %v, want %v", manager.circuitBreakerCooldown, 30*time.Second)
+	}
+	if manager.circuits == nil {
+		t.Fatal("circuits map should be initialized")
+	}
+}
+
+func TestCircuitBreakerOpensAfterThresholdFailures(t *testing.T) {
+	manager := NewManagerWithConfig(silentLogger(), nil, nil, nil, nil, ManagerConfig{
+		CircuitBreakerThreshold: 2,
+		CircuitBreakerCooldown:  30 * time.Second,
+	})
+	now := time.Date(2026, 3, 31, 12, 0, 0, 0, time.UTC)
+
+	manager.recordProviderFailure("openai", now)
+	if err := manager.beforeProviderCall("openai", now.Add(1*time.Second)); err != nil {
+		t.Fatalf("beforeProviderCall() after first failure = %v, want nil", err)
+	}
+
+	manager.recordProviderFailure("openai", now.Add(2*time.Second))
+	if err := manager.beforeProviderCall("openai", now.Add(3*time.Second)); err == nil {
+		t.Fatal("expected circuit-open error after threshold failures")
+	}
+}
+
+func TestCircuitBreakerAllowsHalfOpenProbeAfterCooldown(t *testing.T) {
+	manager := NewManagerWithConfig(silentLogger(), nil, nil, nil, nil, ManagerConfig{
+		CircuitBreakerThreshold: 1,
+		CircuitBreakerCooldown:  10 * time.Second,
+	})
+	now := time.Date(2026, 3, 31, 12, 0, 0, 0, time.UTC)
+
+	manager.recordProviderFailure("anthropic", now)
+	if err := manager.beforeProviderCall("anthropic", now.Add(5*time.Second)); err == nil {
+		t.Fatal("expected fast-fail while cooldown is active")
+	}
+
+	if err := manager.beforeProviderCall("anthropic", now.Add(11*time.Second)); err != nil {
+		t.Fatalf("expected half-open probe after cooldown, got %v", err)
+	}
+	if err := manager.beforeProviderCall("anthropic", now.Add(11*time.Second)); err == nil {
+		t.Fatal("expected concurrent half-open probe to be rejected")
+	}
+
+	manager.recordProviderSuccess("anthropic")
+	if err := manager.beforeProviderCall("anthropic", now.Add(12*time.Second)); err != nil {
+		t.Fatalf("expected closed circuit after successful probe, got %v", err)
+	}
+}
+
+func TestCircuitBreakerReopensWhenHalfOpenProbeFails(t *testing.T) {
+	manager := NewManagerWithConfig(silentLogger(), nil, nil, nil, nil, ManagerConfig{
+		CircuitBreakerThreshold: 1,
+		CircuitBreakerCooldown:  10 * time.Second,
+	})
+	now := time.Date(2026, 3, 31, 12, 0, 0, 0, time.UTC)
+
+	manager.recordProviderFailure("openrouter", now)
+	if err := manager.beforeProviderCall("openrouter", now.Add(11*time.Second)); err != nil {
+		t.Fatalf("expected half-open probe after cooldown, got %v", err)
+	}
+
+	manager.recordProviderFailure("openrouter", now.Add(11*time.Second))
+	if err := manager.beforeProviderCall("openrouter", now.Add(12*time.Second)); err == nil {
+		t.Fatal("expected circuit to reopen after failed probe")
 	}
 }
 

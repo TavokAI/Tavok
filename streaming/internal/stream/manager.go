@@ -14,6 +14,7 @@ package stream
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -91,6 +92,7 @@ func (c carrierFromRequest) Keys() []string {
 // Manager tracks all active streams and coordinates lifecycle.
 type Manager struct {
 	mu           sync.RWMutex
+	circuits     map[string]*circuitState
 	active       map[string]struct{} // messageId → active stream
 	logger       *slog.Logger
 	gwClient     *gateway.Client
@@ -102,6 +104,9 @@ type Manager struct {
 	semaphore            chan struct{}
 	// maxStreamDuration is the hard ceiling for any single stream (L14).
 	maxStreamDuration time.Duration
+	// circuit breaker parameters are applied per provider name.
+	circuitBreakerThreshold int
+	circuitBreakerCooldown  time.Duration
 	// L13: Token batching parameters (configurable via env vars)
 	batchMaxTokens     int
 	batchFlushInterval time.Duration
@@ -113,10 +118,18 @@ type Manager struct {
 // NewManager creates a new stream manager.
 // ManagerConfig holds configurable parameters for the stream manager.
 type ManagerConfig struct {
-	MaxConcurrentStreams int
-	MaxStreamDuration    time.Duration
-	BatchMaxTokens       int           // L13: Max tokens per batch before flush (default 10)
-	BatchFlushInterval   time.Duration // L13: Max time before flushing partial batch (default 50ms)
+	MaxConcurrentStreams    int
+	MaxStreamDuration       time.Duration
+	CircuitBreakerThreshold int
+	CircuitBreakerCooldown  time.Duration
+	BatchMaxTokens          int           // L13: Max tokens per batch before flush (default 10)
+	BatchFlushInterval      time.Duration // L13: Max time before flushing partial batch (default 50ms)
+}
+
+type circuitState struct {
+	consecutiveFailures int
+	openedUntil         time.Time
+	probeInFlight       bool
 }
 
 func NewManager(logger *slog.Logger, gwClient *gateway.Client, loader *config.Loader, registry *provider.Registry, toolRegistry *tools.Registry, maxConcurrentStreams int, maxStreamDuration time.Duration) *Manager {
@@ -139,19 +152,28 @@ func NewManagerWithConfig(logger *slog.Logger, gwClient *gateway.Client, loader 
 	if cfg.BatchFlushInterval <= 0 {
 		cfg.BatchFlushInterval = 50 * time.Millisecond
 	}
+	if cfg.CircuitBreakerThreshold <= 0 {
+		cfg.CircuitBreakerThreshold = 5
+	}
+	if cfg.CircuitBreakerCooldown <= 0 {
+		cfg.CircuitBreakerCooldown = 30 * time.Second
+	}
 
 	return &Manager{
-		active:               make(map[string]struct{}),
-		logger:               logger,
-		gwClient:             gwClient,
-		loader:               loader,
-		registry:             registry,
-		toolRegistry:         toolRegistry,
-		maxConcurrentStreams: cfg.MaxConcurrentStreams,
-		semaphore:            make(chan struct{}, cfg.MaxConcurrentStreams),
-		maxStreamDuration:    cfg.MaxStreamDuration,
-		batchMaxTokens:       cfg.BatchMaxTokens,
-		batchFlushInterval:   cfg.BatchFlushInterval,
+		active:                  make(map[string]struct{}),
+		circuits:                make(map[string]*circuitState),
+		logger:                  logger,
+		gwClient:                gwClient,
+		loader:                  loader,
+		registry:                registry,
+		toolRegistry:            toolRegistry,
+		maxConcurrentStreams:    cfg.MaxConcurrentStreams,
+		semaphore:               make(chan struct{}, cfg.MaxConcurrentStreams),
+		maxStreamDuration:       cfg.MaxStreamDuration,
+		circuitBreakerThreshold: cfg.CircuitBreakerThreshold,
+		circuitBreakerCooldown:  cfg.CircuitBreakerCooldown,
+		batchMaxTokens:          cfg.BatchMaxTokens,
+		batchFlushInterval:      cfg.BatchFlushInterval,
 	}
 }
 
@@ -482,6 +504,11 @@ func (m *Manager) handleStream(ctx context.Context, req streamRequest) {
 			checkpointIndex++
 		}
 
+		if err := m.beforeProviderCall(p.Name(), time.Now()); err != nil {
+			m.publishError(ctx, req, allContent.String(), err.Error(), totalTokenCount, startTime)
+			return
+		}
+
 		// Run one provider iteration
 		iterContent, iterTokens, pr, timedOut := m.runProviderIteration(
 			streamCtx, ctx, req, streamReq, agentConfig,
@@ -489,6 +516,7 @@ func (m *Manager) handleStream(ctx context.Context, req streamRequest) {
 		)
 
 		if timedOut {
+			m.recordProviderFailure(p.Name(), time.Now())
 			// Already published error in runProviderIteration
 			return
 		}
@@ -497,6 +525,7 @@ func (m *Manager) handleStream(ctx context.Context, req streamRequest) {
 		totalTokenCount += iterTokens
 
 		if pr.err != nil {
+			m.recordProviderFailure(p.Name(), time.Now())
 			m.logger.Error("Stream provider error",
 				"messageId", req.MessageID,
 				"error", pr.err,
@@ -505,6 +534,8 @@ func (m *Manager) handleStream(ctx context.Context, req streamRequest) {
 			m.publishError(ctx, req, allContent.String(), pr.err.Error(), totalTokenCount, startTime)
 			return
 		}
+
+		m.recordProviderSuccess(p.Name())
 
 		// Check if the model wants to use tools
 		if pr.result != nil && pr.result.StopReason == "tool_use" && len(pr.result.ToolCalls) > 0 {
@@ -653,6 +684,69 @@ func (m *Manager) handleStream(ctx context.Context, req streamRequest) {
 		"tokenCount", totalTokenCount,
 		"durationMs", durationMs,
 	)
+}
+
+func (m *Manager) beforeProviderCall(providerName string, now time.Time) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	state := m.circuitState(providerName)
+	if state.openedUntil.IsZero() {
+		return nil
+	}
+	if now.Before(state.openedUntil) {
+		return errors.New("Provider temporarily unavailable (circuit open)")
+	}
+	if state.probeInFlight {
+		return errors.New("Provider temporarily unavailable (circuit open)")
+	}
+
+	state.probeInFlight = true
+	return nil
+}
+
+func (m *Manager) recordProviderSuccess(providerName string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	state := m.circuitState(providerName)
+	state.consecutiveFailures = 0
+	state.openedUntil = time.Time{}
+	state.probeInFlight = false
+}
+
+func (m *Manager) recordProviderFailure(providerName string, now time.Time) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	state := m.circuitState(providerName)
+	opened := false
+
+	if state.probeInFlight {
+		state.probeInFlight = false
+		state.consecutiveFailures = m.circuitBreakerThreshold
+		state.openedUntil = now.Add(m.circuitBreakerCooldown)
+		opened = true
+	} else {
+		state.consecutiveFailures++
+		if state.consecutiveFailures >= m.circuitBreakerThreshold {
+			state.openedUntil = now.Add(m.circuitBreakerCooldown)
+			opened = true
+		}
+	}
+
+	if opened {
+		m.logger.Error("Circuit breaker opened", "provider", providerName)
+	}
+}
+
+func (m *Manager) circuitState(providerName string) *circuitState {
+	state, ok := m.circuits[providerName]
+	if !ok {
+		state = &circuitState{}
+		m.circuits[providerName] = state
+	}
+	return state
 }
 
 // runProviderIteration runs a single provider stream iteration,
