@@ -146,8 +146,7 @@ describe("route_invocation_safety", () => {
 
   it("agent PATCH returns 400 for invalid JSON body", async () => {
     const handler = createServerAgentPatchHandler({
-      getServerSession: async () => ({ user: { id: "owner-1" } }),
-      authOptions: {},
+      getSession: async () => ({ user: { id: "owner-1" } }),
       prismaClient: {
         server: {
           findUnique: async () => ({ ownerId: "owner-1" }),
@@ -176,8 +175,7 @@ describe("route_invocation_safety", () => {
 
   it("channel PATCH returns 400 for invalid JSON body", async () => {
     const handler = createServerChannelPatchHandler({
-      getServerSession: async () => ({ user: { id: "owner-1" } }),
-      authOptions: {},
+      getSession: async () => ({ user: { id: "owner-1" } }),
       prismaClient: {
         server: {
           findUnique: async () => ({ ownerId: "owner-1" }),

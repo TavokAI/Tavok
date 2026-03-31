@@ -1,14 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth/next";
+import { auth } from "@/auth";
 import bcrypt from "bcryptjs";
-import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 
 /**
  * GET /api/users/me — Return current user's profile
  */
 export async function GET() {
-  const session = await getServerSession(authOptions);
+  const session = await auth();
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -39,7 +38,7 @@ export async function GET() {
  * Body: { displayName?, email?, avatarUrl?, currentPassword?, newPassword? }
  */
 export async function PATCH(request: NextRequest) {
-  const session = await getServerSession(authOptions);
+  const session = await auth();
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

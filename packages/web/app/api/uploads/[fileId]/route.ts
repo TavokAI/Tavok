@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth/next";
+import { auth } from "@/auth";
 import { readFile } from "fs/promises";
 import { join } from "path";
-import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 
 const UPLOADS_DIR = process.env.UPLOADS_DIR || "/app/uploads";
@@ -26,7 +25,7 @@ export async function GET(
   { params }: { params: Promise<{ fileId: string }> },
 ) {
   const { fileId } = await params;
-  const session = await getServerSession(authOptions);
+  const session = await auth();
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

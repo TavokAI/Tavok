@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/lib/auth";
+import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
 import { checkMemberPermission } from "@/lib/check-member-permission";
 import {
@@ -19,7 +18,7 @@ export async function PATCH(
   { params }: { params: Promise<{ serverId: string; roleId: string }> },
 ) {
   const { serverId, roleId } = await params;
-  const session = await getServerSession(authOptions);
+  const session = await auth();
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -128,7 +127,7 @@ export async function DELETE(
   { params }: { params: Promise<{ serverId: string; roleId: string }> },
 ) {
   const { serverId, roleId } = await params;
-  const session = await getServerSession(authOptions);
+  const session = await auth();
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

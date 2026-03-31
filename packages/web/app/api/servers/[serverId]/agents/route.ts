@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
 import { encrypt } from "@/lib/encryption";
 import { generateId } from "@/lib/ulid";
@@ -27,7 +26,7 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ serverId: string }> },
 ) {
-  const session = await getServerSession(authOptions);
+  const session = await auth();
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -121,7 +120,7 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ serverId: string }> },
 ) {
-  const session = await getServerSession(authOptions);
+  const session = await auth();
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
