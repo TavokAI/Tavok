@@ -97,7 +97,7 @@
 - **Repro steps**:
   1. Run `pip install tavok-sdk`.
   2. Observe "ERROR: No matching distribution found for tavok-sdk".
-- **Notes**: SDK source exists at `sdk/python/`. Needs `python -m build` + `twine upload` or a CI publish workflow. README should mark as "coming soon" until published.
+- **Notes**: SDK source exists at `sdk/python/`. Local `python -m build` and wheel install verification passed on 2026-03-31, and `.github/workflows/publish-sdk.yml` now provides a dedicated manual publish path. Keep this open until a public PyPI release makes `pip install tavok-sdk` succeed end-to-end.
 
 ## BREAK-0015
 
