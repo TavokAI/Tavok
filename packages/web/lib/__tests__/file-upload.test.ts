@@ -14,7 +14,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const {
   mockPrisma,
   mockSessionRef,
-  mockGetServerSession,
+  mockAuth,
   mockGetImageDimensions,
 } = vi.hoisted(() => {
   const _mockPrisma = {
@@ -23,23 +23,18 @@ const {
     },
   };
   const _mockSessionRef = { current: { user: { id: "user-1" } } as any };
-  const _mockGetServerSession = vi.fn(() =>
-    Promise.resolve(_mockSessionRef.current),
-  );
+  const _mockAuth = vi.fn(() => Promise.resolve(_mockSessionRef.current));
   const _mockGetImageDimensions = vi.fn();
   return {
     mockPrisma: _mockPrisma,
     mockSessionRef: _mockSessionRef,
-    mockGetServerSession: _mockGetServerSession,
+    mockAuth: _mockAuth,
     mockGetImageDimensions: _mockGetImageDimensions,
   };
 });
 
 vi.mock("@/lib/db", () => ({ prisma: mockPrisma }));
-vi.mock("@/lib/auth", () => ({ authOptions: {} }));
-vi.mock("next-auth/next", () => ({
-  getServerSession: mockGetServerSession,
-}));
+vi.mock("@/auth", () => ({ auth: mockAuth }));
 vi.mock("@/lib/ulid", () => ({ generateId: () => "test-file-id-001" }));
 vi.mock("@/lib/image-dimensions", () => ({
   getImageDimensions: (...args: any[]) => mockGetImageDimensions(...args),

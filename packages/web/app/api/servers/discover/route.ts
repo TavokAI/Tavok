@@ -1,15 +1,14 @@
 // TODO(PROD-READY): Endpoint is functional but no UI calls it.
 // Wire into a server discovery UI or remove. See production-readiness audit.
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/lib/auth";
+import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
 
 /**
  * GET /api/servers/discover — List all servers for discovery (MVP: public listing)
  */
 export async function GET() {
-  const session = await getServerSession(authOptions);
+  const session = await auth();
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

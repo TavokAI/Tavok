@@ -341,8 +341,7 @@ describe("createInternalMessagesPostHandler", () => {
 describe("createServerAgentPatchHandler", () => {
   const makeAgentHandler = (overrides = {}) =>
     createServerAgentPatchHandler({
-      getServerSession: async () => ({ user: { id: "owner-1" } }),
-      authOptions: {},
+      getSession: async () => ({ user: { id: "owner-1" } }),
       prismaClient: {
         server: { findUnique: async () => ({ ownerId: "owner-1" }) },
         agent: {
@@ -360,8 +359,7 @@ describe("createServerAgentPatchHandler", () => {
 
   it("returns 401 when not authenticated", async () => {
     const handler = createServerAgentPatchHandler({
-      getServerSession: async () => null,
-      authOptions: {},
+      getSession: async () => null,
       prismaClient: {},
       encrypt: (v: string) => v,
     });
@@ -374,8 +372,7 @@ describe("createServerAgentPatchHandler", () => {
 
   it("returns 403 when user is not server owner", async () => {
     const handler = createServerAgentPatchHandler({
-      getServerSession: async () => ({ user: { id: "not-owner" } }),
-      authOptions: {},
+      getSession: async () => ({ user: { id: "not-owner" } }),
       prismaClient: {
         server: { findUnique: async () => ({ ownerId: "owner-1" }) },
       },
@@ -390,8 +387,7 @@ describe("createServerAgentPatchHandler", () => {
 
   it("returns 404 when agent is not in the server (IDOR prevention)", async () => {
     const handler = createServerAgentPatchHandler({
-      getServerSession: async () => ({ user: { id: "owner-1" } }),
-      authOptions: {},
+      getSession: async () => ({ user: { id: "owner-1" } }),
       prismaClient: {
         server: { findUnique: async () => ({ ownerId: "owner-1" }) },
         agent: { findUnique: async () => ({ serverId: "different-server" }) },
@@ -417,8 +413,7 @@ describe("createServerAgentPatchHandler", () => {
   it("encrypts apiKey when provided", async () => {
     let capturedUpdate: any = null;
     const handler = createServerAgentPatchHandler({
-      getServerSession: async () => ({ user: { id: "owner-1" } }),
-      authOptions: {},
+      getSession: async () => ({ user: { id: "owner-1" } }),
       prismaClient: {
         server: { findUnique: async () => ({ ownerId: "owner-1" }) },
         agent: {
@@ -590,8 +585,7 @@ describe("internal stream lifecycle handlers", () => {
 describe("createServerChannelPatchHandler", () => {
   it("returns 401 when not authenticated", async () => {
     const handler = createServerChannelPatchHandler({
-      getServerSession: async () => null,
-      authOptions: {},
+      getSession: async () => null,
       prismaClient: {},
     });
     const res = await handler(
@@ -603,8 +597,7 @@ describe("createServerChannelPatchHandler", () => {
 
   it("returns 404 when channel is not in the server (IDOR prevention)", async () => {
     const handler = createServerChannelPatchHandler({
-      getServerSession: async () => ({ user: { id: "owner-1" } }),
-      authOptions: {},
+      getSession: async () => ({ user: { id: "owner-1" } }),
       prismaClient: {
         server: { findUnique: async () => ({ ownerId: "owner-1" }) },
         channel: {
@@ -621,8 +614,7 @@ describe("createServerChannelPatchHandler", () => {
 
   it("returns 400 for invalid defaultAgentId type", async () => {
     const handler = createServerChannelPatchHandler({
-      getServerSession: async () => ({ user: { id: "owner-1" } }),
-      authOptions: {},
+      getSession: async () => ({ user: { id: "owner-1" } }),
       prismaClient: {
         server: { findUnique: async () => ({ ownerId: "owner-1" }) },
         channel: { findUnique: async () => ({ serverId: "s1" }) },
@@ -638,8 +630,7 @@ describe("createServerChannelPatchHandler", () => {
   it("allows setting defaultAgentId to null", async () => {
     let capturedUpdate: any = null;
     const handler = createServerChannelPatchHandler({
-      getServerSession: async () => ({ user: { id: "owner-1" } }),
-      authOptions: {},
+      getSession: async () => ({ user: { id: "owner-1" } }),
       prismaClient: {
         server: { findUnique: async () => ({ ownerId: "owner-1" }) },
         channel: {
@@ -663,8 +654,7 @@ describe("createServerChannelPatchHandler", () => {
 
   it("returns 400 when agentIds is not an array", async () => {
     const handler = createServerChannelPatchHandler({
-      getServerSession: async () => ({ user: { id: "owner-1" } }),
-      authOptions: {},
+      getSession: async () => ({ user: { id: "owner-1" } }),
       prismaClient: {
         server: { findUnique: async () => ({ ownerId: "owner-1" }) },
         channel: { findUnique: async () => ({ serverId: "s1" }) },
@@ -682,8 +672,7 @@ describe("createServerChannelPatchHandler", () => {
 
   it("returns 400 when agentIds contains non-string elements", async () => {
     const handler = createServerChannelPatchHandler({
-      getServerSession: async () => ({ user: { id: "owner-1" } }),
-      authOptions: {},
+      getSession: async () => ({ user: { id: "owner-1" } }),
       prismaClient: {
         server: { findUnique: async () => ({ ownerId: "owner-1" }) },
         channel: { findUnique: async () => ({ serverId: "s1" }) },
@@ -701,8 +690,7 @@ describe("createServerChannelPatchHandler", () => {
 
   it("returns 400 when agentIds contains agents not in server", async () => {
     const handler = createServerChannelPatchHandler({
-      getServerSession: async () => ({ user: { id: "owner-1" } }),
-      authOptions: {},
+      getSession: async () => ({ user: { id: "owner-1" } }),
       prismaClient: {
         server: { findUnique: async () => ({ ownerId: "owner-1" }) },
         channel: {
@@ -728,8 +716,7 @@ describe("createServerChannelPatchHandler", () => {
 
   it("accepts valid agentIds array and proceeds to update", async () => {
     const handler = createServerChannelPatchHandler({
-      getServerSession: async () => ({ user: { id: "owner-1" } }),
-      authOptions: {},
+      getSession: async () => ({ user: { id: "owner-1" } }),
       prismaClient: {
         server: { findUnique: async () => ({ ownerId: "owner-1" }) },
         channel: {
@@ -760,8 +747,7 @@ describe("createServerChannelPatchHandler", () => {
 
   it("accepts empty agentIds array (remove all agents)", async () => {
     const handler = createServerChannelPatchHandler({
-      getServerSession: async () => ({ user: { id: "owner-1" } }),
-      authOptions: {},
+      getSession: async () => ({ user: { id: "owner-1" } }),
       prismaClient: {
         server: { findUnique: async () => ({ ownerId: "owner-1" }) },
         channel: {

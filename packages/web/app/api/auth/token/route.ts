@@ -1,7 +1,6 @@
 import crypto from "crypto";
-import { getServerSession } from "next-auth";
+import { auth } from "@/auth";
 import { NextResponse } from "next/server";
-import { authOptions } from "@/lib/auth";
 
 /**
  * GET /api/auth/token — Returns a Gateway-compatible HS256 JWT.
@@ -36,7 +35,7 @@ function signHs256Jwt(
 }
 
 export async function GET() {
-  const session = await getServerSession(authOptions);
+  const session = await auth();
 
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });

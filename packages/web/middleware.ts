@@ -1,41 +1,43 @@
-import { NextResponse } from "next/server";
+import NextAuth from "next-auth";
 import type { NextRequest } from "next/server";
-import { getToken } from "next-auth/jwt";
+import { NextResponse } from "next/server";
+import { authConfig } from "@/auth.config";
 import { RateLimiter } from "@/lib/rate-limit";
 
-// Rate limiter for login attempts: 30 per 60s per IP
 const loginLimiter = new RateLimiter({ max: 30, windowSec: 60 });
 
 const publicRoutes = ["/login", "/register"];
 
 // DESIGN NOTE (API-001): These prefixes bypass the middleware session check
 // intentionally. Each route under these prefixes handles its own auth:
-//   /api/auth     — NextAuth callbacks (auth is the purpose)
-//   /api/health   — Unauthenticated health check for load balancers
-//   /api/internal — Service-to-service calls authenticated via x-internal-secret
-//   /api/v1       — Agent API calls authenticated via Bearer sk-tvk-... API keys
-// Every new route under these prefixes MUST implement route-level auth.
+//   /api/auth     - Auth.js callbacks
+//   /api/health   - Unauthenticated health checks
+//   /api/internal - Service-to-service calls via x-internal-secret
+//   /api/v1       - Agent API calls via API keys
 const publicPrefixes = ["/api/auth", "/api/health", "/api/internal", "/api/v1"];
+
+const { auth: withAuth } = NextAuth(authConfig);
 
 function isPublicRoute(pathname: string): boolean {
   if (publicRoutes.includes(pathname)) return true;
   return publicPrefixes.some((prefix) => pathname.startsWith(prefix));
 }
 
-export async function middleware(request: NextRequest) {
+export default withAuth(async function middleware(
+  request: NextRequest & {
+    auth: { user?: unknown } | null;
+  },
+) {
   const { pathname } = request.nextUrl;
 
-  // Skip static files and Next.js internals
   if (pathname.startsWith("/_next") || pathname.startsWith("/favicon")) {
     return NextResponse.next();
   }
 
-  // Correlation ID: use incoming header or generate a new one
   const requestId = request.headers.get("x-request-id") ?? crypto.randomUUID();
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set("x-request-id", requestId);
 
-  // Rate limit login attempts (POST to NextAuth credentials callback)
   if (
     pathname.startsWith("/api/auth/callback/credentials") &&
     request.method === "POST"
@@ -59,32 +61,12 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  let token = await getToken({
-    req: request,
-    secret: process.env.JWT_SECRET,
-  });
+  const session = request.auth;
 
-  // Be explicit about cookie names so auth works consistently across mixed local environments.
-  if (!token) {
-    token =
-      (await getToken({
-        req: request,
-        secret: process.env.JWT_SECRET,
-        cookieName: "__Secure-next-auth.session-token",
-      })) ||
-      (await getToken({
-        req: request,
-        secret: process.env.JWT_SECRET,
-        cookieName: "next-auth.session-token",
-      }));
-  }
-
-  // Authenticated user accessing auth pages → redirect to app
-  if (token && (pathname === "/login" || pathname === "/register")) {
+  if (session && (pathname === "/login" || pathname === "/register")) {
     return NextResponse.redirect(new URL("/", request.url));
   }
 
-  // Public route → allow through with correlation ID
   if (isPublicRoute(pathname)) {
     const response = NextResponse.next({
       request: { headers: requestHeaders },
@@ -93,8 +75,7 @@ export async function middleware(request: NextRequest) {
     return response;
   }
 
-  // Unauthenticated → redirect to login
-  if (!token) {
+  if (!session) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
@@ -103,10 +84,7 @@ export async function middleware(request: NextRequest) {
   });
   response.headers.set("x-request-id", requestId);
   return response;
-}
-
-// Security headers (CSP, X-Frame-Options, etc.) are set in next.config.js
-// via the headers() config, which is the reliable approach in Next.js 15.
+});
 
 export const config = {
   matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],

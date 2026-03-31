@@ -11,7 +11,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // ---------- mocks ----------
 // vi.hoisted ensures these are available when vi.mock factories run (hoisted above imports).
 
-const { mockPrisma, mockSessionRef, mockGetServerSession } = vi.hoisted(() => {
+const { mockPrisma, mockSessionRef, mockAuth } = vi.hoisted(() => {
   const _mockPrisma = {
     dmParticipant: { findUnique: vi.fn() },
     directMessage: { findUnique: vi.fn() },
@@ -22,21 +22,16 @@ const { mockPrisma, mockSessionRef, mockGetServerSession } = vi.hoisted(() => {
     },
   };
   const _mockSessionRef = { current: { user: { id: "user-1" } } as any };
-  const _mockGetServerSession = vi.fn(() =>
-    Promise.resolve(_mockSessionRef.current),
-  );
+  const _mockAuth = vi.fn(() => Promise.resolve(_mockSessionRef.current));
   return {
     mockPrisma: _mockPrisma,
     mockSessionRef: _mockSessionRef,
-    mockGetServerSession: _mockGetServerSession,
+    mockAuth: _mockAuth,
   };
 });
 
 vi.mock("@/lib/db", () => ({ prisma: mockPrisma }));
-vi.mock("@/lib/auth", () => ({ authOptions: {} }));
-vi.mock("next-auth/next", () => ({
-  getServerSession: mockGetServerSession,
-}));
+vi.mock("@/auth", () => ({ auth: mockAuth }));
 vi.mock("@/lib/ulid", () => ({ generateId: () => "test-ulid-001" }));
 vi.mock("@/lib/gateway-client", () => ({
   broadcastToChannel: vi.fn(() => Promise.resolve()),

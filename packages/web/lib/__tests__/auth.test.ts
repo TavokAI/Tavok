@@ -19,6 +19,39 @@ vi.mock("bcryptjs", () => ({
   },
 }));
 
+const {
+  mockAuthExport,
+  mockHandlers,
+  mockSignInExport,
+  mockSignOutExport,
+  mockCredentialsProvider,
+} = vi.hoisted(() => ({
+  mockAuthExport: vi.fn(),
+  mockHandlers: { GET: vi.fn(), POST: vi.fn() },
+  mockSignInExport: vi.fn(),
+  mockSignOutExport: vi.fn(),
+  mockCredentialsProvider: vi.fn((options: unknown) => ({
+    id: "credentials",
+    name: "Credentials",
+    type: "credentials",
+    options,
+  })),
+}));
+
+vi.mock("next-auth", () => ({
+  default: vi.fn(() => ({
+    handlers: mockHandlers,
+    auth: mockAuthExport,
+    signIn: mockSignInExport,
+    signOut: mockSignOutExport,
+  })),
+}));
+
+vi.mock("next-auth/providers/credentials", () => ({
+  default: mockCredentialsProvider,
+}));
+
+import { auth, handlers } from "../../auth";
 import { authOptions } from "../auth";
 
 describe("auth configuration", () => {
@@ -28,6 +61,12 @@ describe("auth configuration", () => {
 
   it("uses jwt session strategy", () => {
     expect(authOptions.session?.strategy).toBe("jwt");
+  });
+
+  it("exports root auth helpers for v5 usage", () => {
+    expect(typeof auth).toBe("function");
+    expect(typeof handlers.GET).toBe("function");
+    expect(typeof handlers.POST).toBe("function");
   });
 
   it("has 24-hour session maxAge", () => {
@@ -206,15 +245,15 @@ describe("auth configuration", () => {
   describe("logger", () => {
     it("suppresses JWT_SESSION_ERROR", () => {
       const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-      authOptions.logger?.error("JWT_SESSION_ERROR", {} as Error);
+      authOptions.logger?.error("JWT_SESSION_ERROR");
       expect(errorSpy).not.toHaveBeenCalled();
       errorSpy.mockRestore();
     });
 
     it("logs other errors", () => {
       const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-      authOptions.logger?.error("OTHER_ERROR", {} as Error);
-      expect(errorSpy).toHaveBeenCalledWith("[auth] OTHER_ERROR", {});
+      authOptions.logger?.error("OTHER_ERROR");
+      expect(errorSpy).toHaveBeenCalledWith("[auth]", "OTHER_ERROR");
       errorSpy.mockRestore();
     });
   });

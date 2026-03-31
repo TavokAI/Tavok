@@ -89,10 +89,7 @@ interface PrismaClientDep {
 }
 
 interface SessionDeps {
-  getServerSession: (
-    authOptions: unknown,
-  ) => Promise<{ user?: { id?: string } } | null>;
-  authOptions: unknown;
+  getSession: () => Promise<{ user?: { id?: string } } | null>;
   prismaClient: PrismaClient;
 }
 
@@ -575,8 +572,7 @@ function coerceOptionalString(value: unknown) {
 }
 
 export function createServerAgentPatchHandler({
-  getServerSession,
-  authOptions,
+  getSession,
   prismaClient,
   encrypt,
 }: ServerAgentPatchDeps) {
@@ -584,7 +580,7 @@ export function createServerAgentPatchHandler({
     request: RequestLike,
     { params }: RouteContext,
   ) {
-    const session = await getServerSession(authOptions);
+    const session = await getSession();
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -675,15 +671,14 @@ export function createServerAgentPatchHandler({
 }
 
 export function createServerChannelPatchHandler({
-  getServerSession,
-  authOptions,
+  getSession,
   prismaClient,
 }: SessionDeps) {
   return async function serverChannelPatchHandler(
     request: RequestLike,
     { params }: RouteContext,
   ) {
-    const session = await getServerSession(authOptions);
+    const session = await getSession();
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
