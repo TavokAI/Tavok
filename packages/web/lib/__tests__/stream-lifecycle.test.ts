@@ -208,7 +208,7 @@ describe("createStreamLifecycleService", () => {
 
     expect(tx.message.update).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: "msg-1" },
+        where: { id: "msg-1", streamingStatus: "ACTIVE" },
         data: {
           content: "done",
           streamingStatus: "COMPLETE",
@@ -229,5 +229,26 @@ describe("createStreamLifecycleService", () => {
       tokenHistory: '[{"o":0,"t":12}]',
       checkpoints: '[{"index":0,"label":"start"}]',
     });
+  });
+
+  it("maps prisma P2025 terminal updates to a lifecycle conflict", async () => {
+    const tx = makeTx();
+
+    tx.message.findUnique.mockResolvedValue(makeStreamingMessage());
+    tx.message.update.mockRejectedValue(
+      Object.assign(new Error("record not found"), {
+        code: "P2025",
+        name: "PrismaClientKnownRequestError",
+      }),
+    );
+
+    const { service } = makeService(tx);
+
+    await expect(
+      service.failStream({
+        messageId: "msg-1",
+        content: "*[Error]*",
+      }),
+    ).rejects.toBeInstanceOf(StreamLifecycleConflictError);
   });
 });

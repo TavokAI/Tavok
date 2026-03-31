@@ -187,14 +187,35 @@ async function transitionTerminalState(
       );
     }
 
-    return tx.message.update({
-      where: { id: input.messageId },
-      data: buildTerminalUpdateData(input, nextStatus),
-      select: streamLifecycleSelect,
-    });
+    try {
+      return await tx.message.update({
+        where: {
+          id: input.messageId,
+          streamingStatus: "ACTIVE",
+        },
+        data: buildTerminalUpdateData(input, nextStatus),
+        select: streamLifecycleSelect,
+      });
+    } catch (error) {
+      if (isPrismaNotFoundError(error)) {
+        throw new StreamLifecycleConflictError(
+          `Invalid stream transition ACTIVE -> ${nextStatus}`,
+        );
+      }
+      throw error;
+    }
   });
 
   return toStreamLifecycleMessage(record);
+}
+
+function isPrismaNotFoundError(error: unknown): error is Error & { code: string } {
+  return (
+    !!error &&
+    typeof error === "object" &&
+    "code" in error &&
+    (error as { code?: unknown }).code === "P2025"
+  );
 }
 
 function buildTerminalUpdateData(
