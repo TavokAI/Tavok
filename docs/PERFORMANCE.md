@@ -30,7 +30,47 @@ Break-testing (TASK-0007) validated the streaming pipeline under normal conditio
 
 Infrastructure failure scenarios (F-02, F-05, F-06) exposed and resolved terminal state convergence issues. See `docs/KNOWN-ISSUES.md` for details.
 
-Formal load testing (concurrent connections, concurrent streams) has not yet been conducted. k6 scripts exist in `tests/load/` but are not yet integrated into CI.
+Initial k6 baselines were captured on 2026-03-31. See the hardening sprint baseline below.
+
+---
+
+## 2026-03-31 Hardening Sprint Baseline
+
+### Environment
+
+- Host: AMD Ryzen 7 9800X3D (8 cores / 16 threads), 64 GiB RAM
+- Container runtime: Docker Desktop Linux engine 29.2.0 with 16 vCPU and about 30.2 GiB memory available to containers
+- Stack: `docker compose up -d` using the repo `.env`, with web/gateway/streaming health checks all returning `{"status":"ok"}`
+
+### Messaging (`tests/load/k6-messaging.js`)
+
+- Concurrency profile: 5 -> 20 -> 20 -> 0 VUs over 50s
+- Throughput: 730 / 730 durable message acknowledgements, 13.89 messages/sec
+- Delivery latency: p50 119ms, p95 134ms, p99 146.42ms
+- HTTP setup latency (`http_req_duration_custom`): p50 7ms, p95 157.60ms, p99 187.52ms
+- WebSocket connect latency: p50 3ms, p95 3ms, p99 4ms
+- Failure rate: 0%
+
+### Typing Storm (`tests/load/k6-typing-storm.js`)
+
+- Concurrency profile: 10 -> 50 -> 50 -> 0 VUs over 30s
+- Throughput: 4,280 typing events sent, 111.10 typing events/sec
+- WebSocket connect latency: p50 3ms, p95 3.70ms
+- Health signal: 100% of per-iteration and teardown health checks stayed green
+- Broadcast note: only 38 `user_typing` fanout events were delivered because the server-side typing throttle intentionally coalesces storms
+
+### Soak (`tests/load/k6-soak.js`)
+
+- Concurrency profile: 5 -> 10 -> 0 VUs over 10 minutes
+- Throughput: 1,947 durable messages, 3.24 messages/sec sustained
+- Delivery latency: p50 1013ms, p95 1024ms
+- Error rate: 0%
+- Health check failures: 0
+
+### Script Caveats
+
+- `tests/load/k6-resilience.js` completed but failed its thresholds in this environment because the reconnect scenario opens an unauthenticated protected socket and the rate-limit subtest did not observe a 429.
+- `tests/load/k6-streaming.js` completed as a smoke run, but it did not observe `stream_token` events under the current script assumptions, so no TTFT percentile is published from that script yet.
 
 ---
 
