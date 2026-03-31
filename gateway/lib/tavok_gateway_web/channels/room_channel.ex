@@ -278,55 +278,55 @@ defmodule TavokGatewayWeb.RoomChannel do
             "tavok.message_id": trigger_message_id
           })
       } do
-      # L15: Skip triggers if charter is completed — prevents wasted dispatches and user-facing errors
-      charter_completed =
-        case WebClient.get_channel_info(channel_id) do
-          {:ok, %{"charterStatus" => "COMPLETED"}} -> true
-          {:ok, %{"charterStatus" => "PAUSED"}} -> true
-          _ -> false
+        # L15: Skip triggers if charter is completed — prevents wasted dispatches and user-facing errors
+        charter_completed =
+          case WebClient.get_channel_info(channel_id) do
+            {:ok, %{"charterStatus" => "COMPLETED"}} -> true
+            {:ok, %{"charterStatus" => "PAUSED"}} -> true
+            _ -> false
+          end
+
+        if charter_completed do
+          Logger.info(
+            "[TriggerDecision] channel=#{channel_id} charter completed/paused — skipping all triggers"
+          )
+        else
+          # Multi-agent: try ChannelAgent join table first, fall back to single defaultAgent (TASK-0012)
+          case ConfigCache.get_channel_agents(channel_id) do
+            {:ok, agents} when is_list(agents) and length(agents) > 0 ->
+              # Evaluate trigger condition for each agent independently
+              any_triggered =
+                Enum.reduce(agents, false, fn agent_config, acc ->
+                  maybe_trigger_agent(socket, agent_config, trigger_message_id, content) or acc
+                end)
+
+              maybe_emit_trigger_hint(socket, agents, content, any_triggered)
+
+            {:ok, _empty} ->
+              # No agents in ChannelAgent table — fall back to single defaultAgent (backward compat)
+              case ConfigCache.get_channel_agent(channel_id) do
+                {:ok, nil} ->
+                  # BUG-008: Log when no agent is configured — helps diagnose BYOK trigger failures
+                  Logger.debug(
+                    "[TriggerDecision] channel=#{channel_id} no defaultAgent configured — no trigger"
+                  )
+
+                  :noop
+
+                {:ok, agent_config} ->
+                  any_triggered =
+                    maybe_trigger_agent(socket, agent_config, trigger_message_id, content)
+
+                  maybe_emit_trigger_hint(socket, [agent_config], content, any_triggered)
+
+                {:error, reason} ->
+                  Logger.error("Failed to fetch channel agent: #{inspect(reason)}")
+              end
+
+            {:error, reason} ->
+              Logger.error("Failed to fetch channel agents: #{inspect(reason)}")
+          end
         end
-
-      if charter_completed do
-        Logger.info(
-          "[TriggerDecision] channel=#{channel_id} charter completed/paused — skipping all triggers"
-        )
-      else
-        # Multi-agent: try ChannelAgent join table first, fall back to single defaultAgent (TASK-0012)
-        case ConfigCache.get_channel_agents(channel_id) do
-          {:ok, agents} when is_list(agents) and length(agents) > 0 ->
-            # Evaluate trigger condition for each agent independently
-            any_triggered =
-              Enum.reduce(agents, false, fn agent_config, acc ->
-                maybe_trigger_agent(socket, agent_config, trigger_message_id, content) or acc
-              end)
-
-            maybe_emit_trigger_hint(socket, agents, content, any_triggered)
-
-          {:ok, _empty} ->
-            # No agents in ChannelAgent table — fall back to single defaultAgent (backward compat)
-            case ConfigCache.get_channel_agent(channel_id) do
-              {:ok, nil} ->
-                # BUG-008: Log when no agent is configured — helps diagnose BYOK trigger failures
-                Logger.debug(
-                  "[TriggerDecision] channel=#{channel_id} no defaultAgent configured — no trigger"
-                )
-
-                :noop
-
-              {:ok, agent_config} ->
-                any_triggered =
-                  maybe_trigger_agent(socket, agent_config, trigger_message_id, content)
-
-                maybe_emit_trigger_hint(socket, [agent_config], content, any_triggered)
-
-              {:error, reason} ->
-                Logger.error("Failed to fetch channel agent: #{inspect(reason)}")
-            end
-
-          {:error, reason} ->
-            Logger.error("Failed to fetch channel agents: #{inspect(reason)}")
-        end
-      end
       end
     end)
 
@@ -361,119 +361,124 @@ defmodule TavokGatewayWeb.RoomChannel do
       kind: :server,
       attributes: trace_attributes(socket)
     } do
-    cond do
-      String.trim(content) == "" ->
-        {:reply, {:error, %{reason: "empty_content"}}, socket}
+      cond do
+        String.trim(content) == "" ->
+          {:reply, {:error, %{reason: "empty_content"}}, socket}
 
-      String.length(content) > @max_content_length ->
-        {:reply, {:error, %{reason: "content_too_long", max: @max_content_length}}, socket}
+        String.length(content) > @max_content_length ->
+          {:reply, {:error, %{reason: "content_too_long", max: @max_content_length}}, socket}
 
-      true ->
-        channel_id = socket.assigns.channel_id
+        true ->
+          channel_id = socket.assigns.channel_id
 
-        # 0. SEND_MESSAGES permission check (BREAK-0012 fix)
-        # Agents bypass — authorized via ChannelAgent ACL at join time
-        send_allowed =
-          if socket.assigns[:author_type] == "AGENT" do
-            true
+          # 0. SEND_MESSAGES permission check (BREAK-0012 fix)
+          # Agents bypass — authorized via ChannelAgent ACL at join time
+          send_allowed =
+            if socket.assigns[:author_type] == "AGENT" do
+              true
+            else
+              case ConfigCache.get_channel_membership(channel_id, socket.assigns.user_id) do
+                {:ok, %{"canSendMessages" => true}} -> true
+                {:ok, %{"canSendMessages" => false}} -> false
+                # Legacy cached entries without canSendMessages — allow (backwards compat)
+                {:ok, %{"isMember" => true}} -> true
+                _ -> false
+              end
+            end
+
+          if not send_allowed do
+            {:reply, {:error, %{reason: "missing_permission", permission: "SEND_MESSAGES"}},
+             socket}
           else
-            case ConfigCache.get_channel_membership(channel_id, socket.assigns.user_id) do
-              {:ok, %{"canSendMessages" => true}} -> true
-              {:ok, %{"canSendMessages" => false}} -> false
-              # Legacy cached entries without canSendMessages — allow (backwards compat)
-              {:ok, %{"isMember" => true}} -> true
-              _ -> false
+            # 0a. Per-channel rate limit check (DEC-0035)
+            case RateLimiter.check_and_increment(channel_id) do
+              {:error, :rate_limited} ->
+                {:reply, {:error, %{reason: "rate_limited"}}, socket}
+
+              :ok ->
+                user_id = socket.assigns.user_id
+
+                # 0b. Per-user rate limit check (BUG-005)
+                case RateLimiter.check_user_rate(channel_id, user_id) do
+                  {:error, :rate_limited} ->
+                    {:reply, {:error, %{reason: "rate_limited"}}, socket}
+
+                  :ok ->
+                    display_name = socket.assigns.display_name
+
+                    # 1. Generate ULID for the message
+                    message_id = Ulid.generate()
+                    Tracer.set_attribute("tavok.message_id", message_id)
+
+                    # 2. Get next sequence number with Redis-backed monotonic recovery
+                    case next_sequence(channel_id) do
+                      {:ok, sequence} ->
+                        seq_str = Integer.to_string(sequence)
+
+                        # 3. Broadcast immediately — payload built from in-memory data only
+                        author_type = socket.assigns[:author_type] || "USER"
+
+                        message_payload = %{
+                          id: message_id,
+                          channelId: channel_id,
+                          authorId: user_id,
+                          authorType: author_type,
+                          authorName: display_name,
+                          authorAvatarUrl: nil,
+                          content: content,
+                          type: "STANDARD",
+                          streamingStatus: nil,
+                          sequence: seq_str,
+                          createdAt: DateTime.utc_now() |> DateTime.to_iso8601()
+                        }
+
+                        Broadcast.broadcast_pre_serialized!(
+                          socket,
+                          "message_new",
+                          message_payload
+                        )
+
+                        # 3b. Buffer for reconnection sync gap (DEC-0051)
+                        MessageBuffer.buffer_message(channel_id, message_payload)
+
+                        # 4. Check for agent trigger (async — don't delay the reply)
+                        send(self(), {:check_agent_trigger, message_id, content})
+
+                        Tracer.add_event("channel.agent_trigger_evaluation_scheduled", %{
+                          "tavok.channel_id" => channel_id,
+                          "tavok.message_id" => message_id
+                        })
+
+                        # 5. Persist in background — never blocks the channel process
+                        persist_body = %{
+                          id: message_id,
+                          channelId: channel_id,
+                          authorId: user_id,
+                          authorType: author_type,
+                          content: content,
+                          type: "STANDARD",
+                          streamingStatus: nil,
+                          sequence: seq_str
+                        }
+
+                        MessagePersistence.persist_async(persist_body, message_id, channel_id)
+
+                        Tracer.add_event("channel.message_persist_scheduled", %{
+                          "tavok.channel_id" => channel_id,
+                          "tavok.message_id" => message_id
+                        })
+
+                        # 6. Reply to sender immediately
+                        {:reply, {:ok, %{id: message_id, sequence: seq_str}}, socket}
+
+                      {:error, reason} ->
+                        Logger.error("Redis INCR failed: #{inspect(reason)}")
+                        {:reply, {:error, %{reason: "sequence_failed"}}, socket}
+                    end
+                end
             end
           end
-
-        if not send_allowed do
-          {:reply, {:error, %{reason: "missing_permission", permission: "SEND_MESSAGES"}}, socket}
-        else
-          # 0a. Per-channel rate limit check (DEC-0035)
-          case RateLimiter.check_and_increment(channel_id) do
-            {:error, :rate_limited} ->
-              {:reply, {:error, %{reason: "rate_limited"}}, socket}
-
-            :ok ->
-              user_id = socket.assigns.user_id
-
-              # 0b. Per-user rate limit check (BUG-005)
-              case RateLimiter.check_user_rate(channel_id, user_id) do
-                {:error, :rate_limited} ->
-                  {:reply, {:error, %{reason: "rate_limited"}}, socket}
-
-                :ok ->
-                  display_name = socket.assigns.display_name
-
-                  # 1. Generate ULID for the message
-                  message_id = Ulid.generate()
-                  Tracer.set_attribute("tavok.message_id", message_id)
-
-                  # 2. Get next sequence number with Redis-backed monotonic recovery
-                  case next_sequence(channel_id) do
-                    {:ok, sequence} ->
-                      seq_str = Integer.to_string(sequence)
-
-                      # 3. Broadcast immediately — payload built from in-memory data only
-                      author_type = socket.assigns[:author_type] || "USER"
-
-                      message_payload = %{
-                        id: message_id,
-                        channelId: channel_id,
-                        authorId: user_id,
-                        authorType: author_type,
-                        authorName: display_name,
-                        authorAvatarUrl: nil,
-                        content: content,
-                        type: "STANDARD",
-                        streamingStatus: nil,
-                        sequence: seq_str,
-                        createdAt: DateTime.utc_now() |> DateTime.to_iso8601()
-                      }
-
-                      Broadcast.broadcast_pre_serialized!(socket, "message_new", message_payload)
-
-                      # 3b. Buffer for reconnection sync gap (DEC-0051)
-                      MessageBuffer.buffer_message(channel_id, message_payload)
-
-                      # 4. Check for agent trigger (async — don't delay the reply)
-                      send(self(), {:check_agent_trigger, message_id, content})
-
-                      Tracer.add_event("channel.agent_trigger_evaluation_scheduled", %{
-                        "tavok.channel_id" => channel_id,
-                        "tavok.message_id" => message_id
-                      })
-
-                      # 5. Persist in background — never blocks the channel process
-                      persist_body = %{
-                        id: message_id,
-                        channelId: channel_id,
-                        authorId: user_id,
-                        authorType: author_type,
-                        content: content,
-                        type: "STANDARD",
-                        streamingStatus: nil,
-                        sequence: seq_str
-                      }
-
-                      MessagePersistence.persist_async(persist_body, message_id, channel_id)
-
-                      Tracer.add_event("channel.message_persist_scheduled", %{
-                        "tavok.channel_id" => channel_id,
-                        "tavok.message_id" => message_id
-                      })
-
-                      # 6. Reply to sender immediately
-                      {:reply, {:ok, %{id: message_id, sequence: seq_str}}, socket}
-
-                    {:error, reason} ->
-                      Logger.error("Redis INCR failed: #{inspect(reason)}")
-                      {:reply, {:error, %{reason: "sequence_failed"}}, socket}
-                  end
-              end
-          end
-        end
-    end
+      end
     end
   end
 

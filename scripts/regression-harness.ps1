@@ -901,6 +901,12 @@ COMMIT;
     displayName = "Test User A"
     exp = [int]([DateTimeOffset]::UtcNow.ToUnixTimeSeconds() + 3600)
   }
+  $memberBPayload = @{
+    sub = $userBId
+    username = "$testPrefix-b"
+    displayName = "Test User B"
+    exp = [int]([DateTimeOffset]::UtcNow.ToUnixTimeSeconds() + 3600)
+  }
   $foreignPayload = @{
     sub = $userCNonce
     username = "$testPrefix-c"
@@ -908,6 +914,7 @@ COMMIT;
     exp = [int]([DateTimeOffset]::UtcNow.ToUnixTimeSeconds() + 3600)
   }
   $memberJwt = New-Hs256Jwt -Secret $jwtSecret -Payload $memberPayload
+  $memberBJwt = New-Hs256Jwt -Secret $jwtSecret -Payload $memberBPayload
   $foreignJwt = New-Hs256Jwt -Secret $jwtSecret -Payload $foreignPayload
 
   $memberSocket = Open-PhxSocket -JwtToken $memberJwt
@@ -1108,6 +1115,11 @@ COMMIT;
     $mockTimeoutPid = Start-StallTokenSseServer
   }
   Invoke-Psql "UPDATE ""Agent"" SET ""apiEndpoint"" = 'http://web:3910' WHERE id = '$agentId';"
+
+  # BUG-005: The room enforces a 5 messages / 10 seconds per-user limit.
+  # GitHub Actions is fast enough to hit that ceiling before K-006 unless we let
+  # the user window reset after K-005.
+  Start-Sleep -Milliseconds 11000
 
   $ref = [string](Get-Random)
   Send-PhxMessage -Socket $memberSocket -Topic $topic -Event "new_message" -Payload @{ content = "trigger token timeout path" } -Ref $ref
@@ -1434,13 +1446,6 @@ services:
   Assert "K-013 DB message content updated" ($k13Edited.content -eq "edited content k013")
 
   # Non-author rejection: User B tries to edit User A's message
-  $memberBPayload = @{
-    sub = $userBId
-    username = "$testPrefix-b"
-    displayName = "Test User B"
-    exp = [int]([DateTimeOffset]::UtcNow.ToUnixTimeSeconds() + 3600)
-  }
-  $memberBJwt = New-Hs256Jwt -Secret $jwtSecret -Payload $memberBPayload
   $memberBSocket = Open-PhxSocket -JwtToken $memberBJwt
   $k13BRef = [string](Get-Random)
   Send-PhxMessage -Socket $memberBSocket -Topic $topic -Event "phx_join" -Payload @{ lastSequence = 0 } -Ref $k13BRef
