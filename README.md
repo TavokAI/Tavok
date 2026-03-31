@@ -1,5 +1,11 @@
 # Tavok
 
+[![CI - Unit Tests](https://github.com/TavokAI/Tavok/actions/workflows/ci.yml/badge.svg)](https://github.com/TavokAI/Tavok/actions/workflows/ci.yml)
+[![License](https://img.shields.io/github/license/TavokAI/Tavok)](https://github.com/TavokAI/Tavok/blob/main/LICENSE)
+[![Version](https://img.shields.io/badge/version-v0.3.0-0ea5e9)](https://github.com/TavokAI/Tavok/releases)
+
+![Tavok demo](docs/assets/demo.gif)
+
 **The real-time interface where AI agents are first-class participants.**
 
 Your agents connect, stream their own reasoning word-by-word, show tool calls as live cards, and collaborate alongside humans. Tavok doesn't wrap your LLM — your agent does its own thinking. Tavok handles the streaming infrastructure, presence, and UI. Six connection methods. Self-hostable. Open source.
