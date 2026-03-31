@@ -758,13 +758,16 @@ function Get-SessionCookie([string]$Email, [string]$Password) {
 
     # Extract session cookie from jar
     $cookies = Get-Content $cookieJar.FullName -Raw
-    $sessionLine = ($cookies -split "`n" | Where-Object { $_ -match "next-auth.session-token" }) | Select-Object -First 1
+    $sessionLine = ($cookies -split "`n" | Where-Object {
+      $_ -match "authjs\.session-token" -or $_ -match "next-auth\.session-token"
+    }) | Select-Object -First 1
     if ([string]::IsNullOrWhiteSpace($sessionLine)) {
       throw "No session cookie found after sign-in"
     }
     $parts = $sessionLine.Trim() -split "`t"
+    $cookieName = $parts[-2]
     $cookieValue = $parts[-1]
-    return "next-auth.session-token=$cookieValue"
+    return "$cookieName=$cookieValue"
   }
   finally {
     Remove-Item $csrfFile -Force -ErrorAction SilentlyContinue

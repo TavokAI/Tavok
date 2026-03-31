@@ -63,6 +63,10 @@ describe("auth configuration", () => {
     expect(authOptions.session?.strategy).toBe("jwt");
   });
 
+  it("trusts the configured host for Auth.js callbacks", () => {
+    expect(authOptions.trustHost).toBe(true);
+  });
+
   it("exports root auth helpers for v5 usage", () => {
     expect(typeof auth).toBe("function");
     expect(typeof handlers.GET).toBe("function");
