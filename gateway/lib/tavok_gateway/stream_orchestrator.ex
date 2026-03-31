@@ -8,6 +8,7 @@ defmodule TavokGateway.StreamOrchestrator do
   """
 
   require Logger
+  require OpenTelemetry.Tracer, as: Tracer
 
   alias TavokGateway.Broadcast
   alias TavokGateway.Sequence
@@ -25,6 +26,9 @@ defmodule TavokGateway.StreamOrchestrator do
       )
       when is_binary(channel_id) and is_map(agent_config) and is_binary(trigger_message_id) and
              is_binary(trigger_content) do
+    Tracer.with_span "stream_orchestrator.start_byok_stream", %{
+      attributes: %{"tavok.channel_id" => channel_id}
+    } do
     id_generator = Keyword.get(opts, :id_generator, &Ulid.generate/0)
     sequence_allocator = Keyword.get(opts, :sequence_allocator, &Sequence.next_channel_sequence/1)
 
@@ -49,6 +53,12 @@ defmodule TavokGateway.StreamOrchestrator do
     agent_avatar_url = Map.get(agent_config, "avatarUrl")
     message_id = id_generator.()
 
+    Tracer.set_attributes(
+      trace_attributes(channel_id, agent_id, %{
+        "tavok.message_id" => message_id
+      })
+    )
+
     case sequence_allocator.(channel_id) do
       {:ok, sequence} ->
         sequence_str = Integer.to_string(sequence)
@@ -66,6 +76,13 @@ defmodule TavokGateway.StreamOrchestrator do
 
         case start_placeholder.(placeholder) do
           {:ok, _persisted_placeholder} ->
+            Tracer.add_event(
+              "stream_orchestrator.placeholder_persisted",
+              trace_attributes(channel_id, agent_id, %{
+                "tavok.message_id" => message_id
+              })
+            )
+
             Logger.info(
               "Durable stream start committed: channel=#{channel_id} message=#{message_id} agent=#{agent_id} sequence=#{sequence_str}"
             )
@@ -85,6 +102,13 @@ defmodule TavokGateway.StreamOrchestrator do
 
             register_watchdog.(channel_id, message_id)
 
+            Tracer.add_event(
+              "stream_orchestrator.watchdog_registered",
+              trace_attributes(channel_id, agent_id, %{
+                "tavok.message_id" => message_id
+              })
+            )
+
             stream_request = %{
               channelId: channel_id,
               messageId: message_id,
@@ -95,19 +119,35 @@ defmodule TavokGateway.StreamOrchestrator do
               traceparent: traceparent_getter.()
             }
 
+            dispatch_ctx = OpenTelemetry.Ctx.get_current()
+
             case task_starter.(fn ->
-                   dispatch_stream_request(
-                     channel_id,
-                     message_id,
-                     agent_id,
-                     stream_request,
-                     publish_request,
-                     fail_stream,
-                     deregister_watchdog,
-                     broadcaster
-                   )
+                   Tracer.with_span dispatch_ctx, "stream_orchestrator.dispatch_stream_request", %{
+                     attributes:
+                       trace_attributes(channel_id, agent_id, %{
+                         "tavok.message_id" => message_id
+                       })
+                   } do
+                     dispatch_stream_request(
+                       channel_id,
+                       message_id,
+                       agent_id,
+                       stream_request,
+                       publish_request,
+                       fail_stream,
+                       deregister_watchdog,
+                       broadcaster
+                     )
+                   end
                  end) do
               {:ok, _task} ->
+                Tracer.add_event(
+                  "stream_orchestrator.dispatch_scheduled",
+                  trace_attributes(channel_id, agent_id, %{
+                    "tavok.message_id" => message_id
+                  })
+                )
+
                 Logger.info(
                   "Stream request dispatch scheduled: channel=#{channel_id} message=#{message_id} agent=#{agent_id}"
                 )
@@ -145,6 +185,7 @@ defmodule TavokGateway.StreamOrchestrator do
       {:error, reason} ->
         Logger.error("Redis INCR failed for streaming message: #{inspect(reason)}")
         {:error, {:sequence_failed, reason}}
+    end
     end
   end
 
@@ -207,6 +248,16 @@ defmodule TavokGateway.StreamOrchestrator do
     Task.Supervisor.start_child(TavokGateway.TaskSupervisor, fun)
   end
 
+  defp trace_attributes(channel_id, agent_id, extra \\ %{}) do
+    %{
+      "tavok.channel_id" => channel_id,
+      "tavok.agent_id" => agent_id
+    }
+    |> Map.merge(extra)
+    |> Enum.reject(fn {_key, value} -> is_nil(value) end)
+    |> Enum.into(%{})
+  end
+
   defp dispatch_stream_request(
          channel_id,
          message_id,
@@ -219,6 +270,13 @@ defmodule TavokGateway.StreamOrchestrator do
        ) do
     case publish_request.(stream_request) do
       :ok ->
+        Tracer.add_event(
+          "stream_orchestrator.request_published",
+          trace_attributes(channel_id, agent_id, %{
+            "tavok.message_id" => message_id
+          })
+        )
+
         Logger.info(
           "Stream request published: channel=#{channel_id} message=#{message_id} agent=#{agent_id}"
         )
@@ -226,6 +284,14 @@ defmodule TavokGateway.StreamOrchestrator do
         :ok
 
       {:error, reason} ->
+        Tracer.add_event(
+          "stream_orchestrator.request_publish_failed",
+          trace_attributes(channel_id, agent_id, %{
+            "tavok.message_id" => message_id,
+            "tavok.publish_reason" => inspect(reason)
+          })
+        )
+
         Logger.error(
           "Failed to publish stream request: channel=#{channel_id} message=#{message_id} agent=#{agent_id} reason=#{inspect(reason)}"
         )
@@ -253,6 +319,13 @@ defmodule TavokGateway.StreamOrchestrator do
        ) do
     case fail_stream.(message_id, %{"content" => "[Error: #{@dispatch_failure_error}]"}) do
       {:ok, _response} ->
+        Tracer.add_event(
+          "stream_orchestrator.dispatch_failure_recovered",
+          trace_attributes(channel_id, agent_id, %{
+            "tavok.message_id" => message_id
+          })
+        )
+
         Logger.info(
           "Durably failed stream after dispatch error: channel=#{channel_id} message=#{message_id} agent=#{agent_id}"
         )
@@ -271,6 +344,14 @@ defmodule TavokGateway.StreamOrchestrator do
         :ok
 
       {:error, fail_reason} ->
+        Tracer.add_event(
+          "stream_orchestrator.dispatch_failure_recovery_failed",
+          trace_attributes(channel_id, agent_id, %{
+            "tavok.message_id" => message_id,
+            "tavok.fail_reason" => inspect(fail_reason)
+          })
+        )
+
         Logger.error(
           "Failed to durably fail stream after dispatch error: channel=#{channel_id} message=#{message_id} agent=#{agent_id} publish_reason=#{inspect(reason)} fail_reason=#{inspect(fail_reason)}"
         )

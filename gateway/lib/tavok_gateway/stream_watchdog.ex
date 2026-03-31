@@ -9,6 +9,7 @@ defmodule TavokGateway.StreamWatchdog do
   use GenServer
 
   require Logger
+  require OpenTelemetry.Tracer, as: Tracer
 
   @default_check_after_ms 45_000
   @max_active_retries 5
@@ -114,78 +115,103 @@ defmodule TavokGateway.StreamWatchdog do
     })
   end
 
+  defp trace_attributes(channel_id, message_id, extra \\ %{}) do
+    %{
+      "tavok.channel_id" => channel_id,
+      "tavok.message_id" => message_id
+    }
+    |> Map.merge(extra)
+    |> Enum.reject(fn {_key, value} -> is_nil(value) end)
+    |> Enum.into(%{})
+  end
+
   defp check_and_emit_terminal(channel_id, message_id, retries, state) do
     case state.web_client.get_message(message_id) do
       {:ok, %{"streamingStatus" => "COMPLETE"} = message} ->
-        payload = %{
-          "messageId" => message_id,
-          "status" => "complete",
-          "finalContent" => Map.get(message, "content") || ""
-        }
+        Tracer.with_span "stream_watchdog.recover_complete", %{
+          attributes: trace_attributes(channel_id, message_id)
+        } do
+          payload = %{
+            "messageId" => message_id,
+            "status" => "complete",
+            "finalContent" => Map.get(message, "content") || ""
+          }
 
-        state.broadcaster.("room:#{channel_id}", "stream_complete", payload)
+          state.broadcaster.("room:#{channel_id}", "stream_complete", payload)
 
-        Logger.info(
-          "[StreamWatchdog] Broadcast synthetic stream_complete from durable COMPLETE: channel=#{channel_id} messageId=#{message_id}"
-        )
+          Logger.info(
+            "[StreamWatchdog] Broadcast synthetic stream_complete from durable COMPLETE: channel=#{channel_id} messageId=#{message_id}"
+          )
 
-        :terminal
+          :terminal
+        end
 
       {:ok, %{"streamingStatus" => "ERROR"} = message} ->
-        partial_content = Map.get(message, "content")
+        Tracer.with_span "stream_watchdog.recover_error", %{
+          attributes: trace_attributes(channel_id, message_id)
+        } do
+          partial_content = Map.get(message, "content")
 
-        payload = %{
-          "messageId" => message_id,
-          "status" => "error",
-          "error" => "Stream failed before terminal event delivery",
-          "partialContent" => partial_content
-        }
+          payload = %{
+            "messageId" => message_id,
+            "status" => "error",
+            "error" => "Stream failed before terminal event delivery",
+            "partialContent" => partial_content
+          }
 
-        state.broadcaster.("room:#{channel_id}", "stream_error", payload)
+          state.broadcaster.("room:#{channel_id}", "stream_error", payload)
 
-        Logger.info(
-          "[StreamWatchdog] Broadcast synthetic stream_error from durable ERROR: channel=#{channel_id} messageId=#{message_id}"
-        )
+          Logger.info(
+            "[StreamWatchdog] Broadcast synthetic stream_error from durable ERROR: channel=#{channel_id} messageId=#{message_id}"
+          )
 
-        :terminal
+          :terminal
+        end
 
       {:ok, %{"streamingStatus" => "ACTIVE"}} when retries >= @max_active_retries ->
-        # Stream has been ACTIVE for too long; recover by durably forcing ERROR
-        # before emitting a synthetic terminal event.
-        Logger.error(
-          "[StreamWatchdog] Forcing stuck stream to ERROR after #{retries} retries: " <>
-            "channel=#{channel_id} messageId=#{message_id}"
-        )
+        Tracer.with_span "stream_watchdog.recover_timeout", %{
+          attributes:
+            trace_attributes(channel_id, message_id, %{
+              "tavok.retry_count" => retries
+            })
+        } do
+          # Stream has been ACTIVE for too long; recover by durably forcing ERROR
+          # before emitting a synthetic terminal event.
+          Logger.error(
+            "[StreamWatchdog] Forcing stuck stream to ERROR after #{retries} retries: " <>
+              "channel=#{channel_id} messageId=#{message_id}"
+          )
 
-        case state.web_client.fail_stream(message_id, %{
-               "content" => "[Error: #{@timeout_error_reason}]"
-             }) do
-          {:ok, _response} ->
-            Logger.info(
-              "[StreamWatchdog] Durably forced ERROR for missed terminal event: channel=#{channel_id} messageId=#{message_id}"
-            )
+          case state.web_client.fail_stream(message_id, %{
+                 "content" => "[Error: #{@timeout_error_reason}]"
+               }) do
+            {:ok, _response} ->
+              Logger.info(
+                "[StreamWatchdog] Durably forced ERROR for missed terminal event: channel=#{channel_id} messageId=#{message_id}"
+              )
 
-            payload = %{
-              "messageId" => message_id,
-              "status" => "error",
-              "error" => @timeout_error_reason,
-              "partialContent" => nil
-            }
+              payload = %{
+                "messageId" => message_id,
+                "status" => "error",
+                "error" => @timeout_error_reason,
+                "partialContent" => nil
+              }
 
-            state.broadcaster.("room:#{channel_id}", "stream_error", payload)
+              state.broadcaster.("room:#{channel_id}", "stream_error", payload)
 
-            Logger.info(
-              "[StreamWatchdog] Broadcast synthetic stream_error after durable recovery: channel=#{channel_id} messageId=#{message_id}"
-            )
+              Logger.info(
+                "[StreamWatchdog] Broadcast synthetic stream_error after durable recovery: channel=#{channel_id} messageId=#{message_id}"
+              )
 
-            :terminal
+              :terminal
 
-          {:error, reason} ->
-            Logger.warning(
-              "[StreamWatchdog] Durable ERROR recovery failed; retrying: channel=#{channel_id} messageId=#{message_id} reason=#{inspect(reason)}"
-            )
+            {:error, reason} ->
+              Logger.warning(
+                "[StreamWatchdog] Durable ERROR recovery failed; retrying: channel=#{channel_id} messageId=#{message_id} reason=#{inspect(reason)}"
+              )
 
-            :pending
+              :pending
+          end
         end
 
       {:ok, %{"streamingStatus" => "ACTIVE"}} ->

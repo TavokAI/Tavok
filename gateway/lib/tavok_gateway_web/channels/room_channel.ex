@@ -38,11 +38,7 @@ defmodule TavokGatewayWeb.RoomChannel do
   def join("room:" <> channel_id, params, socket) do
     Tracer.with_span "channel.join", %{
       kind: :server,
-      attributes: %{
-        "tavok.channel_id": channel_id,
-        "tavok.user_id": socket.assigns.user_id,
-        "tavok.author_type": socket.assigns[:author_type] || "USER"
-      }
+      attributes: trace_attributes(socket, %{"tavok.channel_id": channel_id})
     } do
       Logger.info(
         "#{socket.assigns[:author_type] || "USER"} #{socket.assigns.user_id} joining room:#{channel_id}"
@@ -161,19 +157,37 @@ defmodule TavokGatewayWeb.RoomChannel do
 
   @impl true
   def handle_info(:after_join, socket) do
-    # Track this user's presence in the channel
-    {:ok, _} =
-      Presence.track(socket, socket.assigns.user_id, %{
-        username: socket.assigns.username,
-        display_name: socket.assigns.display_name,
-        online_at: inspect(System.system_time(:second)),
-        status: "online"
-      })
+    Tracer.with_span "presence.join", %{
+      attributes: trace_attributes(socket)
+    } do
+      # Track this user's presence in the channel
+      {:ok, _} =
+        Presence.track(socket, socket.assigns.user_id, %{
+          username: socket.assigns.username,
+          display_name: socket.assigns.display_name,
+          online_at: inspect(System.system_time(:second)),
+          status: "online"
+        })
 
-    # Push current presence state to the joining user
-    push(socket, "presence_state", Presence.list(socket))
+      # Push current presence state to the joining user
+      push(socket, "presence_state", Presence.list(socket))
 
-    {:noreply, socket}
+      {:noreply, socket}
+    end
+  end
+
+  @impl true
+  def terminate(reason, socket) do
+    Tracer.with_span "presence.leave", %{
+      attributes:
+        trace_attributes(socket, %{
+          "tavok.disconnect_reason": inspect(reason)
+        })
+    } do
+      :ok
+    end
+
+    :ok
   end
 
   @impl true
@@ -252,11 +266,18 @@ defmodule TavokGatewayWeb.RoomChannel do
   @impl true
   def handle_info({:check_agent_trigger, trigger_message_id, content}, socket) do
     channel_id = socket.assigns.channel_id
+    parent_ctx = OpenTelemetry.Ctx.get_current()
 
     # Run agent trigger check in a separate Task to avoid blocking the channel process.
     # The channel process handles ALL messages for this room — blocking it with HTTP calls
     # would freeze message delivery for every user in the channel. (ISSUE-007)
     Task.Supervisor.async_nolink(TavokGateway.TaskSupervisor, fn ->
+      Tracer.with_span parent_ctx, "channel.agent_trigger_evaluation", %{
+        attributes:
+          trace_attributes(socket, %{
+            "tavok.message_id": trigger_message_id
+          })
+      } do
       # L15: Skip triggers if charter is completed — prevents wasted dispatches and user-facing errors
       charter_completed =
         case WebClient.get_channel_info(channel_id) do
@@ -306,6 +327,7 @@ defmodule TavokGatewayWeb.RoomChannel do
             Logger.error("Failed to fetch channel agents: #{inspect(reason)}")
         end
       end
+      end
     end)
 
     {:noreply, socket}
@@ -335,6 +357,10 @@ defmodule TavokGatewayWeb.RoomChannel do
 
   @impl true
   def handle_in("new_message", %{"content" => content}, socket) when is_binary(content) do
+    Tracer.with_span "channel.new_message", %{
+      kind: :server,
+      attributes: trace_attributes(socket)
+    } do
     cond do
       String.trim(content) == "" ->
         {:reply, {:error, %{reason: "empty_content"}}, socket}
@@ -381,6 +407,7 @@ defmodule TavokGatewayWeb.RoomChannel do
 
                   # 1. Generate ULID for the message
                   message_id = Ulid.generate()
+                  Tracer.set_attribute("tavok.message_id", message_id)
 
                   # 2. Get next sequence number with Redis-backed monotonic recovery
                   case next_sequence(channel_id) do
@@ -412,6 +439,11 @@ defmodule TavokGatewayWeb.RoomChannel do
                       # 4. Check for agent trigger (async — don't delay the reply)
                       send(self(), {:check_agent_trigger, message_id, content})
 
+                      Tracer.add_event("channel.agent_trigger_evaluation_scheduled", %{
+                        "tavok.channel_id" => channel_id,
+                        "tavok.message_id" => message_id
+                      })
+
                       # 5. Persist in background — never blocks the channel process
                       persist_body = %{
                         id: message_id,
@@ -426,6 +458,11 @@ defmodule TavokGatewayWeb.RoomChannel do
 
                       MessagePersistence.persist_async(persist_body, message_id, channel_id)
 
+                      Tracer.add_event("channel.message_persist_scheduled", %{
+                        "tavok.channel_id" => channel_id,
+                        "tavok.message_id" => message_id
+                      })
+
                       # 6. Reply to sender immediately
                       {:reply, {:ok, %{id: message_id, sequence: seq_str}}, socket}
 
@@ -436,6 +473,7 @@ defmodule TavokGatewayWeb.RoomChannel do
               end
           end
         end
+    end
     end
   end
 
@@ -942,6 +980,17 @@ defmodule TavokGatewayWeb.RoomChannel do
     Application.get_env(:tavok_gateway, :web_client, TavokGateway.WebClient)
   end
 
+  defp trace_attributes(socket, extra \\ %{}) do
+    %{
+      "tavok.channel_id": socket.assigns[:channel_id],
+      "tavok.user_id": socket.assigns[:user_id],
+      "tavok.author_type": socket.assigns[:author_type] || "USER"
+    }
+    |> Map.merge(extra)
+    |> Enum.reject(fn {_key, value} -> is_nil(value) end)
+    |> Enum.into(%{})
+  end
+
   defp handle_agent_stream_start(_payload, socket) do
     channel_id = socket.assigns.channel_id
     agent_id = socket.assigns.user_id
@@ -1192,6 +1241,12 @@ defmodule TavokGatewayWeb.RoomChannel do
       "[TriggerDecision] channel=#{channel_id} agent=#{agent_id} mode=#{trigger_mode} method=#{connection_method} " <>
         "should_trigger=#{should_trigger} has_mention=#{has_mention} content_len=#{String.length(content)}"
     )
+
+    Tracer.add_event("channel.agent_trigger_decision", %{
+      "tavok.channel_id" => channel_id,
+      "tavok.agent_id" => agent_id,
+      "tavok.should_trigger" => should_trigger
+    })
 
     if should_trigger do
       case connection_method do
