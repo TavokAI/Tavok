@@ -103,25 +103,22 @@
 
 - **Severity**: `MEDIUM`
 - **Description**: `tavok init` does not prompt for agent creation. README shows an interactive "Add agents? (y/n)" flow that does not exist in the CLI.
-- **Status**: `KNOWN` (v0.2.5)
-- **Repro steps**:
-  1. Run `npx tavok init`.
-  2. Observe init completes without agent creation prompt.
-  3. No `.tavok-agents.json` file is created.
-- **Notes**: Agents must be registered manually via `curl POST /api/v1/agents/register`. CLI should add an interactive agent creation step, or README should document the manual path.
+- **Status**: `RESOLVED` (2026-03-31)
+- **Fix summary**: `tavok init` keeps the interactive agent wizard and now always prints a manual `POST /api/v1/bootstrap/agents` fallback with the required `serverId` and `connectionMethod` fields when no agent is created during setup.
 
 ## BREAK-0016
 
 - **Severity**: `LOW`
 - **Description**: `tavok init` output does not include payload field names or SDK examples. Developers must visit the GitHub repo to learn the wire format.
-- **Status**: `KNOWN` (v0.2.5)
-- **Notes**: Init should print a "Send your first message" example showing `{content: "..."}` field name and V2 wire format `[join_ref, ref, topic, event, payload]`.
+- **Status**: `RESOLVED` (2026-03-31)
+- **Fix summary**: Init output now includes a "Send your first message" section with the `{"content": "..."}` payload field name and a concrete Phoenix V2 frame example in `[join_ref, ref, topic, event, payload]` format.
 
 ## BREAK-0017
 
 - **Severity**: `LOW`
 - **Description**: `npx tavok init` exits with SIGTERM instead of exit code 0. Automation checking exit codes may interpret this as failure.
-- **Status**: `KNOWN` (v0.2.5)
+- **Status**: `RESOLVED` (2026-03-31)
+- **Fix summary**: The npm wrapper now normalizes expected `SIGINT` and `SIGTERM` child-process exits to code `0` while preserving explicit exit codes and unexpected signal failures.
 
 ## BREAK-0018
 

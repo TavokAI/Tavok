@@ -292,7 +292,7 @@ func runInit(args []string) {
 	}
 
 	fmt.Println()
-	fmt.Printf("  Manage agents: open %s → Agents panel, or re-run tavok init\n", result.URLs.Web)
+	fmt.Println(buildInitNextSteps(result.URLs.Web, result.Server.ID, result.Channel.ID, createdAgents))
 }
 
 // runBootstrapFromExisting handles the case where .env already exists (idempotent re-run).
@@ -434,6 +434,30 @@ func splitEmail(email string) string {
 		}
 	}
 	return "admin"
+}
+
+func buildInitNextSteps(baseURL, serverID, channelID string, createdAgents []agents.CreatedAgent) string {
+	var b strings.Builder
+
+	b.WriteString("  ── Next Steps ──\n")
+	fmt.Fprintf(&b, "    Manage agents: open %s → Agents panel, or re-run tavok init\n", baseURL)
+
+	if len(createdAgents) == 0 {
+		b.WriteString("    No agent was created during init. Register one manually with:\n")
+		fmt.Fprintf(&b, "    POST %s/api/v1/bootstrap/agents\n", baseURL)
+		b.WriteString("    Authorization: Bearer admin-$TAVOK_ADMIN_TOKEN\n")
+		b.WriteString("    Content-Type: application/json\n")
+		fmt.Fprintf(&b, "    Body: {\"name\": \"assistant\", \"serverId\": \"%s\", \"connectionMethod\": \"WEBSOCKET\"}\n", serverID)
+	} else {
+		b.WriteString("    Agent credentials: .tavok-agents.json\n")
+	}
+
+	b.WriteString("    Send your first message:\n")
+	b.WriteString("    payload fields: {\"content\": \"Hello from Tavok\"}\n")
+	b.WriteString("    V2 wire format: [join_ref, ref, topic, event, payload]\n")
+	fmt.Fprintf(&b, "    Example: [null, \"1\", \"room:%s\", \"new_message\", {\"content\": \"Hello from Tavok\"}]\n", channelID)
+
+	return strings.TrimRight(b.String(), "\n")
 }
 
 func printUsage() {

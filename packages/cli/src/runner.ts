@@ -155,8 +155,23 @@ export async function runBinary(
     });
 
     child.on("error", reject);
-    child.on("exit", (code) => resolve(code ?? 1));
+    child.on("exit", (code, signal) => resolve(normalizeExitCode(code, signal)));
   });
+}
+
+export function normalizeExitCode(
+  code: number | null,
+  signal: NodeJS.Signals | null,
+): number {
+  if (code !== null) {
+    return code;
+  }
+
+  if (signal === "SIGINT" || signal === "SIGTERM") {
+    return 0;
+  }
+
+  return 1;
 }
 
 function getCacheRoot(env: EnvLike): string {

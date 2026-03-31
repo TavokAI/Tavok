@@ -9,6 +9,7 @@ import {
   getCacheBinaryPath,
   getChecksumsUrl,
   getReleaseBaseUrl,
+  normalizeExitCode,
   parseChecksums,
   verifyChecksum,
 } from "./runner";
@@ -148,5 +149,17 @@ describe("checksum verification", () => {
     } finally {
       rmSync(tmpDir, { recursive: true, force: true });
     }
+  });
+});
+
+describe("process exit normalization", () => {
+  it("treats expected termination signals as success", () => {
+    expect(normalizeExitCode(null, "SIGTERM")).toBe(0);
+    expect(normalizeExitCode(null, "SIGINT")).toBe(0);
+  });
+
+  it("preserves explicit exit codes and unexpected signal exits", () => {
+    expect(normalizeExitCode(7, null)).toBe(7);
+    expect(normalizeExitCode(null, "SIGKILL")).toBe(1);
   });
 });
