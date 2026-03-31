@@ -30,7 +30,7 @@ type OpenAI struct {
 
 func NewOpenAI() *OpenAI {
 	return &OpenAI{
-		transport: NewHTTPSSETransport(), // Default: HTTP SSE (DEC-0034)
+		transport: NewHTTPSSETransport("openai"), // Default: HTTP SSE (DEC-0034)
 	}
 }
 

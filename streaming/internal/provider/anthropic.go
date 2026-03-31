@@ -25,7 +25,7 @@ type Anthropic struct {
 
 func NewAnthropic() *Anthropic {
 	return &Anthropic{
-		transport: NewHTTPSSETransport(), // Default: HTTP SSE (DEC-0034)
+		transport: NewHTTPSSETransport("anthropic"), // Default: HTTP SSE (DEC-0034)
 	}
 }
 
