@@ -22,9 +22,9 @@ defmodule TavokGatewayWeb.UserSocket do
   require Logger
 
   # Channel routing — topic patterns mapped to channel modules
-  channel "room:*", TavokGatewayWeb.RoomChannel
+  channel("room:*", TavokGatewayWeb.RoomChannel)
   # TASK-0019: Direct messages
-  channel "dm:*", TavokGatewayWeb.DmChannel
+  channel("dm:*", TavokGatewayWeb.DmChannel)
 
   # ---- Path 1: Human auth via JWT ----
 
