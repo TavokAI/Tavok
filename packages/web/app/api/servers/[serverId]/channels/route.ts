@@ -93,10 +93,7 @@ export async function POST(
       type,
     });
 
-    return NextResponse.json(
-      channel,
-      { status: 201 },
-    );
+    return NextResponse.json(channel, { status: 201 });
   } catch (error) {
     console.error("[channels] Failed to create channel:", error);
     return NextResponse.json({ error: "Internal error" }, { status: 500 });

@@ -36,7 +36,9 @@ async function loadAuthorMaps(
 ): Promise<AuthorMaps> {
   const userAuthorIds = [
     ...new Set(
-      messages.filter((message) => message.authorType === "USER").map((message) => message.authorId),
+      messages
+        .filter((message) => message.authorType === "USER")
+        .map((message) => message.authorId),
     ),
   ];
   const agentAuthorIds = [
@@ -82,9 +84,7 @@ async function loadAuthorMaps(
   };
 }
 
-function mapReactions(
-  reactions: Array<{ emoji: string; userId: string }>,
-) {
+function mapReactions(reactions: Array<{ emoji: string; userId: string }>) {
   const reactionMap = new Map<string, string[]>();
   for (const reaction of reactions) {
     const existing = reactionMap.get(reaction.emoji) || [];

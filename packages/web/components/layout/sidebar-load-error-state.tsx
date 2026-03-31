@@ -27,7 +27,11 @@ export function SidebarLoadErrorState({
             <path d="M12 2a10 10 0 100 20 10 10 0 000-20zm0 14a1.25 1.25 0 110 2.5A1.25 1.25 0 0112 16zm1-8v6h-2V8h2z" />
           </svg>
         </span>
-        <p className={narrow ? "text-xs text-text-primary" : "text-sm text-text-primary"}>
+        <p
+          className={
+            narrow ? "text-xs text-text-primary" : "text-sm text-text-primary"
+          }
+        >
           Failed to load
         </p>
         <button

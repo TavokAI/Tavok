@@ -209,7 +209,9 @@ async function transitionTerminalState(
   return toStreamLifecycleMessage(record);
 }
 
-function isPrismaNotFoundError(error: unknown): error is Error & { code: string } {
+function isPrismaNotFoundError(
+  error: unknown,
+): error is Error & { code: string } {
   return (
     !!error &&
     typeof error === "object" &&

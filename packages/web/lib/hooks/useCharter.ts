@@ -3,10 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { Dispatch, MutableRefObject, SetStateAction } from "react";
 import type { Channel } from "phoenix";
-import type {
-  CharterAction,
-  CharterState,
-} from "./use-channel-types";
+import type { CharterAction, CharterState } from "./use-channel-types";
 
 export interface UseCharterResult {
   charterState: CharterState | null;

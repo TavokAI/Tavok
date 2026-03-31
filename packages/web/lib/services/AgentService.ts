@@ -155,15 +155,13 @@ export async function ensureServerExists(
   });
 }
 
-export async function bootstrapCreateAgent(
-  input: {
-    name: string;
-    serverId: string;
-    connectionMethod: ConnectionMethodValue;
-    webhookUrl?: string;
-    channelIds?: string[];
-  },
-) {
+export async function bootstrapCreateAgent(input: {
+  name: string;
+  serverId: string;
+  connectionMethod: ConnectionMethodValue;
+  webhookUrl?: string;
+  channelIds?: string[];
+}) {
   const result = await createAgent({
     name: input.name,
     serverId: input.serverId,

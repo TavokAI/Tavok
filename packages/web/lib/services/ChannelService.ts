@@ -185,7 +185,9 @@ export async function updateServerChannel(
     }
 
     await prismaClient.$transaction([
-      prismaClient.channelAgent.deleteMany({ where: { channelId: input.channelId } }),
+      prismaClient.channelAgent.deleteMany({
+        where: { channelId: input.channelId },
+      }),
       ...input.agentIds.map((agentId) =>
         prismaClient.channelAgent.create({
           data: {

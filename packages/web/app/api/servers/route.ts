@@ -76,10 +76,7 @@ export async function POST(request: NextRequest) {
       defaultChannelTopic,
     });
 
-    return NextResponse.json(
-      server,
-      { status: 201 },
-    );
+    return NextResponse.json(server, { status: 201 });
   } catch (error) {
     console.error("[servers] Failed to create server:", error);
     return NextResponse.json({ error: "Internal error" }, { status: 500 });

@@ -16,9 +16,9 @@ export function useTyping(
   channelRef: MutableRefObject<Channel | null>,
 ): UseTypingResult {
   const [typingUsers, setTypingUsers] = useState<TypingUser[]>([]);
-  const typingTimersRef = useRef<
-    Map<string, ReturnType<typeof setTimeout>>
-  >(new Map());
+  const typingTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(
+    new Map(),
+  );
   const lastTypingSentRef = useRef(0);
 
   useEffect(() => {

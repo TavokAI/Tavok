@@ -4,10 +4,7 @@ import { useCallback, useEffect, useMemo, useRef } from "react";
 import type { Dispatch, MutableRefObject, SetStateAction } from "react";
 import type { Channel } from "phoenix";
 import { compareSequences } from "@/lib/api-safety";
-import type {
-  MessagePayload,
-  PendingStreamMeta,
-} from "./use-channel-types";
+import type { MessagePayload, PendingStreamMeta } from "./use-channel-types";
 
 export const CAPACITY_EXCEEDED_CONTENT =
   "[All agents are busy right now. Please try again in a moment.]";
@@ -36,7 +33,10 @@ export function getStreamErrorContent(payload: {
   );
 }
 
-export function getStreamErrorHint(error: string, code?: string): string | null {
+export function getStreamErrorHint(
+  error: string,
+  code?: string,
+): string | null {
   if (isCapacityExceededStreamError(code)) {
     return CAPACITY_EXCEEDED_HINT;
   }
@@ -535,8 +535,12 @@ export function useStreaming({
         orphanTokenBufferRef.current.delete(payload.messageId);
 
         setMessages((prev) => {
-          const hasMatch = prev.some((message) => message.id === payload.messageId);
-          const streamMeta = pendingStreamMetaRef.current.get(payload.messageId);
+          const hasMatch = prev.some(
+            (message) => message.id === payload.messageId,
+          );
+          const streamMeta = pendingStreamMetaRef.current.get(
+            payload.messageId,
+          );
 
           if (hasMatch) {
             pendingStreamMetaRef.current.delete(payload.messageId);
@@ -621,7 +625,10 @@ export function useStreaming({
           typeof payload.contentOffset !== "number" ||
           payload.contentOffset < 0
         ) {
-          console.warn("[stream_checkpoint] Invalid payload, skipping:", payload);
+          console.warn(
+            "[stream_checkpoint] Invalid payload, skipping:",
+            payload,
+          );
           return;
         }
 
@@ -629,7 +636,9 @@ export function useStreaming({
           prev.map((message) => {
             if (message.id !== payload.messageId) return message;
             const existing = message.checkpoints || [];
-            if (existing.some((checkpoint) => checkpoint.index === payload.index)) {
+            if (
+              existing.some((checkpoint) => checkpoint.index === payload.index)
+            ) {
               return message;
             }
 
@@ -661,7 +670,8 @@ export function useStreaming({
   );
 
   const activeStreamCount = useMemo(
-    () => messages.filter((message) => message.streamingStatus === "ACTIVE").length,
+    () =>
+      messages.filter((message) => message.streamingStatus === "ACTIVE").length,
     [messages],
   );
 

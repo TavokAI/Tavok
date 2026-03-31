@@ -200,7 +200,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   }, [serverId]);
 
   const refreshServers = useCallback(async () => {
-    const data = await fetchAndSet<ServerData>("/api/servers", "servers", setServers);
+    const data = await fetchAndSet<ServerData>(
+      "/api/servers",
+      "servers",
+      setServers,
+    );
     if (data) {
       setServersError(null);
     } else {

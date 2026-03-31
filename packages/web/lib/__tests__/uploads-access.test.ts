@@ -1,8 +1,8 @@
 // @ts-nocheck -- route tests use partial Prisma mocks
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { mockPrisma, mockSessionRef, mockAuth, mockReadFile } =
-  vi.hoisted(() => {
+const { mockPrisma, mockSessionRef, mockAuth, mockReadFile } = vi.hoisted(
+  () => {
     const prisma = {
       attachment: {
         findUnique: vi.fn(),
@@ -25,7 +25,8 @@ const { mockPrisma, mockSessionRef, mockAuth, mockReadFile } =
       mockAuth: auth,
       mockReadFile: readFile,
     };
-  });
+  },
+);
 
 vi.mock("@/lib/db", () => ({ prisma: mockPrisma }));
 vi.mock("@/auth", () => ({ auth: mockAuth }));

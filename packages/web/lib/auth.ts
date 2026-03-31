@@ -1,7 +1,1 @@
-export {
-  auth,
-  authOptions,
-  handlers,
-  signIn,
-  signOut,
-} from "../auth";
+export { auth, authOptions, handlers, signIn, signOut } from "../auth";

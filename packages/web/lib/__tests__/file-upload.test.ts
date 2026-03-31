@@ -11,27 +11,23 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // ---------- mocks ----------
 // vi.hoisted ensures these are available when vi.mock factories run (hoisted above imports).
 
-const {
-  mockPrisma,
-  mockSessionRef,
-  mockAuth,
-  mockGetImageDimensions,
-} = vi.hoisted(() => {
-  const _mockPrisma = {
-    attachment: {
-      create: vi.fn(),
-    },
-  };
-  const _mockSessionRef = { current: { user: { id: "user-1" } } as any };
-  const _mockAuth = vi.fn(() => Promise.resolve(_mockSessionRef.current));
-  const _mockGetImageDimensions = vi.fn();
-  return {
-    mockPrisma: _mockPrisma,
-    mockSessionRef: _mockSessionRef,
-    mockAuth: _mockAuth,
-    mockGetImageDimensions: _mockGetImageDimensions,
-  };
-});
+const { mockPrisma, mockSessionRef, mockAuth, mockGetImageDimensions } =
+  vi.hoisted(() => {
+    const _mockPrisma = {
+      attachment: {
+        create: vi.fn(),
+      },
+    };
+    const _mockSessionRef = { current: { user: { id: "user-1" } } as any };
+    const _mockAuth = vi.fn(() => Promise.resolve(_mockSessionRef.current));
+    const _mockGetImageDimensions = vi.fn();
+    return {
+      mockPrisma: _mockPrisma,
+      mockSessionRef: _mockSessionRef,
+      mockAuth: _mockAuth,
+      mockGetImageDimensions: _mockGetImageDimensions,
+    };
+  });
 
 vi.mock("@/lib/db", () => ({ prisma: mockPrisma }));
 vi.mock("@/auth", () => ({ auth: mockAuth }));

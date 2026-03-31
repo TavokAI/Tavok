@@ -60,8 +60,9 @@ export const authConfig = {
   },
 
   useSecureCookies:
-    (process.env.AUTH_URL ?? process.env.NEXTAUTH_URL)?.startsWith("https://") ??
-    false,
+    (process.env.AUTH_URL ?? process.env.NEXTAUTH_URL)?.startsWith(
+      "https://",
+    ) ?? false,
 
   logger: {
     error(error) {
