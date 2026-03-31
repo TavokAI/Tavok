@@ -5,12 +5,33 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useChatContext } from "@/components/providers/chat-provider";
 import { CreateServerModal } from "@/components/modals/create-server-modal";
+import { ErrorBoundary } from "@/components/ui/error-boundary";
 import { passthroughImageLoader } from "@/lib/image-loader";
+import { SidebarLoadErrorState } from "./sidebar-load-error-state";
 
-export function ServerSidebar() {
-  const { servers, currentServerId, serverUnreadMap } = useChatContext();
+function ServerSidebarContent() {
+  const {
+    servers,
+    currentServerId,
+    serverUnreadMap,
+    serversError,
+    refreshServers,
+  } = useChatContext();
   const router = useRouter();
   const [showCreateModal, setShowCreateModal] = useState(false);
+
+  if (serversError) {
+    return (
+      <div className="flex h-full w-[72px] flex-col bg-background-tertiary">
+        <SidebarLoadErrorState
+          narrow
+          onRetry={() => {
+            void refreshServers();
+          }}
+        />
+      </div>
+    );
+  }
 
   return (
     <>
@@ -116,5 +137,27 @@ export function ServerSidebar() {
         onClose={() => setShowCreateModal(false)}
       />
     </>
+  );
+}
+
+export function ServerSidebar() {
+  const { refreshServers } = useChatContext();
+
+  return (
+    <ErrorBoundary
+      label="Server Sidebar"
+      fallback={
+        <div className="flex h-full w-[72px] flex-col bg-background-tertiary">
+          <SidebarLoadErrorState
+            narrow
+            onRetry={() => {
+              void refreshServers();
+            }}
+          />
+        </div>
+      }
+    >
+      <ServerSidebarContent />
+    </ErrorBoundary>
   );
 }

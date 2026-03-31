@@ -9,16 +9,20 @@ import { ManageAgentsModal } from "@/components/modals/manage-agents-modal";
 import { RoleManagementModal } from "@/components/modals/role-management-modal";
 import { ChannelSettingsModal } from "@/components/modals/channel-settings-modal";
 import { InviteModal } from "@/components/modals/invite-modal";
+import { ErrorBoundary } from "@/components/ui/error-boundary";
 import { Permissions } from "@/lib/permissions";
+import { SidebarLoadErrorState } from "./sidebar-load-error-state";
 
-export function ChannelSidebar() {
+function ChannelSidebarContent() {
   const { data: session } = useSession();
   const {
     currentServerId,
     currentChannelId,
     currentServerName,
     channels,
+    channelsError,
     hasPermission,
+    refreshChannels,
     unreadMap,
   } = useChatContext();
   const router = useRouter();
@@ -35,6 +39,18 @@ export function ChannelSidebar() {
 
   const displayName = session?.user?.displayName || "User";
   const username = session?.user?.username || "username";
+
+  if (channelsError && currentServerId) {
+    return (
+      <div className="flex h-full w-60 flex-col bg-background-secondary">
+        <SidebarLoadErrorState
+          onRetry={() => {
+            void refreshChannels();
+          }}
+        />
+      </div>
+    );
+  }
 
   return (
     <>
@@ -289,5 +305,26 @@ export function ChannelSidebar() {
         />
       )}
     </>
+  );
+}
+
+export function ChannelSidebar() {
+  const { refreshChannels } = useChatContext();
+
+  return (
+    <ErrorBoundary
+      label="Channel Sidebar"
+      fallback={
+        <div className="flex h-full w-60 flex-col bg-background-secondary">
+          <SidebarLoadErrorState
+            onRetry={() => {
+              void refreshChannels();
+            }}
+          />
+        </div>
+      }
+    >
+      <ChannelSidebarContent />
+    </ErrorBoundary>
   );
 }

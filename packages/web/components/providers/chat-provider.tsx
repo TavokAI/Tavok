@@ -103,11 +103,13 @@ export async function fetchAndSet<T>(
 interface ChatContextValue {
   servers: ServerData[];
   serversLoaded: boolean;
+  serversError: string | null;
   currentServerId: string | null;
   currentChannelId: string | null;
   currentServerName: string | null;
   currentServerOwnerId: string | null;
   channels: ChannelData[];
+  channelsError: string | null;
   members: MemberData[];
   agents: AgentData[];
   serverDataById: Record<string, ServerScopedData>;
@@ -157,7 +159,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
   const [servers, setServers] = useState<ServerData[]>([]);
   const [serversLoaded, setServersLoaded] = useState(false);
+  const [serversError, setServersError] = useState<string | null>(null);
   const [channels, setChannels] = useState<ChannelData[]>([]);
+  const [channelsError, setChannelsError] = useState<string | null>(null);
   const [members, setMembers] = useState<MemberData[]>([]);
   const [agents, setAgents] = useState<AgentData[]>([]);
   const [serverDataById, setServerDataById] = useState<
@@ -196,7 +200,13 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   }, [serverId]);
 
   const refreshServers = useCallback(async () => {
-    await fetchAndSet<ServerData>("/api/servers", "servers", setServers);
+    const data = await fetchAndSet<ServerData>("/api/servers", "servers", setServers);
+    if (data) {
+      setServersError(null);
+    } else {
+      setServers([]);
+      setServersError("Failed to load");
+    }
     setServersLoaded(true);
   }, []);
 
@@ -206,6 +216,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       setAgents([]);
       setCurrentServerName(null);
       setCurrentServerOwnerId(null);
+      setChannelsError(null);
       return;
     }
     const data = await fetchAndSet<ChannelData>(
@@ -219,8 +230,14 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       },
     );
     if (data) {
+      setChannelsError(null);
       setCurrentServerName((data.name as string) || null);
       setCurrentServerOwnerId((data.ownerId as string) || null);
+    } else {
+      setChannels([]);
+      setCurrentServerName(null);
+      setCurrentServerOwnerId(null);
+      setChannelsError("Failed to load");
     }
   }, [serverId]);
 
@@ -484,11 +501,13 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     () => ({
       servers,
       serversLoaded,
+      serversError,
       currentServerId: serverId,
       currentChannelId: channelId,
       currentServerName,
       currentServerOwnerId,
       channels,
+      channelsError,
       members,
       agents,
       serverDataById,
@@ -509,11 +528,13 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     [
       servers,
       serversLoaded,
+      serversError,
       serverId,
       channelId,
       currentServerName,
       currentServerOwnerId,
       channels,
+      channelsError,
       members,
       agents,
       serverDataById,
