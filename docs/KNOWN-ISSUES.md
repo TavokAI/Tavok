@@ -79,13 +79,8 @@
 
 - **Severity**: `MEDIUM`
 - **Description**: Gateway enforces channel membership on `join/3` but does not enforce `SEND_MESSAGES` permission on `handle_in("new_message")`.
-- **Status**: `KNOWN` (v0 deferred)
-- **Repro steps**:
-  1. Join a channel as a member.
-  2. Revoke `SEND_MESSAGES` from the member's effective role permissions.
-  3. Send `new_message` directly over the WebSocket topic.
-  4. Message is accepted despite UI hiding the input.
-- **Notes**: v0 accepts this as an architectural limitation; proper fix requires gateway-side permission context (e.g., permission claims in JWT or a permission check path at join/send time).
+- **Status**: `RESOLVED` (2026-03-31)
+- **Fix summary**: `RoomChannel.handle_in("new_message")` now checks `ConfigCache.get_channel_membership/2` and rejects sends when `canSendMessages` is false, while preserving the agent bypass and legacy cache compatibility path.
 
 ## BREAK-0013
 
