@@ -4,6 +4,13 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { checkMemberPermission } from "@/lib/check-member-permission";
 import { Permissions } from "@/lib/permissions";
+import {
+  deleteServerById,
+  getServerDetail,
+  getServerMembership,
+  getServerOwner,
+  updateServerById,
+} from "@/lib/services/ServerService";
 
 /**
  * GET /api/servers/[serverId] — Server detail with channels and member count
@@ -20,55 +27,23 @@ export async function GET(
   const { serverId } = await params;
 
   try {
-    // Verify user is a member
-    const membership = await prisma.member.findUnique({
-      where: {
-        userId_serverId: {
-          userId: session.user.id,
-          serverId,
-        },
-      },
-    });
+    const membership = await getServerMembership(
+      prisma,
+      session.user.id,
+      serverId,
+    );
 
     if (!membership) {
       return NextResponse.json({ error: "Not a member" }, { status: 403 });
     }
 
-    const server = await prisma.server.findUnique({
-      where: { id: serverId },
-      include: {
-        channels: {
-          orderBy: { position: "asc" },
-          select: {
-            id: true,
-            name: true,
-            type: true,
-            topic: true,
-            position: true,
-            defaultAgentId: true,
-            channelAgents: { select: { agentId: true } },
-          },
-        },
-        _count: { select: { members: true } },
-      },
-    });
+    const server = await getServerDetail(prisma, serverId);
 
     if (!server) {
       return NextResponse.json({ error: "Server not found" }, { status: 404 });
     }
 
-    return NextResponse.json({
-      id: server.id,
-      name: server.name,
-      iconUrl: server.iconUrl,
-      ownerId: server.ownerId,
-      channels: server.channels.map((ch) => ({
-        ...ch,
-        agentIds: ch.channelAgents.map((ca: { agentId: string }) => ca.agentId),
-        channelAgents: undefined,
-      })),
-      memberCount: server._count.members,
-    });
+    return NextResponse.json(server);
   } catch (error) {
     console.error("[servers] Failed to get server:", error);
     return NextResponse.json({ error: "Internal error" }, { status: 500 });
@@ -161,16 +136,8 @@ export async function PATCH(
   }
 
   try {
-    const server = await prisma.server.update({
-      where: { id: serverId },
-      data: updateData,
-    });
-    return NextResponse.json({
-      id: server.id,
-      name: server.name,
-      iconUrl: server.iconUrl,
-      ownerId: server.ownerId,
-    });
+    const server = await updateServerById(prisma, serverId, updateData);
+    return NextResponse.json(server);
   } catch (error) {
     console.error("[servers] Failed to update server:", error);
     return NextResponse.json({ error: "Internal error" }, { status: 500 });
@@ -192,10 +159,7 @@ export async function DELETE(
   const { serverId } = await params;
 
   try {
-    const server = await prisma.server.findUnique({
-      where: { id: serverId },
-      select: { id: true, ownerId: true },
-    });
+    const server = await getServerOwner(prisma, serverId);
 
     if (!server) {
       return NextResponse.json({ error: "Server not found" }, { status: 404 });
@@ -208,9 +172,7 @@ export async function DELETE(
       );
     }
 
-    await prisma.server.delete({
-      where: { id: serverId },
-    });
+    await deleteServerById(prisma, serverId);
 
     return NextResponse.json({ success: true });
   } catch (error) {

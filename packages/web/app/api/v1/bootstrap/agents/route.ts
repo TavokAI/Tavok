@@ -2,13 +2,15 @@ import { NextRequest, NextResponse } from "next/server";
 import { authenticateAdminToken } from "@/lib/admin-auth";
 import { prisma } from "@/lib/db";
 import {
-  createAgent,
-  buildConnectionInfo,
   AgentNameConflictError,
   VALID_CONNECTION_METHODS,
   type ConnectionMethodValue,
 } from "@/lib/agent-factory";
 import { RateLimiter, getClientIp } from "@/lib/rate-limit";
+import {
+  bootstrapCreateAgent,
+  ensureServerExists,
+} from "@/lib/services/AgentService";
 
 /**
  * POST /api/v1/bootstrap/agents — CLI-initiated agent creation
@@ -74,10 +76,7 @@ export async function POST(request: NextRequest) {
   }
 
   // Verify server exists
-  const server = await prisma.server.findUnique({
-    where: { id: serverId },
-    select: { id: true },
-  });
+  const server = await ensureServerExists(prisma, serverId);
 
   if (!server) {
     return NextResponse.json({ error: "Server not found" }, { status: 404 });
@@ -96,7 +95,7 @@ export async function POST(request: NextRequest) {
       ? channelIds.filter((id): id is string => typeof id === "string")
       : undefined;
 
-    const result = await createAgent({
+    const result = await bootstrapCreateAgent({
       name: name.trim(),
       serverId,
       connectionMethod: resolvedMethod,
@@ -104,24 +103,8 @@ export async function POST(request: NextRequest) {
       channelIds: validatedChannelIds,
     });
 
-    const connectionInfo = buildConnectionInfo(
-      result.agent.id,
-      result.connectionMethod,
-      {
-        webhookUrl,
-        webhookSecret: result.webhookSecret,
-      },
-    );
-
     return NextResponse.json(
-      {
-        id: result.agent.id,
-        name: result.agent.name,
-        apiKey: result.apiKey,
-        serverId,
-        connectionMethod: result.connectionMethod,
-        ...connectionInfo,
-      },
+      result,
       { status: 201 },
     );
   } catch (error) {

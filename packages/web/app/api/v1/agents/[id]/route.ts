@@ -1,18 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { authenticateAgentById } from "@/lib/agent-auth";
-import { logAgentAction } from "@/lib/agent-audit";
-
-/**
- * GET /api/v1/agents/{id} — Get agent info
- * PATCH /api/v1/agents/{id} — Update agent
- * DELETE /api/v1/agents/{id} — Deregister agent
- *
- * All routes require API key auth via Authorization header:
- *   Authorization: Bearer sk-tvk-...
- *
- * DEC-0040: Agent self-registration
- */
+import {
+  deleteRegisteredAgent,
+  getRegisteredAgent,
+  updateRegisteredAgent,
+} from "@/lib/services/AgentService";
 
 export async function GET(
   request: NextRequest,
@@ -25,52 +18,12 @@ export async function GET(
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
 
-  const agent = await prisma.agent.findUnique({
-    where: { id },
-    select: {
-      id: true,
-      name: true,
-      avatarUrl: true,
-      serverId: true,
-      llmModel: true,
-      isActive: true,
-      triggerMode: true,
-      createdAt: true,
-      agentRegistration: {
-        select: {
-          capabilities: true,
-          healthUrl: true,
-          webhookUrl: true,
-          maxTokensSec: true,
-          lastHealthCheck: true,
-          lastHealthOk: true,
-          connectionMethod: true,
-        },
-      },
-    },
-  });
-
-  if (!agent || !agent.agentRegistration) {
+  const agent = await getRegisteredAgent(prisma, id);
+  if (!agent) {
     return NextResponse.json({ error: "Agent not found" }, { status: 404 });
   }
 
-  return NextResponse.json({
-    agentId: agent.id,
-    displayName: agent.name,
-    avatarUrl: agent.avatarUrl,
-    serverId: agent.serverId,
-    model: agent.llmModel,
-    isActive: agent.isActive,
-    triggerMode: agent.triggerMode,
-    capabilities: agent.agentRegistration.capabilities,
-    healthUrl: agent.agentRegistration.healthUrl,
-    webhookUrl: agent.agentRegistration.webhookUrl,
-    maxTokensSec: agent.agentRegistration.maxTokensSec,
-    lastHealthCheck: agent.agentRegistration.lastHealthCheck,
-    lastHealthOk: agent.agentRegistration.lastHealthOk,
-    connectionMethod: agent.agentRegistration.connectionMethod,
-    createdAt: agent.createdAt,
-  });
+  return NextResponse.json(agent);
 }
 
 export async function PATCH(
@@ -108,42 +61,14 @@ export async function PATCH(
   };
 
   try {
-    // Fetch serverId for audit log
-    const agentRecord = await prisma.agent.findUnique({
-      where: { id },
-      select: { serverId: true },
-    });
-
-    logAgentAction({
-      agentId: id,
-      serverId: agentRecord?.serverId || "unknown",
-      action: "agent_update",
-      metadata: { fields: Object.keys(body) },
-    });
-
-    await prisma.$transaction(async (tx) => {
-      // Update Agent fields if provided
-      const agentUpdate: Record<string, unknown> = {};
-      if (displayName !== undefined) agentUpdate.name = displayName;
-      if (avatarUrl !== undefined) agentUpdate.avatarUrl = avatarUrl;
-
-      if (Object.keys(agentUpdate).length > 0) {
-        await tx.agent.update({ where: { id }, data: agentUpdate });
-      }
-
-      // Update AgentRegistration fields if provided
-      const regUpdate: Record<string, unknown> = {};
-      if (capabilities !== undefined) regUpdate.capabilities = capabilities;
-      if (healthUrl !== undefined) regUpdate.healthUrl = healthUrl;
-      if (webhookUrl !== undefined) regUpdate.webhookUrl = webhookUrl;
-      if (maxTokensSec !== undefined) regUpdate.maxTokensSec = maxTokensSec;
-
-      if (Object.keys(regUpdate).length > 0) {
-        await tx.agentRegistration.update({
-          where: { agentId: id },
-          data: regUpdate,
-        });
-      }
+    await updateRegisteredAgent(prisma, {
+      id,
+      displayName,
+      avatarUrl,
+      capabilities,
+      healthUrl,
+      webhookUrl,
+      maxTokensSec,
     });
 
     return NextResponse.json({ success: true });
@@ -165,21 +90,7 @@ export async function DELETE(
   }
 
   try {
-    // Fetch serverId for audit log before deletion
-    const agentRecord = await prisma.agent.findUnique({
-      where: { id },
-      select: { serverId: true },
-    });
-
-    logAgentAction({
-      agentId: id,
-      serverId: agentRecord?.serverId || "unknown",
-      action: "agent_deregister",
-    });
-
-    // Delete Agent — AgentRegistration cascades via onDelete: Cascade
-    await prisma.agent.delete({ where: { id } });
-
+    await deleteRegisteredAgent(prisma, id);
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("[v1/agents] Agent deregistration failed:", error);

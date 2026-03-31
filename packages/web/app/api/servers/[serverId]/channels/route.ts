@@ -2,9 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { generateId } from "@/lib/ulid";
 import { checkMemberPermission } from "@/lib/check-member-permission";
 import { Permissions } from "@/lib/permissions";
+import {
+  createServerChannel,
+  listServerChannels,
+} from "@/lib/services/ChannelService";
+import { getServerMembership } from "@/lib/services/ServerService";
 
 /**
  * GET /api/servers/[serverId]/channels — List channels for a server
@@ -21,29 +25,17 @@ export async function GET(
   const { serverId } = await params;
 
   try {
-    // Verify membership
-    const membership = await prisma.member.findUnique({
-      where: {
-        userId_serverId: { userId: session.user.id, serverId },
-      },
-    });
+    const membership = await getServerMembership(
+      prisma,
+      session.user.id,
+      serverId,
+    );
 
     if (!membership) {
       return NextResponse.json({ error: "Not a member" }, { status: 403 });
     }
 
-    const channels = await prisma.channel.findMany({
-      where: { serverId },
-      orderBy: { position: "asc" },
-      select: {
-        id: true,
-        name: true,
-        type: true,
-        topic: true,
-        position: true,
-      },
-    });
-
+    const channels = await listServerChannels(prisma, serverId);
     return NextResponse.json({ channels });
   } catch (error) {
     console.error("[channels] Failed to list channels:", error);
@@ -95,51 +87,15 @@ export async function POST(
       );
     }
 
-    // L5: Atomic position assignment to prevent collision on concurrent creation
-    const channelId = generateId();
-    const channel = await prisma.$transaction(async (tx) => {
-      const lastChannel = await tx.channel.findFirst({
-        where: { serverId },
-        orderBy: { position: "desc" },
-        select: { position: true },
-      });
-      const nextPosition = (lastChannel?.position ?? -1) + 1;
-
-      return tx.channel.create({
-        data: {
-          id: channelId,
-          serverId,
-          name,
-          topic,
-          type,
-          position: nextPosition,
-        },
-      });
+    const channel = await createServerChannel(prisma, {
+      serverId,
+      name,
+      topic,
+      type,
     });
-
-    // Auto-assign all active agents in this server to the new channel
-    const serverAgents = await prisma.agent.findMany({
-      where: { serverId, isActive: true },
-      select: { id: true },
-    });
-    if (serverAgents.length > 0) {
-      await prisma.channelAgent.createMany({
-        data: serverAgents.map((agent) => ({
-          id: generateId(),
-          channelId: channel.id,
-          agentId: agent.id,
-        })),
-      });
-    }
 
     return NextResponse.json(
-      {
-        id: channel.id,
-        name: channel.name,
-        type: channel.type,
-        topic: channel.topic,
-        position: channel.position,
-      },
+      channel,
       { status: 201 },
     );
   } catch (error) {
