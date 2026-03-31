@@ -1656,3 +1656,56 @@ The `Message.metadata` field uses Prisma `Json?` type because it's queried for t
 - Fast streams are valid even when the database has already advanced to `COMPLETE` by the time a consumer reacts to `stream_start`; the correctness check is the durable start commit itself, not a timing window.
 - Terminal transport loss is handled by recovery, not by deliberately broadcasting ahead of persistence.
 - Protocol, architecture, and release-gate docs now treat the explicit `/api/internal/streams/*` endpoints as the source of truth for stream lifecycle state.
+
+## DEC-0081 - Shared provider 429 retry policy
+
+**Date**: 2026-03-31
+**Status**: Accepted
+**Relates to**: release-readiness hardening
+
+**Context**: Anthropic and OpenAI calls shared the same transport abstraction, but 429s still surfaced as immediate failures. Retrying inside each provider would duplicate logic and make future providers drift in behavior.
+
+**Decision**: Centralize 429 handling in the provider transport layer. On HTTP 429 only:
+
+1. Parse `Retry-After` as either seconds or an HTTP date
+2. Default to 1 second when the header is missing or invalid
+3. Retry up to 3 times with exponential backoff (`retry-after * 2^attempt`) capped at 30 seconds
+4. Log each retry with provider name, attempt number, and retry delay in milliseconds
+5. Do not retry 5xx or other transport errors here - the circuit breaker remains responsible for broader upstream failure handling
+
+**Consequences**: All LLM providers now share the same bounded rate-limit behavior, transport logs expose backoff timing directly, and hard 429s still surface to the stream lifecycle after the retry budget is exhausted.
+
+## DEC-0082 - Per-provider circuit breaker defaults in the streaming manager
+
+**Date**: 2026-03-31
+**Status**: Accepted
+**Relates to**: release-readiness hardening
+
+**Context**: Consecutive provider failures stayed on the hot path and kept consuming stream slots, even when a single provider was clearly degraded. Recovery also lacked a controlled probe path.
+
+**Decision**: Add a per-provider circuit breaker to the Go streaming manager with exposed config defaults:
+
+1. Open the circuit after 5 consecutive failures for the same provider
+2. Keep it open for 30 seconds before allowing recovery
+3. Allow exactly one half-open probe request after cooldown expiry
+4. Fail fast for other requests while the circuit is open or the half-open probe is already in flight
+5. Reset the counter on success and reopen the cooldown window immediately if the probe fails
+
+**Consequences**: A degraded provider no longer drags the whole streaming path down with repeated slow failures, recovery is explicit and observable, and the default behavior is configurable through `ManagerConfig` and proxy startup wiring.
+
+## DEC-0083 - Execute the Auth.js v5 migration with a root auth surface
+
+**Date**: 2026-03-31
+**Status**: Accepted
+**Relates to**: A5 architecture decision, DEC-0078
+
+**Context**: DEC-0078 documented the migration plan and deferred execution while Auth.js v5 stabilized. The hardening sprint made the migration mandatory to converge the auth surface before launch.
+
+**Decision**: Complete the migration on the web package with `packages/web/auth.ts` and `packages/web/auth.config.ts` as the canonical auth exports. The repo now:
+
+1. Uses Auth.js v5 (`next-auth@5.0.0-beta.30`) with exported `auth`, `handlers`, `signIn`, and `signOut`
+2. Replaces route-based `getServerSession(authOptions)` usage with `auth()`
+3. Wraps the existing custom middleware logic with the v5 `NextAuth(authConfig)` pattern instead of replacing Tavok-specific redirects and request handling
+4. Keeps the existing Credentials + JWT model and agent-auth separation intact
+
+**Consequences**: The codebase has one v5-native server auth surface, route handlers no longer depend on legacy session helpers, and future auth work should treat DEC-0078 as historical planning context rather than current direction. Verification for this migration is Vitest + TypeScript green on Windows; the remaining standalone build symlink issue is unrelated to auth correctness.
