@@ -11,6 +11,7 @@ out/
 .env.local
 .env.production
 .env.*.local
+.venv-*/
 
 # === Build outputs ===
 dist/
@@ -86,6 +87,7 @@ backups/
 cookies.txt
 test_*.png
 test_*.py
+.tmp-chrome-login-data*
 
 # === Build artifacts ===
 build-log.txt

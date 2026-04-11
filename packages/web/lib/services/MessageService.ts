@@ -331,6 +331,9 @@ export async function searchServerMessages(
         authorName = agent.name;
         authorAvatarUrl = agent.avatarUrl;
       }
+    } else if (row.authorType === "SYSTEM") {
+      authorName = "System";
+      authorAvatarUrl = null;
     }
 
     return {

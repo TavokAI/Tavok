@@ -23,6 +23,9 @@ function getSendErrorHint(resp: unknown): string {
   }
 }
 
+const SEND_TIMEOUT_HINT =
+  "Message send failed: request timed out. Please try again.";
+
 export interface UseMessagesResult {
   messages: MessagePayload[];
   setMessages: Dispatch<SetStateAction<MessagePayload[]>>;
@@ -70,9 +73,17 @@ export function useMessages(
           ...message,
           reactions: message.reactions || [],
         }));
-        const uniqueNew = normalizedNew.filter(
-          (message) => !messageIdsRef.current.has(message.id),
-        );
+        const seenInBatch = new Set<string>();
+        const uniqueNew = normalizedNew.filter((message) => {
+          if (
+            messageIdsRef.current.has(message.id) ||
+            seenInBatch.has(message.id)
+          ) {
+            return false;
+          }
+          seenInBatch.add(message.id);
+          return true;
+        });
         if (uniqueNew.length === 0) return prev;
 
         uniqueNew.forEach((message) => messageIdsRef.current.add(message.id));
@@ -210,6 +221,10 @@ export function useMessages(
         .receive("error", (resp: unknown) => {
           setAgentTriggerHint(getSendErrorHint(resp));
           resolve(false);
+        })
+        .receive("timeout", () => {
+          setAgentTriggerHint(SEND_TIMEOUT_HINT);
+          resolve(false);
         });
     });
   }, []);
@@ -221,10 +236,17 @@ export function useMessages(
 
     loadingHistoryRef.current = true;
     const oldestMessage = messages[0];
-    channelRef.current.push("history", {
-      before: oldestMessage?.id,
-      limit: 50,
-    });
+    channelRef.current
+      .push("history", {
+        before: oldestMessage?.id,
+        limit: 50,
+      })
+      .receive("error", () => {
+        loadingHistoryRef.current = false;
+      })
+      .receive("timeout", () => {
+        loadingHistoryRef.current = false;
+      });
   }, [hasMoreHistory, messages]);
 
   const updateReactions = useCallback(

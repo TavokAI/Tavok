@@ -457,8 +457,33 @@ export function useStreaming({
           sequence: payload.sequence,
         });
         streamLastTokenRef.current.set(payload.messageId, now);
-        streamNextIndexRef.current.set(payload.messageId, 0);
         pruneExpiredOrphanTokens(orphanTokenBufferRef.current, now);
+
+        const bufferedTokens = takeBufferedOrphanTokens(
+          orphanTokenBufferRef.current,
+          payload.messageId,
+          now,
+        );
+
+        let initialContent = "";
+        let nextIndex = 0;
+        const pendingOutOfOrder = new Map<number, string>();
+
+        for (const token of bufferedTokens) {
+          if (token.index === nextIndex) {
+            initialContent += token.token;
+            nextIndex++;
+          } else if (token.index > nextIndex) {
+            pendingOutOfOrder.set(token.index, token.token);
+          }
+        }
+
+        streamNextIndexRef.current.set(payload.messageId, nextIndex);
+        if (pendingOutOfOrder.size > 0) {
+          streamOooBufferRef.current.set(payload.messageId, pendingOutOfOrder);
+        } else {
+          streamOooBufferRef.current.delete(payload.messageId);
+        }
 
         const placeholder: MessagePayload = {
           id: payload.messageId,
@@ -467,7 +492,7 @@ export function useStreaming({
           authorType: "AGENT",
           authorName: payload.agentName,
           authorAvatarUrl: payload.agentAvatarUrl,
-          content: "",
+          content: initialContent,
           type: "STREAMING",
           streamingStatus: "ACTIVE",
           sequence: payload.sequence,
@@ -475,13 +500,6 @@ export function useStreaming({
           reactions: [],
         };
         addMessages([placeholder]);
-
-        const bufferedTokens = takeBufferedOrphanTokens(
-          orphanTokenBufferRef.current,
-          payload.messageId,
-          now,
-        );
-        bufferedTokens.forEach((token) => applyStreamToken(token, now));
       });
 
       channel.on("stream_token", (raw: unknown) => {

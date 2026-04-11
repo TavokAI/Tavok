@@ -12,7 +12,7 @@ function checkDocker(): void {
     execSync("docker --version", { stdio: "ignore" });
   } catch {
     dockerOK = false;
-    console.error("⚠ Docker not found.");
+    console.error("Docker not found.");
     if (process.platform === "darwin") {
       console.error("  Install: brew install --cask docker");
       console.error(
@@ -32,7 +32,7 @@ function checkDocker(): void {
     try {
       execSync("docker compose version", { stdio: "ignore" });
     } catch {
-      console.error("⚠ docker compose (v2) not found.");
+      console.error("docker compose (v2) not found.");
       console.error(
         "  Docker Compose v2 ships with Docker Desktop and recent Docker Engine.",
       );
@@ -42,21 +42,19 @@ function checkDocker(): void {
   }
 }
 
-async function main(): Promise<void> {
-  const args = process.argv.slice(2);
-
-  // Pre-flight: if running "init", check Docker availability
+async function resolveExitCode(args: string[]): Promise<number> {
   if (args[0] === "init") {
     checkDocker();
-    // Note: docker-compose.yml check removed — the Go binary now embeds it
-    // and writes it to the current directory during init.
   }
 
   const packageVersion = readPackageVersion();
   const target = detectInstallTarget(process.platform, process.arch);
   const binaryPath = await ensureBinary(packageVersion, target);
-  const exitCode = await runBinary(binaryPath, args);
-  process.exitCode = exitCode;
+  return runBinary(binaryPath, args);
+}
+
+async function main(): Promise<void> {
+  process.exitCode = await resolveExitCode(process.argv.slice(2));
 }
 
 function readPackageVersion(): string {
@@ -71,8 +69,20 @@ function readPackageVersion(): string {
   }
 }
 
-void main().catch((error: unknown) => {
+function reportFatalError(error: unknown): void {
   const message = error instanceof Error ? error.message : String(error);
   console.error(`tavok: ${message}`);
   process.exitCode = 1;
-});
+}
+
+export async function runCli(): Promise<void> {
+  try {
+    await main();
+  } catch (error: unknown) {
+    reportFatalError(error);
+  }
+}
+
+if (require.main === module) {
+  void runCli();
+}
