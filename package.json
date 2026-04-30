@@ -13,7 +13,8 @@
     "typecheck": "pnpm --filter web typecheck",
     "db:migrate": "pnpm --filter web db:migrate",
     "db:studio": "pnpm --filter web db:studio",
-    "db:seed": "pnpm --filter web db:seed"
+    "db:seed": "pnpm --filter web db:seed",
+    "package:smoke": "node scripts/package-smoke.mjs"
   },
   "engines": {
     "node": ">=20.19.0",
