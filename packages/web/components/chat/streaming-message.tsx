@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useMemo, useCallback } from "react";
-import Image from "next/image";
 import { useChatContext } from "@/components/providers/chat-provider";
 import type { MessagePayload, ReactionData } from "@/lib/hooks/use-channel";
 import { MarkdownContentLazy as MarkdownContent } from "./lazy-markdown-content";
@@ -11,7 +10,10 @@ import { MessageActions } from "./message-actions";
 import { MessageMetadata } from "./message-metadata";
 import { RewindSlider } from "./rewind-slider";
 import { CheckpointResume } from "./checkpoint-resume";
-import { passthroughImageLoader } from "@/lib/image-loader";
+import {
+  buildAgentSummaryFromMessage,
+  AgentSummaryTrigger,
+} from "@/components/agent/agent-summary";
 import { formatTime } from "@/lib/format-time";
 
 interface StreamingMessageProps {
@@ -66,6 +68,14 @@ export function StreamingMessage({
   const isActive = message.streamingStatus === "ACTIVE";
   const isError = message.streamingStatus === "ERROR";
   const isComplete = message.streamingStatus === "COMPLETE";
+  const agentSummary = useMemo(
+    () =>
+      buildAgentSummaryFromMessage(
+        agents.find((agent) => agent.id === message.authorId),
+        message,
+      ),
+    [agents, message],
+  );
   const hasTimeline =
     message.thinkingTimeline && message.thinkingTimeline.length > 0;
 
@@ -258,28 +268,13 @@ export function StreamingMessage({
     >
       {/* Avatar with pulse while streaming */}
       <div className="flex-shrink-0 pt-0.5">
-        <div className="relative">
-          {message.authorAvatarUrl ? (
-            <Image
-              src={message.authorAvatarUrl}
-              alt={message.authorName}
-              loader={passthroughImageLoader}
-              unoptimized
-              width={34}
-              height={34}
-              className="h-[34px] w-[34px] rounded-full object-cover"
-            />
-          ) : (
-            <div
-              className={`flex h-[34px] w-[34px] items-center justify-center rounded-full text-[12px] font-semibold ${isActive ? "bg-background-elevated border border-accent-cyan/20 text-text-secondary" : "bg-background-elevated text-text-secondary"}`}
-            >
-              {message.authorName?.charAt(0)?.toUpperCase() || "?"}
-            </div>
-          )}
-          {isActive && (
-            <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-accent-cyan animate-pulse border-2 border-background-floating" />
-          )}
-        </div>
+        <AgentSummaryTrigger
+          agent={agentSummary}
+          isStreaming={isActive}
+          size="sm"
+          shape="round"
+          hoverPlacement="right"
+        />
       </div>
 
       {/* Content */}

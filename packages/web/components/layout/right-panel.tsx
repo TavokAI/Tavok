@@ -11,7 +11,7 @@ interface AgentInfo {
   id: string;
   name: string;
   isStreaming: boolean;
-  llmModel?: string;
+  llmModel?: string | null;
   thinkingSteps?: string[];
 }
 

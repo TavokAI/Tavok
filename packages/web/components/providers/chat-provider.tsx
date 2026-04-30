@@ -41,11 +41,25 @@ interface MemberData {
   avatarUrl: string | null;
 }
 
-interface AgentData {
+export interface AgentData {
   id: string;
   name: string;
+  avatarUrl?: string | null;
   isActive: boolean;
-  llmModel?: string;
+  llmProvider?: string | null;
+  llmModel?: string | null;
+  apiEndpoint?: string | null;
+  temperature?: number | null;
+  maxTokens?: number | null;
+  systemPrompt?: string | null;
+  triggerMode?: string | null;
+  connectionMethod?: string | null;
+  capabilities?: string[] | null;
+  channels?: { id: string; name: string }[];
+  isGuest?: boolean;
+  expiresAt?: string | null;
+  revokedAt?: string | null;
+  createdAt?: string | null;
   thinkingSteps?: string | null; // JSON array of phase labels
 }
 
