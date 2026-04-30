@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { generateId } from "@/lib/ulid";
 import { validateInternalSecret } from "@/lib/internal-auth";
+import {
+  AGENT_CAPABILITIES,
+  getAgentCapabilityError,
+} from "@/lib/agent-capabilities";
 
 /**
  * POST /api/internal/agents/{agentId}/enqueue — Queue a message for polling (DEC-0043)
@@ -44,6 +48,42 @@ export async function POST(
   }
 
   try {
+    const registration = await prisma.agentRegistration.findUnique({
+      where: { agentId },
+      select: {
+        capabilities: true,
+        expiresAt: true,
+        isGuest: true,
+        revokedAt: true,
+        agent: {
+          select: {
+            isActive: true,
+          },
+        },
+      },
+    });
+
+    if (!registration) {
+      return NextResponse.json(
+        { error: "Agent registration not found" },
+        { status: 404 },
+      );
+    }
+
+    const receiveError = getAgentCapabilityError(
+      {
+        isActive: registration.agent.isActive,
+        isGuest: registration.isGuest,
+        capabilities: registration.capabilities,
+        expiresAt: registration.expiresAt,
+        revokedAt: registration.revokedAt,
+      },
+      AGENT_CAPABILITIES.READ_HISTORY,
+    );
+    if (receiveError) {
+      return NextResponse.json({ error: receiveError }, { status: 403 });
+    }
+
     await prisma.agentMessage.create({
       data: {
         id: generateId(),

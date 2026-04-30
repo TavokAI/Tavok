@@ -2,10 +2,11 @@ packages:
   - packages/*
 
 ignoredBuiltDependencies:
-  - '@prisma/client'
-  - '@prisma/engines'
+  - "@prisma/client"
+  - "@prisma/engines"
   - prisma
   - sharp
   - unrs-resolver
 
-onlyBuiltDependencies: '[esbuild]'
+onlyBuiltDependencies:
+  - esbuild

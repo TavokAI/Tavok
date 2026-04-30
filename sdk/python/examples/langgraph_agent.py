@@ -48,7 +48,7 @@ def build_graph():
     from langchain_openai import ChatOpenAI
     from langgraph.graph import StateGraph, MessagesState
 
-    llm = ChatOpenAI(model="gpt-4o", streaming=True)
+    llm = ChatOpenAI(model="gpt-5.5", streaming=True)
 
     def think(state: MessagesState) -> dict:
         """Process the user message with the LLM."""

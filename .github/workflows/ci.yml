@@ -89,10 +89,8 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: npm audit (web)
-        run: cd packages/web && pnpm audit --audit-level=high || true
-        # Non-blocking for now — logs warnings but doesn't fail the build.
-        # Change || true to strict failure once existing advisories are triaged.
+      - name: Audit workspace dependencies
+        run: pnpm audit --audit-level=moderate
 
       - name: Go module verify
         run: cd streaming && go mod verify

@@ -6,8 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
-    "lint:fix": "next lint --fix",
+    "lint": "eslint . --max-warnings=0",
+    "lint:fix": "eslint . --fix",
     "format": "prettier --write '**/*.{ts,tsx,js,jsx,json,css,md}'",
     "format:check": "prettier --check '**/*.{ts,tsx,js,jsx,json,css,md}'",
     "typecheck": "prisma generate && tsc --noEmit",
@@ -22,18 +22,18 @@
     "debug:multi-actor": "node scripts/automation-multi-actor.mjs"
   },
   "dependencies": {
-    "@opentelemetry/exporter-trace-otlp-http": "^0.213.0",
-    "@opentelemetry/instrumentation-http": "^0.213.0",
-    "@opentelemetry/instrumentation-undici": "^0.23.0",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.215.0",
+    "@opentelemetry/instrumentation-http": "^0.215.0",
+    "@opentelemetry/instrumentation-undici": "^0.25.0",
     "@opentelemetry/resources": "^2.6.0",
-    "@opentelemetry/sdk-node": "^0.213.0",
+    "@opentelemetry/sdk-node": "^0.215.0",
     "@opentelemetry/semantic-conventions": "^1.40.0",
-    "@prisma/client": "^6.4.0",
+    "@prisma/client": "^6.19.3",
     "@prisma/instrumentation": "^7.5.0",
     "bcryptjs": "2.4.3",
     "highlight.js": "^11.11.1",
     "lucide-react": "^0.577.0",
-    "next": "^15.2.0",
+    "next": "^15.5.15",
     "next-auth": "5.0.0-beta.30",
     "phoenix": "1.8.4",
     "react": "^19.0.0",
@@ -46,24 +46,23 @@
     "zod": "^3.22.0"
   },
   "devDependencies": {
-    "@modelcontextprotocol/sdk": "^1.27.1",
+    "@eslint/eslintrc": "^3.3.4",
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "@playwright/test": "^1.58.2",
     "@types/bcryptjs": "^2.4.6",
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
-    "@vitest/coverage-v8": "^4.0.18",
+    "@vitest/coverage-v8": "^4.1.5",
     "autoprefixer": "^10.4.0",
     "eslint": "^9.0.0",
-    "eslint-config-next": "^15.2.0",
+    "eslint-config-next": "^15.5.15",
     "eslint-config-prettier": "^10.1.8",
-    "postcss": "^8.4.0",
-    "prisma": "^6.4.0",
+    "postcss": "^8.5.12",
+    "prisma": "^6.19.3",
     "tailwindcss": "^3.4.0",
     "typescript": "^5.4.0",
-    "vitest": "^4.0.18"
-  },
-  "prisma": {
-    "schema": "../../prisma/schema.prisma"
+    "vite": "7.3.2",
+    "vitest": "^4.1.5"
   }
 }

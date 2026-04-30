@@ -775,7 +775,7 @@ Get ALL agents assigned to a channel (multi-agent — TASK-0012). Falls back to 
       "id": "01HXZ...",
       "name": "GPT Helper",
       "llmProvider": "openai",
-      "llmModel": "gpt-4o",
+      "llmModel": "gpt-5.5",
       "apiEndpoint": "https://api.openai.com",
       "systemPrompt": "You are a helpful assistant.",
       "temperature": 0.7,
@@ -1069,7 +1069,7 @@ Resume a streaming message from a checkpoint. Creates a new STREAMING message wi
   "messageId": "01HXY...",
   "channelId": "01HXY...",
   "agentId": "01HXY...",
-  "agentName": "GPT-4",
+  "agentName": "GPT-5.5",
   "content": "partial content up to checkpoint..."
 }
 ```

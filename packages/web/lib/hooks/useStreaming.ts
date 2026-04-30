@@ -684,7 +684,7 @@ export function useStreaming({
         agentId,
       });
     },
-    [],
+    [channelRef],
   );
 
   return {

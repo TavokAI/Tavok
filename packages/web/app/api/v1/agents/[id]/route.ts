@@ -47,14 +47,12 @@ export async function PATCH(
   const {
     displayName,
     avatarUrl,
-    capabilities,
     healthUrl,
     webhookUrl,
     maxTokensSec,
   } = body as {
     displayName?: string;
     avatarUrl?: string;
-    capabilities?: string[];
     healthUrl?: string;
     webhookUrl?: string;
     maxTokensSec?: number;
@@ -65,7 +63,6 @@ export async function PATCH(
       id,
       displayName,
       avatarUrl,
-      capabilities,
       healthUrl,
       webhookUrl,
       maxTokensSec,

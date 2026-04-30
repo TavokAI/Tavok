@@ -37,6 +37,9 @@ export async function GET(request: NextRequest) {
       select: {
         id: true,
         capabilities: true,
+        isGuest: true,
+        expiresAt: true,
+        revokedAt: true,
         agent: {
           select: {
             id: true,
@@ -63,6 +66,20 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    if (registration.revokedAt) {
+      return NextResponse.json(
+        { error: "Agent registration is revoked", valid: false },
+        { status: 403 },
+      );
+    }
+
+    if (registration.expiresAt && registration.expiresAt <= new Date()) {
+      return NextResponse.json(
+        { error: "Agent registration is expired", valid: false },
+        { status: 403 },
+      );
+    }
+
     return NextResponse.json({
       valid: true,
       agentId: registration.agent.id,
@@ -70,6 +87,9 @@ export async function GET(request: NextRequest) {
       agentAvatarUrl: registration.agent.avatarUrl,
       serverId: registration.agent.serverId,
       capabilities: registration.capabilities,
+      isGuest: registration.isGuest,
+      expiresAt: registration.expiresAt?.toISOString() ?? null,
+      revokedAt: null,
     });
   } catch (error) {
     console.error("[internal/agents/verify] Agent verification failed:", error);

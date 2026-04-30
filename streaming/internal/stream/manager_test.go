@@ -964,6 +964,23 @@ func TestRunProviderIterationCapturesFirstTokenPublishTime(t *testing.T) {
 	}
 }
 
+func TestExecuteToolsRejectsUnadvertisedToolCallsBeforeRegistryCall(t *testing.T) {
+	source, err := readManagerSource()
+	if err != nil {
+		t.Fatalf("readManagerSource() error = %v", err)
+	}
+
+	if !strings.Contains(source, "allowedToolNames") {
+		t.Fatal("expected handleStream to derive the advertised tool allowlist")
+	}
+	if !strings.Contains(source, "tool call was not advertised") {
+		t.Fatal("expected executeTools to reject unadvertised tool calls")
+	}
+	if !strings.Contains(source, "allowedTools map[string]struct{}") {
+		t.Fatal("expected executeTools to receive an advertised-tool allowlist")
+	}
+}
+
 func selectorCallOrderForFunc(t *testing.T, funcName string) []string {
 	t.Helper()
 

@@ -784,9 +784,9 @@ VALUES
 
 INSERT INTO "Agent" (id, name, "serverId", "llmProvider", "llmModel", "apiEndpoint", "apiKeyEncrypted", "systemPrompt", temperature, "maxTokens", "isActive", "triggerMode", "createdAt", "updatedAt")
 VALUES
-('$botAlphaId', '$testPrefix-alpha', '$serverId', 'custom', 'gpt-4o-mini', 'http://web:3909/fast', '$apiKeyEncrypted', 'alpha', 0.2, 1024, true, 'ALWAYS', '$now'::timestamptz, '$now'::timestamptz),
-('$botBetaId', '$testPrefix-beta', '$serverId', 'custom', 'gpt-4o-mini', 'http://web:3909/slow', '$apiKeyEncrypted', 'beta', 0.2, 1024, true, 'ALWAYS', '$now'::timestamptz, '$now'::timestamptz),
-('$botGammaId', '$testPrefix-gamma', '$serverId', 'custom', 'gpt-4o-mini', 'http://web:3909/fast', '$apiKeyEncrypted', 'gamma', 0.2, 1024, true, 'ALWAYS', '$now'::timestamptz, '$now'::timestamptz);
+('$botAlphaId', '$testPrefix-alpha', '$serverId', 'custom', 'gpt-5.5', 'http://web:3909/fast', '$apiKeyEncrypted', 'alpha', 0.2, 1024, true, 'ALWAYS', '$now'::timestamptz, '$now'::timestamptz),
+('$botBetaId', '$testPrefix-beta', '$serverId', 'custom', 'gpt-5.5', 'http://web:3909/slow', '$apiKeyEncrypted', 'beta', 0.2, 1024, true, 'ALWAYS', '$now'::timestamptz, '$now'::timestamptz),
+('$botGammaId', '$testPrefix-gamma', '$serverId', 'custom', 'gpt-5.5', 'http://web:3909/fast', '$apiKeyEncrypted', 'gamma', 0.2, 1024, true, 'ALWAYS', '$now'::timestamptz, '$now'::timestamptz);
 
 INSERT INTO "Member" (id, "userId", "serverId", "joinedAt")
 VALUES

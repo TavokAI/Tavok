@@ -2,7 +2,7 @@ import type { Template } from "./index";
 
 export const openaiTemplate: Template = {
   id: "openai",
-  name: "OpenAI (GPT-4, GPT-4o)",
+  name: "OpenAI (GPT-5.5)",
   category: "popular",
   connectionMethod: "WEBSOCKET",
   dependencies: {
@@ -13,7 +13,7 @@ export const openaiTemplate: Template = {
     OPENAI_API_KEY: "Your OpenAI API key",
   },
   sourceCode: (agentName: string) => `/**
- * Tavok agent using OpenAI GPT-4o with streaming.
+ * Tavok agent using OpenAI GPT-5.5 with streaming.
  *
  * Environment variables:
  *   TAVOK_AGENT_API_KEY — your Tavok agent API key
@@ -32,7 +32,7 @@ agent.onMention(async (msg) => {
 
   try {
     const stream = await openai.chat.completions.create({
-      model: "gpt-4o",
+      model: "gpt-5.5",
       messages: [{ role: "user", content: msg.content }],
       stream: true,
     });

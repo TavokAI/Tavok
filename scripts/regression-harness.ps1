@@ -879,7 +879,7 @@ VALUES ('$serverId', '$testPrefix server', '$userAId', '$now'::timestamptz, '$no
 INSERT INTO "Channel" (id, "serverId", name, position, "createdAt", "updatedAt")
 VALUES ('$channelId', '$serverId', '$testPrefix channel', 0, '$now'::timestamptz, '$now'::timestamptz);
 INSERT INTO "Agent" (id, name, "serverId", "llmProvider", "llmModel", "apiEndpoint", "apiKeyEncrypted", "systemPrompt", temperature, "maxTokens", "isActive", "triggerMode", "createdAt", "updatedAt")
-VALUES ('$agentId', '$testPrefix agent', '$serverId', 'custom', 'gpt-4o-mini', 'http://web:3909', '$agentApiKeyEncrypted', 'You are helpful.', 0.7, 512, true, 'ALWAYS', '$now'::timestamptz, '$now'::timestamptz);
+VALUES ('$agentId', '$testPrefix agent', '$serverId', 'custom', 'gpt-5.5', 'http://web:3909', '$agentApiKeyEncrypted', 'You are helpful.', 0.7, 512, true, 'ALWAYS', '$now'::timestamptz, '$now'::timestamptz);
 INSERT INTO "Member" (id, "userId", "serverId", "joinedAt")
 VALUES
 ('$memberId', '$userAId', '$serverId', '$now'::timestamptz),

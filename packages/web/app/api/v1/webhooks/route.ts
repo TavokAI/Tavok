@@ -8,6 +8,10 @@ import { getPublicBaseUrl } from "@/lib/internal-auth";
 import { verifyAgentChannelAccess } from "@/lib/agent-channel-acl";
 import { checkAgentRateLimit } from "@/lib/rate-limit";
 import { logAgentAction } from "@/lib/agent-audit";
+import {
+  AGENT_CAPABILITIES,
+  getAgentCapabilityError,
+} from "@/lib/agent-capabilities";
 
 /** Zod schema for webhook creation POST body. */
 const webhookCreateSchema = z
@@ -53,10 +57,18 @@ export async function POST(request: NextRequest) {
 
   const { channelId, name, avatarUrl } = body;
 
+  const capabilityError = getAgentCapabilityError(
+    agent,
+    AGENT_CAPABILITIES.SEND_MESSAGES,
+  );
+  if (capabilityError) {
+    return NextResponse.json({ error: capabilityError }, { status: 403 });
+  }
+
   // Rate limit webhook creation per agent (uses default agent rate limiter)
   const rateCheck = checkAgentRateLimit(agent.agentId);
   if (!rateCheck.allowed) {
-    logAgentAction({
+    await logAgentAction({
       agentId: agent.agentId,
       serverId: agent.serverId,
       action: "rate_limited",
@@ -91,7 +103,7 @@ export async function POST(request: NextRequest) {
 
     const webUrl = getPublicBaseUrl();
 
-    logAgentAction({
+    await logAgentAction({
       agentId: agent.agentId,
       serverId: agent.serverId,
       action: "webhook_create",
@@ -211,7 +223,7 @@ export async function DELETE(request: NextRequest) {
 
     await prisma.inboundWebhook.delete({ where: { id: webhookId } });
 
-    logAgentAction({
+    await logAgentAction({
       agentId: agent.agentId,
       serverId: agent.serverId,
       action: "webhook_delete",

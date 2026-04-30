@@ -14,6 +14,10 @@ import {
   persistMessage,
   startStreamPlaceholder,
 } from "@/lib/internal-api-client";
+import {
+  AGENT_CAPABILITIES,
+  getAgentCapabilityError,
+} from "@/lib/agent-capabilities";
 
 /** Valid typed message types for webhook payloads. */
 const VALID_TYPED_TYPES = [
@@ -86,6 +90,19 @@ export async function POST(
       name: true,
       avatarUrl: true,
       isActive: true,
+      agent: {
+        select: {
+          isActive: true,
+          agentRegistration: {
+            select: {
+              capabilities: true,
+              isGuest: true,
+              expiresAt: true,
+              revokedAt: true,
+            },
+          },
+        },
+      },
     },
   });
 
@@ -127,6 +144,26 @@ export async function POST(
   // Resolve display name/avatar (allow per-message overrides like Discord)
   const displayName = username || webhook.name;
   const displayAvatar = overrideAvatar || webhook.avatarUrl;
+  const agentPolicy = getWebhookAgentPolicy(webhook);
+
+  const sendError = !streaming
+    ? getAgentCapabilityError(agentPolicy, AGENT_CAPABILITIES.SEND_MESSAGES)
+    : null;
+  if (sendError) {
+    return NextResponse.json({ error: sendError }, { status: 403 });
+  }
+
+  const actionCapabilityError = getAgentCapabilityError(
+    agentPolicy,
+    streaming
+      ? AGENT_CAPABILITIES.STREAM
+      : msgType
+        ? AGENT_CAPABILITIES.SEND_ARTIFACTS
+        : AGENT_CAPABILITIES.SEND_MESSAGES,
+  );
+  if (actionCapabilityError) {
+    return NextResponse.json({ error: actionCapabilityError }, { status: 403 });
+  }
 
   const messageId = generateId();
 
@@ -247,4 +284,25 @@ export async function POST(
       { status: 500 },
     );
   }
+}
+
+function getWebhookAgentPolicy(webhook: {
+  agent: {
+    isActive: boolean;
+    agentRegistration: {
+      capabilities: unknown;
+      isGuest: boolean;
+      expiresAt: Date | null;
+      revokedAt: Date | null;
+    } | null;
+  };
+}) {
+  const registration = webhook.agent.agentRegistration;
+  return {
+    isActive: webhook.agent.isActive,
+    capabilities: registration?.capabilities ?? [],
+    isGuest: registration?.isGuest ?? false,
+    expiresAt: registration?.expiresAt ?? null,
+    revokedAt: registration?.revokedAt ?? null,
+  };
 }

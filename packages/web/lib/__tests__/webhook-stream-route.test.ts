@@ -61,6 +61,15 @@ describe("POST /api/v1/webhooks/[token]/stream", () => {
       channelId: "channel-1",
       agentId: "agent-1",
       isActive: true,
+      agent: {
+        isActive: true,
+        agentRegistration: {
+          capabilities: ["streams:write"],
+          isGuest: true,
+          expiresAt: null,
+          revokedAt: null,
+        },
+      },
     });
 
     mockPrisma.message.findUnique.mockResolvedValue({

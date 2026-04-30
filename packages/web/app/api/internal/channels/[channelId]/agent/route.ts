@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { decrypt } from "@/lib/encryption";
 import { validateInternalSecret } from "@/lib/internal-auth";
+import { getAgentLifecycleError } from "@/lib/agent-capabilities";
 
 /**
  * GET /api/internal/channels/{channelId}/agent
@@ -24,7 +25,18 @@ export async function GET(
     const channel = await prisma.channel.findUnique({
       where: { id: channelId },
       include: {
-        defaultAgent: true,
+        defaultAgent: {
+          include: {
+            agentRegistration: {
+              select: {
+                capabilities: true,
+                expiresAt: true,
+                isGuest: true,
+                revokedAt: true,
+              },
+            },
+          },
+        },
       },
     });
 
@@ -34,9 +46,17 @@ export async function GET(
 
     const agent = channel.defaultAgent;
 
-    // Only return active agents
-    if (!agent.isActive) {
-      return NextResponse.json({ error: "Agent is inactive" }, { status: 404 });
+    const lifecycleError = getAgentLifecycleError({
+      isActive: agent.isActive,
+      isGuest: agent.agentRegistration?.isGuest ?? false,
+      capabilities: agent.agentRegistration?.capabilities ?? [],
+      expiresAt: agent.agentRegistration?.expiresAt ?? null,
+      revokedAt: agent.agentRegistration?.revokedAt ?? null,
+    });
+
+    // Only return active, unexpired, unrevoked agents.
+    if (lifecycleError) {
+      return NextResponse.json({ error: lifecycleError }, { status: 404 });
     }
 
     // Decrypt API key for internal use

@@ -18,6 +18,10 @@ import { parseSseChunk } from "@/lib/parse-sse-chunk";
 import type { SseTokenEvent } from "@/lib/parse-sse-chunk";
 import { validateOptionalMessageMetadata } from "@/lib/message-metadata-contract";
 import {
+  AGENT_CAPABILITIES,
+  getAgentCapabilityError,
+} from "@/lib/agent-capabilities";
+import {
   finalizeStreamCompletion,
   finalizeStreamError,
 } from "@/lib/stream-finalization";
@@ -73,8 +77,12 @@ export async function POST(
       webhookUrl: true,
       webhookSecret: true,
       webhookTimeout: true,
+      capabilities: true,
+      expiresAt: true,
+      isGuest: true,
+      revokedAt: true,
       agent: {
-        select: { name: true, avatarUrl: true },
+        select: { name: true, avatarUrl: true, isActive: true },
       },
     },
   });
@@ -84,6 +92,22 @@ export async function POST(
       { error: "Agent has no webhook URL configured" },
       { status: 404 },
     );
+  }
+
+  const registrationPolicy = {
+    isActive: registration.agent.isActive,
+    isGuest: registration.isGuest,
+    capabilities: registration.capabilities,
+    expiresAt: registration.expiresAt,
+    revokedAt: registration.revokedAt,
+  };
+
+  const receiveError = getAgentCapabilityError(
+    registrationPolicy,
+    AGENT_CAPABILITIES.READ_HISTORY,
+  );
+  if (receiveError) {
+    return NextResponse.json({ error: receiveError }, { status: 403 });
   }
 
   // Build outbound payload
@@ -153,6 +177,14 @@ export async function POST(
 
     // Handle SSE streaming response
     if (contentType.includes("text/event-stream") && response.body) {
+      const streamError = getAgentCapabilityError(
+        registrationPolicy,
+        AGENT_CAPABILITIES.STREAM,
+      );
+      if (streamError) {
+        return NextResponse.json({ error: streamError }, { status: 403 });
+      }
+
       const messageId = generateId();
       const sequence = await fetchChannelSequence(channelId);
 
@@ -257,6 +289,14 @@ export async function POST(
     // Handle sync JSON response
     const responseBody = await response.json().catch(() => null);
     if (responseBody?.content) {
+      const sendError = getAgentCapabilityError(
+        registrationPolicy,
+        AGENT_CAPABILITIES.SEND_MESSAGES,
+      );
+      if (sendError) {
+        return NextResponse.json({ error: sendError }, { status: 403 });
+      }
+
       const messageId = generateId();
       const sequence = await fetchChannelSequence(channelId);
 

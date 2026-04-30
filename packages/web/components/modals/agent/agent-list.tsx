@@ -3,7 +3,12 @@
 import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import type { AgentListItem } from "./types";
-import { getMethodBadgeClasses, getMethodLabel } from "./types";
+import {
+  getCapabilityLabel,
+  getMethodBadgeClasses,
+  getMethodLabel,
+} from "./types";
+import { AgentAuditLog } from "./agent-audit-log";
 import { Download, Upload } from "lucide-react";
 
 interface AgentListProps {
@@ -182,6 +187,8 @@ export function AgentList({
         </div>
         <Button onClick={onAddAgent}>Add Agent</Button>
       </div>
+
+      <AgentAuditLog serverId={serverId} />
     </div>
   );
 }
@@ -220,6 +227,24 @@ function AgentRow({
             ? `${agent.llmModel} \u00b7 ${agent.triggerMode.toLowerCase()}`
             : `${getMethodLabel(agent.connectionMethod)} agent \u00b7 ${agent.triggerMode.toLowerCase()}`}
         </p>
+        {agent.capabilities?.length > 0 && (
+          <div className="mt-1 flex flex-wrap gap-1">
+            {agent.capabilities.slice(0, 4).map((capability) => (
+              <span
+                key={capability}
+                className="rounded bg-background-tertiary px-1.5 py-0.5 text-[10px] text-text-muted"
+                title={capability}
+              >
+                {getCapabilityLabel(capability)}
+              </span>
+            ))}
+            {agent.capabilities.length > 4 && (
+              <span className="rounded bg-background-tertiary px-1.5 py-0.5 text-[10px] text-text-muted">
+                +{agent.capabilities.length - 4}
+              </span>
+            )}
+          </div>
+        )}
       </div>
       <div className="flex gap-1">
         <button

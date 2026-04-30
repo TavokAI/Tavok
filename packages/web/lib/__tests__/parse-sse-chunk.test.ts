@@ -59,12 +59,12 @@ describe("parseSseChunk", () => {
 
   it("parses done event with finalContent and metadata", () => {
     const chunk =
-      'data: {"done":true,"finalContent":"complete text","metadata":{"model":"gpt-4"}}\n';
+      'data: {"done":true,"finalContent":"complete text","metadata":{"model":"gpt-5.5"}}\n';
     const { events } = parseSseChunk("", chunk);
     expect(events).toHaveLength(1);
     expect(events[0].done).toBe(true);
     expect(events[0].finalContent).toBe("complete text");
-    expect(events[0].metadata).toEqual({ model: "gpt-4" });
+    expect(events[0].metadata).toEqual({ model: "gpt-5.5" });
   });
 
   it("returns empty events for empty input", () => {

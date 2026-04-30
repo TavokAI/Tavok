@@ -16,15 +16,23 @@
     "db:seed": "pnpm --filter web db:seed"
   },
   "engines": {
-    "node": ">=20.0.0",
+    "node": ">=20.19.0",
     "pnpm": ">=9.0.0"
   },
   "devDependencies": {
     "prettier": "^3.8.1",
-    "prisma": "6.19.2",
+    "prisma": "6.19.3",
     "ws": "^8.19.0"
   },
   "dependencies": {
-    "@prisma/client": "6.19.2"
+    "@prisma/client": "6.19.3"
+  },
+  "pnpm": {
+    "overrides": {
+      "minimatch@3": "3.1.5",
+      "flatted": "3.4.2",
+      "postcss": "8.5.12",
+      "vite": "7.3.2"
+    }
   }
 }

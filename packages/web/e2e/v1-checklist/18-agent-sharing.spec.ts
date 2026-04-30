@@ -150,7 +150,7 @@ test.describe("Section 18: Agent Sharing via Config Templates", () => {
       _tavokAgentTemplate: 1,
       name: "File Imported Agent",
       llmProvider: "openai",
-      llmModel: "gpt-4o",
+      llmModel: "gpt-5.5",
       apiEndpoint: "https://api.openai.com",
       systemPrompt: "Imported via file upload test.",
       temperature: 0.8,

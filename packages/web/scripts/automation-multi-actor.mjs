@@ -126,7 +126,7 @@ async function run() {
   const marker = Date.now();
   const demoMessage = `demo -> alice multi-user ${marker}`;
   const aliceMessage = `alice -> demo multi-user ${marker}`;
-  const mentionMessage = `@GPT-4 multi-actor mention ${marker}`;
+  const mentionMessage = `@GPT-5.5 multi-actor mention ${marker}`;
 
   const demoInput = demoPage.getByRole("textbox").first();
   const aliceInput = alicePage.getByRole("textbox").first();

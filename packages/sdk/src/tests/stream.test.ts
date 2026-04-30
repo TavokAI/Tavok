@@ -222,11 +222,11 @@ describe("StreamContext", () => {
     await ctx.token("brown ");
     await ctx.token("fox");
 
-    await ctx.finish({ model: "gpt-4" });
+    await ctx.finish({ model: "gpt-5.5" });
 
     const completePush = mock.pushCalls.find((c) => c.event === "stream_complete");
     expect(completePush!.payload.finalContent).toBe("The quick brown fox");
-    expect(completePush!.payload.metadata).toEqual({ model: "gpt-4" });
+    expect(completePush!.payload.metadata).toEqual({ model: "gpt-5.5" });
   });
 
   // ---- status / thinking -------------------------------------------------

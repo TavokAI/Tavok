@@ -956,7 +956,7 @@ describe("PUT /api/internal/messages/{messageId} — finalization", () => {
   });
 
   it("persists metadata when included", async () => {
-    const metadata = { model: "gpt-4", tokensUsed: 512 };
+    const metadata = { model: "gpt-5.5", tokensUsed: 512 };
 
     const res = await PUT(
       makePutRequest({

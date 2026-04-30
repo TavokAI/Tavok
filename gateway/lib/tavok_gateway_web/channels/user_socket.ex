@@ -76,6 +76,11 @@ defmodule TavokGatewayWeb.UserSocket do
           |> assign(:author_type, "AGENT")
           |> assign(:server_id, agent_info["serverId"])
           |> assign(:agent_avatar_url, agent_info["agentAvatarUrl"])
+          |> assign(:agent_capabilities, Map.get(agent_info, "capabilities", []))
+          |> assign(:agent_is_guest, Map.get(agent_info, "isGuest", false))
+          |> assign(:agent_expires_at, Map.get(agent_info, "expiresAt"))
+          |> assign(:agent_revoked_at, Map.get(agent_info, "revokedAt"))
+          |> assign(:agent_status_checked_at, System.monotonic_time(:millisecond))
 
         Logger.info(
           "WebSocket connected: agent=#{agent_info["agentId"]} server=#{agent_info["serverId"]}"

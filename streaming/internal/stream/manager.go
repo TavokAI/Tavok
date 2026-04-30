@@ -432,9 +432,11 @@ func (m *Manager) handleStream(ctx context.Context, req streamRequest) {
 
 	// 3. Resolve available tools for this agent (TASK-0018)
 	var toolDefs []provider.ToolDefinition
+	allowedToolNames := make(map[string]struct{})
 	if m.toolRegistry != nil && m.toolRegistry.HasTools() {
-		rawDefs := m.toolRegistry.List(agentConfig.EnabledTools)
+		rawDefs := m.toolRegistry.List(agentConfig.EnabledTools, agentConfig.ApprovedTools)
 		for _, d := range rawDefs {
+			allowedToolNames[d.Name] = struct{}{}
 			toolDefs = append(toolDefs, provider.ToolDefinition{
 				Name:        d.Name,
 				Description: d.Description,
@@ -550,7 +552,7 @@ func (m *Manager) handleStream(ctx context.Context, req streamRequest) {
 			)
 
 			// Execute tools and get results
-			toolResults := m.executeTools(streamCtx, ctx, req, pr.result.ToolCalls)
+			toolResults := m.executeTools(streamCtx, ctx, req, pr.result.ToolCalls, allowedToolNames)
 
 			// Emit checkpoint after tool execution (TASK-0021)
 			cp := checkpointEntry{
@@ -906,6 +908,7 @@ func (m *Manager) executeTools(
 	streamCtx, parentCtx context.Context,
 	req streamRequest,
 	toolCalls []provider.ToolCall,
+	allowedTools map[string]struct{},
 ) []tools.ToolCallResult {
 	// L12: Execute all tools in parallel — results are collected in order
 	type indexedResult struct {
@@ -948,6 +951,27 @@ func (m *Manager) executeTools(
 				Name:      tc.Name,
 				Arguments: tc.Arguments,
 			}
+
+			if !isToolCallAllowed(tc.Name, allowedTools) {
+				result := tools.ToolCallResult{
+					CallID:  tc.ID,
+					Name:    tc.Name,
+					Content: fmt.Sprintf("Tool call was not advertised: %s", tc.Name),
+					IsError: true,
+				}
+				toolSpan.SetStatus(codes.Error, "tool call was not advertised")
+				toolSpan.End()
+
+				m.logger.Warn("Rejected unadvertised tool call",
+					"messageId", req.MessageID,
+					"toolName", tc.Name,
+					"callId", tc.ID,
+				)
+
+				resultCh <- indexedResult{index: idx, result: result}
+				return
+			}
+
 			result := m.toolRegistry.Call(streamCtx, toolReq)
 
 			if result.IsError {
@@ -993,6 +1017,14 @@ func (m *Manager) executeTools(
 	}
 
 	return results
+}
+
+func isToolCallAllowed(name string, allowedTools map[string]struct{}) bool {
+	if len(allowedTools) == 0 {
+		return false
+	}
+	_, ok := allowedTools[name]
+	return ok
 }
 
 // appendToolContext adds tool call and result messages to the conversation context.

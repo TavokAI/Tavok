@@ -30,6 +30,8 @@ RUN npx prisma generate --schema=prisma/schema.prisma
 RUN pnpm install --frozen-lockfile
 
 # Build Next.js (pnpm exec resolves through pnpm's module store correctly)
+ENV TAVOK_NEXT_STANDALONE=1
+ENV NEXT_TELEMETRY_DISABLED=1
 RUN cd packages/web && pnpm exec next build
 
 # --- Stage 2: Runtime ---

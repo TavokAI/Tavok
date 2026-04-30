@@ -40,7 +40,7 @@ const handler = new WebhookHandler({
 });
 
 const llm = new ChatOpenAI({
-  modelName: "gpt-4o",
+  modelName: "gpt-5.5",
   streaming: true,
 });
 

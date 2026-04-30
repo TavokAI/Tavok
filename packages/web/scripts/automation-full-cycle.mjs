@@ -71,7 +71,7 @@ async function run() {
   });
   await page.waitForTimeout(250);
 
-  await input.fill("@GPT-4 automation cycle: mention message");
+  await input.fill("@GPT-5.5 automation cycle: mention message");
   await input.press("Enter");
   await waitForCountIncrease(apiKeyErrorLocator, baselineApiKeyErrors, 10000);
   await inlineErrorHintLocator.waitFor({ timeout: 10000 });

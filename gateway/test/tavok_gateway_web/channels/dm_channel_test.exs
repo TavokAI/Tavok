@@ -1,10 +1,6 @@
 defmodule TavokGatewayWeb.DmChannelTest do
   @moduledoc """
   Unit tests for DmChannel pure/deterministic logic.
-
-  Since DmChannel.parse_sequence/1 is private, we test it indirectly through
-  the public handle_in("sync", ...) handler. Content validation and agent rejection
-  are tested via handle_in("new_message", ...) and join/3.
   """
   use ExUnit.Case
 
@@ -12,21 +8,70 @@ defmodule TavokGatewayWeb.DmChannelTest do
 
   alias TavokGatewayWeb.DmChannel
 
-  # ---------------------------------------------------------------------------
-  # parse_sequence/1 — tested indirectly via handle_in("sync", ...)
-  #
-  # The sync handler calls parse_sequence(last_sequence). When parse_sequence
-  # returns {:error, _}, sync replies {:error, %{reason: "invalid_sequence"}}.
-  # When parse_sequence returns {:ok, nil}, sync replies {:error, %{reason: "invalid_sequence"}}
-  # because the guard `when not is_nil(parsed)` rejects nil.
-  # When parse_sequence returns {:ok, integer}, the code tries WebClient which
-  # will fail in test — but the error will be "sync_failed", NOT "invalid_sequence",
-  # proving parse_sequence accepted the value.
-  # ---------------------------------------------------------------------------
+  defmodule WebClientStub do
+    def get_dm_messages(params) do
+      handler =
+        Process.get({__MODULE__, :get_dm_messages}) ||
+          raise "missing get_dm_messages handler"
 
-  describe "parse_sequence via sync handler" do
+      handler.(params)
+    end
+
+    def post_dm_message(body) do
+      handler = Process.get({__MODULE__, :post_dm_message}, fn _body -> {:ok, %{}} end)
+      handler.(body)
+    end
+  end
+
+  defmodule RedisStub do
+    def command(:redix, _command), do: {:error, :disconnected}
+  end
+
+  describe "parse_sequence/1" do
+    test "accepts nil and numeric sequence values" do
+      assert DmChannel.parse_sequence(nil) == {:ok, nil}
+      assert DmChannel.parse_sequence(123) == {:ok, 123}
+      assert DmChannel.parse_sequence("123") == {:ok, 123}
+      assert DmChannel.parse_sequence("0") == {:ok, 0}
+      assert DmChannel.parse_sequence(0) == {:ok, 0}
+    end
+
+    test "rejects invalid sequence values" do
+      assert DmChannel.parse_sequence("abc") == {:error, :invalid_sequence}
+      assert DmChannel.parse_sequence(1.5) == {:error, :invalid_sequence}
+      assert DmChannel.parse_sequence(:bad) == {:error, :invalid_sequence}
+    end
+
+    test "sync rejects missing lastSequence key" do
+      socket = %Phoenix.Socket{}
+
+      {:reply, {:error, %{reason: reason}}, _socket} =
+        DmChannel.handle_in("sync", %{}, socket)
+
+      assert reason == "invalid_payload"
+    end
+
+    test "sync rejects non-map payload" do
+      socket = %Phoenix.Socket{}
+
+      {:reply, {:error, %{reason: reason}}, _socket} =
+        DmChannel.handle_in("sync", "not-a-map", socket)
+
+      assert reason == "invalid_payload"
+    end
+  end
+
+  describe "sync handler" do
     setup do
-      # Minimal socket with required assigns for sync handler
+      original_web_client = Application.get_env(:tavok_gateway, :web_client)
+      Application.put_env(:tavok_gateway, :web_client, WebClientStub)
+      Process.delete({WebClientStub, :get_dm_messages})
+
+      on_exit(fn ->
+        restore_env(:web_client, original_web_client)
+        Process.delete({WebClientStub, :get_dm_messages})
+      end)
+
       socket = %Phoenix.Socket{
         assigns: %{
           dm_id: "dm-test-123",
@@ -39,90 +84,36 @@ defmodule TavokGatewayWeb.DmChannelTest do
       {:ok, socket: socket}
     end
 
-    test "nil sequence is rejected (sync requires non-nil)", %{socket: socket} do
-      # parse_sequence(nil) -> {:ok, nil}, but sync rejects nil with "invalid_sequence"
-      {:reply, {:error, %{reason: reason}}, _socket} =
-        DmChannel.handle_in("sync", %{"lastSequence" => nil}, socket)
+    test "fetches messages with the parsed sequence", %{socket: socket} do
+      Process.put({WebClientStub, :get_dm_messages}, fn %{
+                                                          dmId: "dm-test-123",
+                                                          afterSequence: 123,
+                                                          limit: 100
+                                                        } ->
+        {:ok, %{"messages" => [%{"id" => "dm-message-1"}]}}
+      end)
 
-      assert reason == "invalid_sequence"
+      assert {:reply, {:ok, %{messages: [%{"id" => "dm-message-1"}]}}, ^socket} =
+               DmChannel.handle_in("sync", %{"lastSequence" => "123"}, socket)
     end
 
-    test "string 'abc' is rejected as invalid_sequence", %{socket: socket} do
-      {:reply, {:error, %{reason: reason}}, _socket} =
-        DmChannel.handle_in("sync", %{"lastSequence" => "abc"}, socket)
+    test "returns sync_failed when message fetch fails", %{socket: socket} do
+      Process.put({WebClientStub, :get_dm_messages}, fn _params -> {:error, :unavailable} end)
 
-      assert reason == "invalid_sequence"
-    end
-
-    test "float 1.5 is rejected as invalid_sequence", %{socket: socket} do
-      {:reply, {:error, %{reason: reason}}, _socket} =
-        DmChannel.handle_in("sync", %{"lastSequence" => 1.5}, socket)
-
-      assert reason == "invalid_sequence"
-    end
-
-    test "atom :bad is rejected as invalid_sequence", %{socket: socket} do
-      {:reply, {:error, %{reason: reason}}, _socket} =
-        DmChannel.handle_in("sync", %{"lastSequence" => :bad}, socket)
-
-      assert reason == "invalid_sequence"
-    end
-
-    test "integer 123 passes parse_sequence (fails downstream at WebClient)", %{socket: socket} do
-      # parse_sequence(123) -> {:ok, 123}, sync proceeds to WebClient which errors
-      {:reply, {:error, %{reason: reason}}, _socket} =
-        DmChannel.handle_in("sync", %{"lastSequence" => 123}, socket)
-
-      # The key assertion: NOT "invalid_sequence" — proving parse_sequence accepted it
-      refute reason == "invalid_sequence",
-             "Integer sequence should pass parse_sequence validation"
-    end
-
-    test "string '123' passes parse_sequence (fails downstream at WebClient)", %{socket: socket} do
-      {:reply, {:error, %{reason: reason}}, _socket} =
-        DmChannel.handle_in("sync", %{"lastSequence" => "123"}, socket)
-
-      refute reason == "invalid_sequence",
-             "Numeric string sequence should pass parse_sequence validation"
-    end
-
-    test "string '0' passes parse_sequence", %{socket: socket} do
-      {:reply, {:error, %{reason: reason}}, _socket} =
-        DmChannel.handle_in("sync", %{"lastSequence" => "0"}, socket)
-
-      refute reason == "invalid_sequence",
-             "Zero string sequence should pass parse_sequence validation"
-    end
-
-    test "integer 0 passes parse_sequence", %{socket: socket} do
-      {:reply, {:error, %{reason: reason}}, _socket} =
-        DmChannel.handle_in("sync", %{"lastSequence" => 0}, socket)
-
-      refute reason == "invalid_sequence",
-             "Zero integer sequence should pass parse_sequence validation"
-    end
-
-    test "missing lastSequence key returns invalid_payload", %{socket: socket} do
-      {:reply, {:error, %{reason: reason}}, _socket} =
-        DmChannel.handle_in("sync", %{}, socket)
-
-      assert reason == "invalid_payload"
-    end
-
-    test "non-map payload returns invalid_payload", %{socket: socket} do
-      {:reply, {:error, %{reason: reason}}, _socket} =
-        DmChannel.handle_in("sync", "not-a-map", socket)
-
-      assert reason == "invalid_payload"
+      assert {:reply, {:error, %{reason: "sync_failed"}}, ^socket} =
+               DmChannel.handle_in("sync", %{"lastSequence" => 123}, socket)
     end
   end
 
-  # ---------------------------------------------------------------------------
-  # new_message content validation
-  # ---------------------------------------------------------------------------
-
   describe "new_message content validation" do
     setup do
+      original_redis_client = Application.get_env(:tavok_gateway, :redis_client)
+      Application.put_env(:tavok_gateway, :redis_client, RedisStub)
+
+      on_exit(fn ->
+        restore_env(:redis_client, original_redis_client)
+      end)
+
       socket = %Phoenix.Socket{
         assigns: %{
           dm_id: "dm-test-456",
@@ -159,15 +150,12 @@ defmodule TavokGatewayWeb.DmChannelTest do
       assert max == 4000
     end
 
-    test "content at exactly 4000 characters passes validation (fails downstream)", %{
-      socket: socket
-    } do
+    test "content at exactly 4000 characters passes validation", %{socket: socket} do
       exact_content = String.duplicate("a", 4000)
 
       {:reply, {:error, %{reason: reason}}, _socket} =
         DmChannel.handle_in("new_message", %{"content" => exact_content}, socket)
 
-      # Should NOT be content_too_long — validation passed, failed at Redis/sequence
       refute reason == "content_too_long",
              "Content at exactly 4000 chars should pass length validation"
 
@@ -175,7 +163,7 @@ defmodule TavokGatewayWeb.DmChannelTest do
              "Non-empty content should pass empty check"
     end
 
-    test "valid content passes validation (fails downstream at Redis)", %{socket: socket} do
+    test "valid content passes validation", %{socket: socket} do
       {:reply, {:error, %{reason: reason}}, _socket} =
         DmChannel.handle_in("new_message", %{"content" => "Hello there"}, socket)
 
@@ -197,10 +185,6 @@ defmodule TavokGatewayWeb.DmChannelTest do
       assert reason == "invalid_payload"
     end
   end
-
-  # ---------------------------------------------------------------------------
-  # message_edit content validation
-  # ---------------------------------------------------------------------------
 
   describe "message_edit content validation" do
     setup do
@@ -261,10 +245,6 @@ defmodule TavokGatewayWeb.DmChannelTest do
     end
   end
 
-  # ---------------------------------------------------------------------------
-  # message_delete payload validation
-  # ---------------------------------------------------------------------------
-
   describe "message_delete payload validation" do
     setup do
       socket = %Phoenix.Socket{
@@ -294,10 +274,6 @@ defmodule TavokGatewayWeb.DmChannelTest do
     end
   end
 
-  # ---------------------------------------------------------------------------
-  # Agent join rejection — DMs are human-only
-  # ---------------------------------------------------------------------------
-
   describe "agent join rejection" do
     test "agents cannot join DM channels" do
       socket = %Phoenix.Socket{
@@ -314,10 +290,6 @@ defmodule TavokGatewayWeb.DmChannelTest do
       assert {:error, %{reason: "agents_cannot_join_dms"}} = result
     end
   end
-
-  # ---------------------------------------------------------------------------
-  # history handler payload validation
-  # ---------------------------------------------------------------------------
 
   describe "history payload validation" do
     setup do
@@ -340,4 +312,7 @@ defmodule TavokGatewayWeb.DmChannelTest do
       assert reason == "invalid_payload"
     end
   end
+
+  defp restore_env(key, nil), do: Application.delete_env(:tavok_gateway, key)
+  defp restore_env(key, value), do: Application.put_env(:tavok_gateway, key, value)
 end

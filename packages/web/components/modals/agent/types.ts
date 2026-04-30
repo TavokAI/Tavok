@@ -151,3 +151,48 @@ export function getMethodLabel(method: ConnectionMethodType | null): string {
       return "Unknown";
   }
 }
+
+const CAPABILITY_LABELS: Record<string, string> = {
+  agent_trigger: "Trigger other agents",
+  agents_trigger: "Trigger other agents",
+  artifact_send: "Send typed artifacts",
+  channel_history_read: "History read",
+  history_read: "History read",
+  key_rotate: "Rotate keys",
+  message_poll: "Poll messages",
+  message_send: "Send messages",
+  messages_send: "Send messages",
+  stream: "Stream responses",
+  stream_response: "Stream responses",
+  stream_responses: "Stream responses",
+  streams_write: "Stream responses",
+  trigger_agents: "Trigger other agents",
+  trigger_other_agents: "Trigger other agents",
+  typed_artifact: "Send typed artifacts",
+  typed_artifact_send: "Send typed artifacts",
+  artifacts_send: "Send typed artifacts",
+  webhook_create: "Create webhooks",
+  webhook_delete: "Delete webhooks",
+};
+
+function normalizeCapabilityKey(capability: string): string {
+  return capability
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
+export function getCapabilityLabel(capability: string): string {
+  const normalized = normalizeCapabilityKey(capability);
+  const label = CAPABILITY_LABELS[normalized];
+  if (label) return label;
+
+  return normalized
+    .split("_")
+    .filter(Boolean)
+    .map((part, index) =>
+      index === 0 ? part.charAt(0).toUpperCase() + part.slice(1) : part,
+    )
+    .join(" ");
+}

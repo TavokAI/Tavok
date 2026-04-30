@@ -7,7 +7,7 @@ import { ChannelPicker } from "./channel-picker";
 import type { AgentListItem } from "./types";
 
 const PROVIDER_DEFAULTS: Record<string, { endpoint: string; model: string }> = {
-  openai: { endpoint: "https://api.openai.com", model: "gpt-4o" },
+  openai: { endpoint: "https://api.openai.com", model: "gpt-5.5" },
   anthropic: {
     endpoint: "https://api.anthropic.com",
     model: "claude-sonnet-4-20250514",
@@ -27,7 +27,10 @@ const PROVIDER_DEFAULTS: Record<string, { endpoint: string; model: string }> = {
   },
   moonshot: { endpoint: "https://api.moonshot.ai", model: "kimi-k2" },
   ollama: { endpoint: "http://localhost:11434", model: "llama3" },
-  openrouter: { endpoint: "https://openrouter.ai/api", model: "openai/gpt-4o" },
+  openrouter: {
+    endpoint: "https://openrouter.ai/api",
+    model: "openai/gpt-5.5",
+  },
   custom: { endpoint: "", model: "" },
 };
 
@@ -48,7 +51,7 @@ export function BYOKForm({
   const [provider, setProvider] = useState(
     editingAgent?.llmProvider || "openai",
   );
-  const [model, setModel] = useState(editingAgent?.llmModel || "gpt-4o");
+  const [model, setModel] = useState(editingAgent?.llmModel || "gpt-5.5");
   const [endpoint, setEndpoint] = useState(
     editingAgent?.apiEndpoint || "https://api.openai.com",
   );
@@ -180,7 +183,7 @@ export function BYOKForm({
         label="Model"
         value={model}
         onChange={(e) => setModel(e.target.value)}
-        placeholder="gpt-4o"
+        placeholder="gpt-5.5"
       />
 
       <Input
