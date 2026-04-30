@@ -30,9 +30,9 @@ describe("agent capability policy", () => {
       capabilities: [AGENT_CAPABILITIES.SEND_MESSAGES],
     };
 
-    expect(
-      hasAgentCapability(guest, AGENT_CAPABILITIES.SEND_MESSAGES),
-    ).toBe(true);
+    expect(hasAgentCapability(guest, AGENT_CAPABILITIES.SEND_MESSAGES)).toBe(
+      true,
+    );
     expect(hasAgentCapability(guest, AGENT_CAPABILITIES.STREAM)).toBe(false);
   });
 

@@ -214,7 +214,9 @@ describe("createAgent", () => {
         connectionMethod: "REST_POLL",
         requireExplicitChannelIds: true,
       }),
-    ).rejects.toThrow("External agents require at least one explicit channelId");
+    ).rejects.toThrow(
+      "External agents require at least one explicit channelId",
+    );
 
     expect(mockAgentCreate).not.toHaveBeenCalled();
     expect(mockRegistrationCreate).not.toHaveBeenCalled();

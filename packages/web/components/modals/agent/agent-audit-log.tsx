@@ -66,7 +66,9 @@ export function AgentAuditLog({ serverId }: AgentAuditLogProps) {
     async function fetchAuditLog() {
       setStatus("loading");
       try {
-        const res = await fetch(`/api/servers/${serverId}/agent-audit?limit=10`);
+        const res = await fetch(
+          `/api/servers/${serverId}/agent-audit?limit=10`,
+        );
         if (cancelled) return;
 
         if (res.status === 404 || res.status === 501) {
@@ -121,7 +123,9 @@ export function AgentAuditLog({ serverId }: AgentAuditLogProps) {
       )}
 
       {status === "ready" && events.length === 0 && (
-        <p className="text-xs text-text-muted">No agent activity recorded yet.</p>
+        <p className="text-xs text-text-muted">
+          No agent activity recorded yet.
+        </p>
       )}
 
       {status === "ready" && events.length > 0 && (
