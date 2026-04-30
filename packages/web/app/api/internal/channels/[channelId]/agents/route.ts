@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { decrypt } from "@/lib/encryption";
 import { validateInternalSecret } from "@/lib/internal-auth";
+import { getAgentLifecycleError } from "@/lib/agent-capabilities";
 
 /**
  * GET /api/internal/channels/{channelId}/agents
@@ -25,29 +26,37 @@ export async function GET(
     // 1. Try ChannelAgent join table first (multi-agent)
     const channelAgents = await prisma.channelAgent.findMany({
       where: { channelId },
-      include: { agent: true },
+      include: {
+        agent: {
+          include: {
+            agentRegistration: {
+              select: {
+                capabilities: true,
+                connectionMethod: true,
+                expiresAt: true,
+                isGuest: true,
+                revokedAt: true,
+              },
+            },
+          },
+        },
+      },
       orderBy: { createdAt: "asc" },
     });
 
     if (channelAgents.length > 0) {
-      // Load agent registrations for connectionMethod lookup (DEC-0043)
-      const activeAgentIds = channelAgents
-        .filter((ca: (typeof channelAgents)[number]) => ca.agent.isActive)
-        .map((ca: (typeof channelAgents)[number]) => ca.agent.id);
-      const agentRegs = await prisma.agentRegistration.findMany({
-        where: { agentId: { in: activeAgentIds } },
-        select: { agentId: true, connectionMethod: true },
-      });
-      const regMap = new Map(
-        agentRegs.map((r: (typeof agentRegs)[number]) => [
-          r.agentId,
-          r.connectionMethod,
-        ]),
-      );
-
       // Return all active agents with decrypted keys
       const agents = channelAgents
-        .filter((ca: (typeof channelAgents)[number]) => ca.agent.isActive)
+        .filter(
+          (ca: (typeof channelAgents)[number]) =>
+            getAgentLifecycleError({
+              isActive: ca.agent.isActive,
+              isGuest: ca.agent.agentRegistration?.isGuest ?? false,
+              capabilities: ca.agent.agentRegistration?.capabilities ?? [],
+              expiresAt: ca.agent.agentRegistration?.expiresAt ?? null,
+              revokedAt: ca.agent.agentRegistration?.revokedAt ?? null,
+            }) === null,
+        )
         .map((ca: (typeof channelAgents)[number]) => {
           let apiKey = "";
           try {
@@ -73,7 +82,8 @@ export async function GET(
             thinkingSteps: ca.agent.thinkingSteps
               ? JSON.parse(ca.agent.thinkingSteps)
               : [], // TASK-0011
-            connectionMethod: regMap.get(ca.agent.id) || null, // DEC-0043: null = BYOK (no registration)
+            connectionMethod:
+              ca.agent.agentRegistration?.connectionMethod || null, // DEC-0043: null = BYOK (no registration)
           };
         });
 
@@ -83,10 +93,35 @@ export async function GET(
     // 2. Fallback: check defaultAgent (backward compat for channels not yet migrated)
     const channel = await prisma.channel.findUnique({
       where: { id: channelId },
-      include: { defaultAgent: true },
+      include: {
+        defaultAgent: {
+          include: {
+            agentRegistration: {
+              select: {
+                capabilities: true,
+                connectionMethod: true,
+                expiresAt: true,
+                isGuest: true,
+                revokedAt: true,
+              },
+            },
+          },
+        },
+      },
     });
 
-    if (!channel || !channel.defaultAgent || !channel.defaultAgent.isActive) {
+    if (
+      !channel ||
+      !channel.defaultAgent ||
+      getAgentLifecycleError({
+        isActive: channel.defaultAgent.isActive,
+        isGuest: channel.defaultAgent.agentRegistration?.isGuest ?? false,
+        capabilities:
+          channel.defaultAgent.agentRegistration?.capabilities ?? [],
+        expiresAt: channel.defaultAgent.agentRegistration?.expiresAt ?? null,
+        revokedAt: channel.defaultAgent.agentRegistration?.revokedAt ?? null,
+      })
+    ) {
       // BUG-008: Log when no agents found — helps diagnose BYOK trigger failures
       console.info(
         `[Internal] No active agents for channel ${channelId} (no ChannelAgent records, no active defaultAgent)`,
@@ -103,12 +138,6 @@ export async function GET(
         `[internal/channels/agents] Failed to decrypt API key for agent ${agent.id}`,
       );
     }
-
-    // Check if this agent has an agent registration for connectionMethod (DEC-0043)
-    const agentReg = await prisma.agentRegistration.findUnique({
-      where: { agentId: agent.id },
-      select: { connectionMethod: true },
-    });
 
     return NextResponse.json({
       agents: [
@@ -127,7 +156,7 @@ export async function GET(
           thinkingSteps: agent.thinkingSteps
             ? JSON.parse(agent.thinkingSteps)
             : [], // TASK-0011
-          connectionMethod: agentReg?.connectionMethod || null, // DEC-0043: null = BYOK (no registration)
+          connectionMethod: agent.agentRegistration?.connectionMethod || null, // DEC-0043: null = BYOK (no registration)
         },
       ],
     });

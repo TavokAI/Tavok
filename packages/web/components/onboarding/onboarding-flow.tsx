@@ -12,7 +12,7 @@ import { SdkQuickstartCard } from "./sdk-quickstart-card";
  * Duplicated here to keep onboarding self-contained (no modal dependency).
  */
 const PROVIDER_DEFAULTS: Record<string, { endpoint: string; model: string }> = {
-  openai: { endpoint: "https://api.openai.com", model: "gpt-4o" },
+  openai: { endpoint: "https://api.openai.com", model: "gpt-5.5" },
   anthropic: {
     endpoint: "https://api.anthropic.com",
     model: "claude-sonnet-4-20250514",
@@ -33,7 +33,7 @@ const PROVIDER_DEFAULTS: Record<string, { endpoint: string; model: string }> = {
   ollama: { endpoint: "http://localhost:11434", model: "llama3" },
   openrouter: {
     endpoint: "https://openrouter.ai/api",
-    model: "openai/gpt-4o",
+    model: "openai/gpt-5.5",
   },
 };
 

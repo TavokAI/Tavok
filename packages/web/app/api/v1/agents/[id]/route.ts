@@ -44,28 +44,20 @@ export async function PATCH(
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const {
-    displayName,
-    avatarUrl,
-    capabilities,
-    healthUrl,
-    webhookUrl,
-    maxTokensSec,
-  } = body as {
-    displayName?: string;
-    avatarUrl?: string;
-    capabilities?: string[];
-    healthUrl?: string;
-    webhookUrl?: string;
-    maxTokensSec?: number;
-  };
+  const { displayName, avatarUrl, healthUrl, webhookUrl, maxTokensSec } =
+    body as {
+      displayName?: string;
+      avatarUrl?: string;
+      healthUrl?: string;
+      webhookUrl?: string;
+      maxTokensSec?: number;
+    };
 
   try {
     await updateRegisteredAgent(prisma, {
       id,
       displayName,
       avatarUrl,
-      capabilities,
       healthUrl,
       webhookUrl,
       maxTokensSec,

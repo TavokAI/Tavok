@@ -188,31 +188,34 @@ export function useMessages(
     [],
   );
 
-  const sendMessage = useCallback((content: string): Promise<boolean> => {
-    const trimmed = content.trim();
-    if (!trimmed) return Promise.resolve(false);
+  const sendMessage = useCallback(
+    (content: string): Promise<boolean> => {
+      const trimmed = content.trim();
+      if (!trimmed) return Promise.resolve(false);
 
-    if (!channelRef.current) {
-      setAgentTriggerHint(
-        "Message send failed: disconnected from channel gateway. Reconnecting...",
-      );
-      return Promise.resolve(false);
-    }
+      if (!channelRef.current) {
+        setAgentTriggerHint(
+          "Message send failed: disconnected from channel gateway. Reconnecting...",
+        );
+        return Promise.resolve(false);
+      }
 
-    setAgentTriggerHint(null);
-    const push = channelRef.current.push("new_message", { content: trimmed });
+      setAgentTriggerHint(null);
+      const push = channelRef.current.push("new_message", { content: trimmed });
 
-    return new Promise((resolve) => {
-      push
-        .receive("ok", () => {
-          resolve(true);
-        })
-        .receive("error", (resp: unknown) => {
-          setAgentTriggerHint(getSendErrorHint(resp));
-          resolve(false);
-        });
-    });
-  }, []);
+      return new Promise((resolve) => {
+        push
+          .receive("ok", () => {
+            resolve(true);
+          })
+          .receive("error", (resp: unknown) => {
+            setAgentTriggerHint(getSendErrorHint(resp));
+            resolve(false);
+          });
+      });
+    },
+    [channelRef],
+  );
 
   const loadHistory = useCallback(() => {
     if (!channelRef.current || !hasMoreHistory || loadingHistoryRef.current) {
@@ -225,7 +228,7 @@ export function useMessages(
       before: oldestMessage?.id,
       limit: 50,
     });
-  }, [hasMoreHistory, messages]);
+  }, [channelRef, hasMoreHistory, messages]);
 
   const updateReactions = useCallback(
     (messageId: string, reactions: ReactionData[]) => {
@@ -258,28 +261,31 @@ export function useMessages(
           });
       });
     },
-    [],
+    [channelRef],
   );
 
-  const deleteMessage = useCallback((messageId: string): Promise<boolean> => {
-    return new Promise((resolve) => {
-      if (!channelRef.current) {
-        resolve(false);
-        return;
-      }
-      channelRef.current
-        .push("message_delete", { messageId })
-        .receive("ok", () => resolve(true))
-        .receive("error", (resp: unknown) => {
-          console.error("[Channel] Delete error:", resp);
+  const deleteMessage = useCallback(
+    (messageId: string): Promise<boolean> => {
+      return new Promise((resolve) => {
+        if (!channelRef.current) {
           resolve(false);
-        })
-        .receive("timeout", () => {
-          console.error("[Channel] Delete timeout");
-          resolve(false);
-        });
-    });
-  }, []);
+          return;
+        }
+        channelRef.current
+          .push("message_delete", { messageId })
+          .receive("ok", () => resolve(true))
+          .receive("error", (resp: unknown) => {
+            console.error("[Channel] Delete error:", resp);
+            resolve(false);
+          })
+          .receive("timeout", () => {
+            console.error("[Channel] Delete timeout");
+            resolve(false);
+          });
+      });
+    },
+    [channelRef],
+  );
 
   return {
     messages,

@@ -5,6 +5,11 @@ import { checkAgentRateLimit } from "@/lib/rate-limit";
 import { logAgentAction } from "@/lib/agent-audit";
 import { verifyAgentChannelAccess } from "@/lib/agent-channel-acl";
 import { listAgentChannelMessages } from "@/lib/services/MessageService";
+import {
+  AGENT_CAPABILITIES,
+  hasAgentCapability,
+  missingCapabilityError,
+} from "@/lib/agent-capabilities";
 
 export async function GET(
   request: NextRequest,
@@ -20,6 +25,13 @@ export async function GET(
     );
   }
 
+  if (!hasAgentCapability(agent, AGENT_CAPABILITIES.READ_HISTORY)) {
+    return NextResponse.json(
+      { error: missingCapabilityError(AGENT_CAPABILITIES.READ_HISTORY) },
+      { status: 403 },
+    );
+  }
+
   const channelAccess = await verifyAgentChannelAccess(agent, channelId);
   if (!channelAccess.ok) {
     return NextResponse.json(
@@ -30,7 +42,7 @@ export async function GET(
 
   const rateCheck = checkAgentRateLimit(agent.agentId);
   if (!rateCheck.allowed) {
-    logAgentAction({
+    await logAgentAction({
       agentId: agent.agentId,
       serverId: agent.serverId,
       action: "rate_limited",
@@ -52,7 +64,7 @@ export async function GET(
     );
   }
 
-  logAgentAction({
+  await logAgentAction({
     agentId: agent.agentId,
     serverId: agent.serverId,
     action: "channel_history_read",

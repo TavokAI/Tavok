@@ -9,6 +9,11 @@ import {
   finalizeStreamCompletion,
   finalizeStreamError,
 } from "@/lib/stream-finalization";
+import {
+  AGENT_CAPABILITIES,
+  hasAgentCapability,
+  missingCapabilityError,
+} from "@/lib/agent-capabilities";
 
 /**
  * POST /api/v1/agents/{id}/messages/{messageId}/stream — Stream tokens (DEC-0043)
@@ -42,9 +47,16 @@ export async function POST(
   }
 
   // ── Rate limiting (per-agent, critical for stream token flood prevention) ──
+  if (!hasAgentCapability(agent, AGENT_CAPABILITIES.STREAM)) {
+    return NextResponse.json(
+      { error: missingCapabilityError(AGENT_CAPABILITIES.STREAM) },
+      { status: 403 },
+    );
+  }
+
   const rateCheck = checkAgentRateLimit(agent.agentId);
   if (!rateCheck.allowed) {
-    logAgentAction({
+    await logAgentAction({
       agentId: agent.agentId,
       serverId: agent.serverId,
       action: "rate_limited",
@@ -131,7 +143,7 @@ export async function POST(
   try {
     // Handle error
     if (error) {
-      logAgentAction({
+      await logAgentAction({
         agentId: agent.agentId,
         serverId: agent.serverId,
         action: "stream_error",
@@ -174,7 +186,7 @@ export async function POST(
 
     // Handle completion
     if (done) {
-      logAgentAction({
+      await logAgentAction({
         agentId: agent.agentId,
         serverId: agent.serverId,
         action: "stream_complete",

@@ -1,7 +1,7 @@
 // Package provider — OpenAI-compatible provider implementation.
 //
 // Handles SSE streaming from any OpenAI-compatible API:
-// - OpenAI (GPT-4, etc.)
+// - OpenAI (GPT-5.5, etc.)
 // - Ollama (local models)
 // - OpenRouter (model aggregator)
 // - LiteLLM, vLLM, or any endpoint speaking the OpenAI format

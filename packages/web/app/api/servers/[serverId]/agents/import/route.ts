@@ -65,7 +65,7 @@ export async function POST(
   const llmProvider =
     typeof template.llmProvider === "string" ? template.llmProvider : "openai";
   const llmModel =
-    typeof template.llmModel === "string" ? template.llmModel : "gpt-4o";
+    typeof template.llmModel === "string" ? template.llmModel : "gpt-5.5";
   const apiEndpoint =
     typeof template.apiEndpoint === "string"
       ? template.apiEndpoint

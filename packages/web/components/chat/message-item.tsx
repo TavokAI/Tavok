@@ -10,6 +10,10 @@ import { FileAttachment, parseFileReferences } from "./file-attachment";
 import { MessageActions } from "./message-actions";
 import { EditMessageInput } from "./edit-message-input";
 import { UserProfileCard } from "@/components/user/user-profile-card";
+import {
+  buildAgentSummaryFromMessage,
+  AgentSummaryTrigger,
+} from "@/components/agent/agent-summary";
 import { passthroughImageLoader } from "@/lib/image-loader";
 import { formatTime } from "@/lib/format-time";
 
@@ -68,6 +72,16 @@ export function MessageItem({
 
   const isAgent = message.authorType === "AGENT";
   const isAuthor = currentUserId === message.authorId;
+  const agentSummary = useMemo(
+    () =>
+      isAgent
+        ? buildAgentSummaryFromMessage(
+            agents.find((agent) => agent.id === message.authorId),
+            message,
+          )
+        : null,
+    [agents, isAgent, message],
+  );
 
   // Edit: only author of non-agent, non-deleted messages
   const canEdit = isAuthor && !isAgent && !message.isDeleted;
@@ -176,7 +190,14 @@ export function MessageItem({
         className={`flex-shrink-0 pt-0.5 ${!isAgent ? "cursor-pointer" : ""}`}
         onClick={!isAgent ? handleAuthorClick : undefined}
       >
-        {message.authorAvatarUrl ? (
+        {agentSummary ? (
+          <AgentSummaryTrigger
+            agent={agentSummary}
+            size="sm"
+            shape="round"
+            hoverPlacement="right"
+          />
+        ) : message.authorAvatarUrl ? (
           <Image
             src={message.authorAvatarUrl}
             alt={message.authorName}

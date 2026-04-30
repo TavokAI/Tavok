@@ -81,9 +81,9 @@ describe("applyStreamComplete", () => {
     const result = applyStreamComplete(msg, {
       messageId: "msg-1",
       finalContent: "Done",
-      metadata: { model: "gpt-4", tokens: 100 },
+      metadata: { model: "gpt-5.5", tokens: 100 },
     });
-    expect(result.metadata).toEqual({ model: "gpt-4", tokens: 100 });
+    expect(result.metadata).toEqual({ model: "gpt-5.5", tokens: 100 });
   });
 });
 

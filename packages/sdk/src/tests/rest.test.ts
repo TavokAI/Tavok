@@ -285,7 +285,7 @@ describe("RestStream", () => {
     globalThis.fetch = fn;
 
     const stream = new RestStream(apiUrl, apiKey, agentId, messageId);
-    await stream.complete("Final answer", { model: "gpt-4" });
+    await stream.complete("Final answer", { model: "gpt-5.5" });
 
     const url = new URL(calls[0].url);
     expect(url.pathname).toBe(
@@ -293,7 +293,7 @@ describe("RestStream", () => {
     );
     expect(JSON.parse(calls[0].init?.body as string)).toEqual({
       finalContent: "Final answer",
-      metadata: { model: "gpt-4" },
+      metadata: { model: "gpt-5.5" },
     });
   });
 

@@ -12,7 +12,7 @@ func TestRegistryRegisterAndList(t *testing.T) {
 	r := NewRegistry()
 	r.Register(NewCurrentTime())
 
-	defs := r.List(nil)
+	defs := r.List(nil, nil)
 	if len(defs) != 1 {
 		t.Fatalf("expected 1 tool, got %d", len(defs))
 	}
@@ -27,7 +27,7 @@ func TestRegistryListWithFilter(t *testing.T) {
 	r.Register(NewWebSearch(WebSearchConfig{}))
 
 	// Filter to only current_time
-	defs := r.List([]string{"current_time"})
+	defs := r.List([]string{"current_time"}, nil)
 	if len(defs) != 1 {
 		t.Fatalf("expected 1 filtered tool, got %d", len(defs))
 	}
@@ -36,9 +36,48 @@ func TestRegistryListWithFilter(t *testing.T) {
 	}
 
 	// Filter to non-existent tool
-	defs = r.List([]string{"nonexistent"})
+	defs = r.List([]string{"nonexistent"}, nil)
 	if len(defs) != 0 {
 		t.Fatalf("expected 0 tools for nonexistent filter, got %d", len(defs))
+	}
+}
+
+func TestRegistryListDefaultExcludesApprovalRequiredTools(t *testing.T) {
+	r := NewRegistry()
+	r.Register(NewCurrentTime())
+	r.Register(NewWebSearch(WebSearchConfig{}))
+
+	defs := r.List(nil, nil)
+	if len(defs) != 1 {
+		t.Fatalf("expected only safe default tools, got %d", len(defs))
+	}
+	if defs[0].Name != "current_time" {
+		t.Fatalf("expected current_time to remain enabled by default, got %q", defs[0].Name)
+	}
+}
+
+func TestRegistryListExplicitOptInStillRequiresApprovalForRiskyTools(t *testing.T) {
+	r := NewRegistry()
+	r.Register(NewCurrentTime())
+	r.Register(NewWebSearch(WebSearchConfig{}))
+
+	defs := r.List([]string{"web_search"}, nil)
+	if len(defs) != 0 {
+		t.Fatalf("expected unapproved web_search to stay hidden, got %d tools", len(defs))
+	}
+}
+
+func TestRegistryListExplicitOptInIncludesApprovedRiskyTools(t *testing.T) {
+	r := NewRegistry()
+	r.Register(NewCurrentTime())
+	r.Register(NewWebSearch(WebSearchConfig{}))
+
+	defs := r.List([]string{"web_search"}, []string{"web_search"})
+	if len(defs) != 1 {
+		t.Fatalf("expected explicitly approved web_search, got %d tools", len(defs))
+	}
+	if defs[0].Name != "web_search" {
+		t.Fatalf("expected web_search, got %q", defs[0].Name)
 	}
 }
 

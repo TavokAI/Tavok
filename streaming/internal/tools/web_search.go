@@ -42,8 +42,9 @@ func NewWebSearch(cfg WebSearchConfig) *WebSearch {
 
 func (w *WebSearch) Definition() ToolDefinition {
 	return ToolDefinition{
-		Name:        "web_search",
-		Description: "Search the web for current information. Returns relevant search results with titles, URLs, and snippets. Use this when the user asks about current events, recent information, or anything that may have changed since your training data.",
+		Name:             "web_search",
+		Description:      "Search the web for current information. Returns relevant search results with titles, URLs, and snippets. Use this when the user asks about current events, recent information, or anything that may have changed since your training data.",
+		RequiresApproval: true,
 		InputSchema: map[string]interface{}{
 			"type": "object",
 			"properties": map[string]interface{}{

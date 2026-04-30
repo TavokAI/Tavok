@@ -12,6 +12,28 @@ import { persistMessage } from "@/lib/internal-api-client";
 import { checkAgentRateLimit } from "@/lib/rate-limit";
 import { logAgentAction } from "@/lib/agent-audit";
 import { verifyAgentChannelAccess } from "@/lib/agent-channel-acl";
+import {
+  AGENT_CAPABILITIES,
+  hasAgentCapability,
+  missingCapabilityError,
+} from "@/lib/agent-capabilities";
+
+const AGENT_MESSAGE_TYPES = new Set([
+  "STANDARD",
+  "TOOL_CALL",
+  "TOOL_RESULT",
+  "CODE_BLOCK",
+  "ARTIFACT",
+  "STATUS",
+]);
+
+const TYPED_ARTIFACT_MESSAGE_TYPES = new Set([
+  "TOOL_CALL",
+  "TOOL_RESULT",
+  "CODE_BLOCK",
+  "ARTIFACT",
+  "STATUS",
+]);
 
 /**
  * GET /api/v1/agents/{id}/messages — Poll for messages (DEC-0043, Phase 4)
@@ -41,13 +63,20 @@ export async function GET(
     );
   }
 
+  if (!hasAgentCapability(agent, AGENT_CAPABILITIES.READ_HISTORY)) {
+    return NextResponse.json(
+      { error: missingCapabilityError(AGENT_CAPABILITIES.READ_HISTORY) },
+      { status: 403 },
+    );
+  }
+
   const { searchParams } = new URL(request.url);
   const channelId = searchParams.get("channel_id");
   const limit = Math.min(parseInt(searchParams.get("limit") || "50", 10), 100);
   const ack = searchParams.get("ack") === "true";
   const wait = Math.min(parseInt(searchParams.get("wait") || "0", 10), 30);
 
-  logAgentAction({
+  await logAgentAction({
     agentId: agent.agentId,
     serverId: agent.serverId,
     action: "message_poll",
@@ -175,10 +204,11 @@ export async function POST(
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const { channelId, content, streaming } = body as {
+  const { channelId, content, streaming, type } = body as {
     channelId?: string;
     content?: string;
     streaming?: boolean;
+    type?: string;
   };
 
   if (!channelId || typeof channelId !== "string") {
@@ -188,10 +218,39 @@ export async function POST(
     );
   }
 
+  const messageType =
+    typeof type === "string" && AGENT_MESSAGE_TYPES.has(type)
+      ? type
+      : "STANDARD";
+
+  if (streaming) {
+    if (!hasAgentCapability(agent, AGENT_CAPABILITIES.STREAM)) {
+      return NextResponse.json(
+        { error: missingCapabilityError(AGENT_CAPABILITIES.STREAM) },
+        { status: 403 },
+      );
+    }
+  } else if (!hasAgentCapability(agent, AGENT_CAPABILITIES.SEND_MESSAGES)) {
+    return NextResponse.json(
+      { error: missingCapabilityError(AGENT_CAPABILITIES.SEND_MESSAGES) },
+      { status: 403 },
+    );
+  }
+
+  if (
+    TYPED_ARTIFACT_MESSAGE_TYPES.has(messageType) &&
+    !hasAgentCapability(agent, AGENT_CAPABILITIES.SEND_ARTIFACTS)
+  ) {
+    return NextResponse.json(
+      { error: missingCapabilityError(AGENT_CAPABILITIES.SEND_ARTIFACTS) },
+      { status: 403 },
+    );
+  }
+
   // ── Rate limiting (per-agent) ──
   const rateCheck = checkAgentRateLimit(agent.agentId);
   if (!rateCheck.allowed) {
-    logAgentAction({
+    await logAgentAction({
       agentId: agent.agentId,
       serverId: agent.serverId,
       action: "rate_limited",
@@ -227,7 +286,7 @@ export async function POST(
 
   try {
     if (streaming) {
-      logAgentAction({
+      await logAgentAction({
         agentId: agent.agentId,
         serverId: agent.serverId,
         action: "stream_start",
@@ -266,7 +325,7 @@ export async function POST(
       );
     }
 
-    logAgentAction({
+    await logAgentAction({
       agentId: agent.agentId,
       serverId: agent.serverId,
       action: "message_send",
@@ -287,7 +346,7 @@ export async function POST(
       authorId: agent.agentId,
       authorType: "AGENT",
       content,
-      type: "STANDARD",
+      type: messageType,
       sequence,
     });
 
@@ -299,7 +358,7 @@ export async function POST(
       authorName: agent.agentName,
       authorAvatarUrl: agent.agentAvatarUrl,
       content,
-      type: "STANDARD",
+      type: messageType,
       streamingStatus: null,
       sequence,
       createdAt: new Date().toISOString(),

@@ -37,6 +37,9 @@ const MOCK_REGISTRATION = {
   agentId: "agent-1",
   capabilities: ["chat", "stream"],
   connectionMethod: "WEBSOCKET",
+  isGuest: false,
+  expiresAt: null,
+  revokedAt: null,
   agent: {
     id: "agent-1",
     name: "TestBot",
@@ -66,6 +69,9 @@ describe("authenticateAgentRequest", () => {
       serverId: "server-1",
       capabilities: ["chat", "stream"],
       connectionMethod: "WEBSOCKET",
+      isGuest: false,
+      expiresAt: null,
+      revokedAt: null,
     });
 
     expect(mockFindFirst).toHaveBeenCalledWith({
@@ -74,6 +80,9 @@ describe("authenticateAgentRequest", () => {
         agentId: true,
         capabilities: true,
         connectionMethod: true,
+        isGuest: true,
+        expiresAt: true,
+        revokedAt: true,
       }),
     });
   });
@@ -112,6 +121,30 @@ describe("authenticateAgentRequest", () => {
     mockFindFirst.mockResolvedValue({
       ...MOCK_REGISTRATION,
       agent: { ...MOCK_REGISTRATION.agent, isActive: false },
+    });
+    const req = createMockRequest({
+      authorization: `Bearer ${TEST_API_KEY}`,
+    });
+    const result = await authenticateAgentRequest(req);
+    expect(result).toBeNull();
+  });
+
+  it("returns null when registration is revoked", async () => {
+    mockFindFirst.mockResolvedValue({
+      ...MOCK_REGISTRATION,
+      revokedAt: new Date("2026-04-01T00:00:00.000Z"),
+    });
+    const req = createMockRequest({
+      authorization: `Bearer ${TEST_API_KEY}`,
+    });
+    const result = await authenticateAgentRequest(req);
+    expect(result).toBeNull();
+  });
+
+  it("returns null when registration is expired", async () => {
+    mockFindFirst.mockResolvedValue({
+      ...MOCK_REGISTRATION,
+      expiresAt: new Date("2026-01-01T00:00:00.000Z"),
     });
     const req = createMockRequest({
       authorization: `Bearer ${TEST_API_KEY}`,
@@ -161,6 +194,9 @@ describe("authenticateAgentKey", () => {
       serverId: "server-1",
       capabilities: ["chat", "stream"],
       connectionMethod: "WEBSOCKET",
+      isGuest: false,
+      expiresAt: null,
+      revokedAt: null,
     });
   });
 
@@ -185,6 +221,9 @@ describe("authenticateAgentById", () => {
   it("returns authorized for valid key matching agentId", async () => {
     mockFindFirst.mockResolvedValue({
       id: "reg-1",
+      isGuest: false,
+      expiresAt: null,
+      revokedAt: null,
       agent: { isActive: true },
     });
 
@@ -196,7 +235,13 @@ describe("authenticateAgentById", () => {
     expect(result).toEqual({ authorized: true });
     expect(mockFindFirst).toHaveBeenCalledWith({
       where: { apiKeyHash: TEST_API_KEY_HASH, agentId: "agent-1" },
-      select: { id: true, agent: { select: { isActive: true } } },
+      select: {
+        id: true,
+        isGuest: true,
+        expiresAt: true,
+        revokedAt: true,
+        agent: { select: { isActive: true } },
+      },
     });
   });
 
@@ -244,6 +289,9 @@ describe("authenticateAgentById", () => {
   it("returns 403 when agent is inactive", async () => {
     mockFindFirst.mockResolvedValue({
       id: "reg-1",
+      isGuest: false,
+      expiresAt: null,
+      revokedAt: null,
       agent: { isActive: false },
     });
 
@@ -269,6 +317,48 @@ describe("authenticateAgentById", () => {
       authorized: false,
       error: "Invalid API key",
       status: 401,
+    });
+  });
+
+  it("returns 403 when the matching registration is revoked", async () => {
+    mockFindFirst.mockResolvedValue({
+      id: "reg-1",
+      isGuest: true,
+      expiresAt: null,
+      revokedAt: new Date("2026-04-01T00:00:00.000Z"),
+      agent: { isActive: true },
+    });
+
+    const req = createMockRequest({
+      authorization: `Bearer ${TEST_API_KEY}`,
+    });
+    const result = await authenticateAgentById(req, "agent-1");
+
+    expect(result).toEqual({
+      authorized: false,
+      error: "Agent registration is revoked",
+      status: 403,
+    });
+  });
+
+  it("returns 403 when the matching registration is expired", async () => {
+    mockFindFirst.mockResolvedValue({
+      id: "reg-1",
+      isGuest: true,
+      expiresAt: new Date("2026-01-01T00:00:00.000Z"),
+      revokedAt: null,
+      agent: { isActive: true },
+    });
+
+    const req = createMockRequest({
+      authorization: `Bearer ${TEST_API_KEY}`,
+    });
+    const result = await authenticateAgentById(req, "agent-1");
+
+    expect(result).toEqual({
+      authorized: false,
+      error: "Agent registration is expired",
+      status: 403,
     });
   });
 });

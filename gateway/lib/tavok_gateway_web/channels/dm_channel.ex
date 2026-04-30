@@ -242,7 +242,7 @@ defmodule TavokGatewayWeb.DmChannel do
 
     case parse_sequence(last_sequence) do
       {:ok, parsed} when not is_nil(parsed) ->
-        case WebClient.get_dm_messages(%{dmId: dm_id, afterSequence: parsed, limit: 100}) do
+        case web_client().get_dm_messages(%{dmId: dm_id, afterSequence: parsed, limit: 100}) do
           {:ok, %{"messages" => messages}} ->
             {:reply, {:ok, %{messages: messages}}, socket}
 
@@ -269,7 +269,7 @@ defmodule TavokGatewayWeb.DmChannel do
 
     query = %{dmId: dm_id, before: before, limit: min(limit, 100)}
 
-    case WebClient.get_dm_messages(query) do
+    case web_client().get_dm_messages(query) do
       {:ok, %{"messages" => messages, "hasMore" => has_more}} ->
         {:reply, {:ok, %{messages: messages, hasMore: has_more}}, socket}
 
@@ -288,10 +288,9 @@ defmodule TavokGatewayWeb.DmChannel do
     dm_id = socket.assigns.dm_id
     user_id = socket.assigns.user_id
 
-    ulid = Ulid.generate()
-
     case next_sequence(dm_id) do
       {:ok, sequence} ->
+        ulid = Ulid.generate()
         seq_str = Integer.to_string(sequence)
 
         # Broadcast to all participants
@@ -313,7 +312,7 @@ defmodule TavokGatewayWeb.DmChannel do
 
         # Persist in background
         Task.Supervisor.async_nolink(TavokGateway.TaskSupervisor, fn ->
-          case WebClient.post_dm_message(%{
+          case web_client().post_dm_message(%{
                  id: ulid,
                  dmId: dm_id,
                  authorId: user_id,
@@ -341,21 +340,29 @@ defmodule TavokGatewayWeb.DmChannel do
   defp next_sequence(dm_id) do
     redis_key = "hive:dm:#{dm_id}:seq"
 
-    case Redix.command(:redix, ["INCR", redis_key]) do
+    case redis_client().command(:redix, ["INCR", redis_key]) do
       {:ok, seq} -> {:ok, seq}
       {:error, reason} -> {:error, reason}
     end
   end
 
-  defp parse_sequence(nil), do: {:ok, nil}
-  defp parse_sequence(value) when is_integer(value), do: {:ok, value}
+  defp web_client do
+    Application.get_env(:tavok_gateway, :web_client, WebClient)
+  end
 
-  defp parse_sequence(value) when is_binary(value) do
+  defp redis_client do
+    Application.get_env(:tavok_gateway, :redis_client, Redix)
+  end
+
+  def parse_sequence(nil), do: {:ok, nil}
+  def parse_sequence(value) when is_integer(value), do: {:ok, value}
+
+  def parse_sequence(value) when is_binary(value) do
     case Integer.parse(value) do
       {int, ""} -> {:ok, int}
       _ -> {:error, :invalid_sequence}
     end
   end
 
-  defp parse_sequence(_), do: {:error, :invalid_sequence}
+  def parse_sequence(_), do: {:error, :invalid_sequence}
 end

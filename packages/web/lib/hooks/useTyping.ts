@@ -22,14 +22,16 @@ export function useTyping(
   const lastTypingSentRef = useRef(0);
 
   useEffect(() => {
+    const typingTimers = typingTimersRef.current;
+
     setTypingUsers([]);
     lastTypingSentRef.current = 0;
-    typingTimersRef.current.forEach((timer) => clearTimeout(timer));
-    typingTimersRef.current.clear();
+    typingTimers.forEach((timer) => clearTimeout(timer));
+    typingTimers.clear();
 
     return () => {
-      typingTimersRef.current.forEach((timer) => clearTimeout(timer));
-      typingTimersRef.current.clear();
+      typingTimers.forEach((timer) => clearTimeout(timer));
+      typingTimers.clear();
     };
   }, [channelId]);
 
@@ -68,7 +70,7 @@ export function useTyping(
     if (now - lastTypingSentRef.current < 3000) return;
     lastTypingSentRef.current = now;
     channelRef.current.push("typing", {});
-  }, []);
+  }, [channelRef]);
 
   return { typingUsers, sendTyping, registerTypingHandlers };
 }

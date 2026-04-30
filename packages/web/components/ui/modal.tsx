@@ -103,7 +103,6 @@ export function Modal({
         if (e.target === overlayRef.current) onClose();
       }}
     >
-      {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions */}
       <div
         ref={contentRef}
         role="dialog"

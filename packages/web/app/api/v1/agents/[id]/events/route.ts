@@ -5,6 +5,11 @@ import {
 } from "@/lib/agent-auth";
 import { prisma } from "@/lib/db";
 import { verifyAgentChannelsAccess } from "@/lib/agent-channel-acl";
+import {
+  AGENT_CAPABILITIES,
+  hasAgentCapability,
+  missingCapabilityError,
+} from "@/lib/agent-capabilities";
 
 /**
  * GET /api/v1/agents/{id}/events — SSE event stream (DEC-0043, Phase 5)
@@ -45,6 +50,15 @@ export async function GET(
       status: 401,
       headers: { "Content-Type": "application/json" },
     });
+  }
+
+  if (!hasAgentCapability(agent, AGENT_CAPABILITIES.READ_HISTORY)) {
+    return new Response(
+      JSON.stringify({
+        error: missingCapabilityError(AGENT_CAPABILITIES.READ_HISTORY),
+      }),
+      { status: 403, headers: { "Content-Type": "application/json" } },
+    );
   }
 
   const { searchParams } = new URL(request.url);

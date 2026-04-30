@@ -6,9 +6,10 @@ import "context"
 // This maps directly to MCP's tools/list response format and is
 // convertible to both Anthropic and OpenAI tool schemas.
 type ToolDefinition struct {
-	Name        string                 `json:"name"`
-	Description string                 `json:"description"`
-	InputSchema map[string]interface{} `json:"input_schema"` // JSON Schema object
+	Name             string                 `json:"name"`
+	Description      string                 `json:"description"`
+	InputSchema      map[string]interface{} `json:"input_schema"` // JSON Schema object
+	RequiresApproval bool                   `json:"requiresApproval,omitempty"`
 }
 
 // ToolCallRequest represents an LLM's request to invoke a tool.

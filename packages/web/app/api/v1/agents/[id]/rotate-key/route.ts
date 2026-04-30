@@ -46,7 +46,7 @@ export async function POST(
       data: { apiKeyHash: newHash },
     });
 
-    logAgentAction({
+    await logAgentAction({
       agentId,
       serverId: agent.serverId,
       action: "key_rotate",

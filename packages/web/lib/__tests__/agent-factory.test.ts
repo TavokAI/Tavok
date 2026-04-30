@@ -184,11 +184,67 @@ describe("createAgent", () => {
       name: "TestBot",
       serverId: "server-1",
       connectionMethod: "WEBSOCKET",
-      capabilities: ["chat", "stream"],
+      capabilities: ["history:read", "messages:send"],
     });
 
     const regData = mockRegistrationCreate.mock.calls[0][0].data;
-    expect(regData.capabilities).toEqual(["chat", "stream"]);
+    expect(regData.capabilities).toEqual(["history:read", "messages:send"]);
+  });
+
+  it("requires explicit channelIds for guest agents", async () => {
+    await expect(
+      createAgent({
+        name: "GuestBot",
+        serverId: "server-1",
+        connectionMethod: "SSE",
+        isGuest: true,
+        expiresAt: new Date("2026-05-01T00:00:00.000Z"),
+      }),
+    ).rejects.toThrow("Guest agents require at least one explicit channelId");
+
+    expect(mockAgentCreate).not.toHaveBeenCalled();
+    expect(mockRegistrationCreate).not.toHaveBeenCalled();
+  });
+
+  it("requires explicit channelIds when external creation asks for guarded assignment", async () => {
+    await expect(
+      createAgent({
+        name: "ExternalBot",
+        serverId: "server-1",
+        connectionMethod: "REST_POLL",
+        requireExplicitChannelIds: true,
+      }),
+    ).rejects.toThrow(
+      "External agents require at least one explicit channelId",
+    );
+
+    expect(mockAgentCreate).not.toHaveBeenCalled();
+    expect(mockRegistrationCreate).not.toHaveBeenCalled();
+  });
+
+  it("persists guest lifecycle fields when creating a guest agent", async () => {
+    const expiresAt = new Date("2026-05-01T00:00:00.000Z");
+    mockChannelFindMany.mockResolvedValue([{ id: "ch-1" }]);
+
+    await createAgent({
+      name: "GuestBot",
+      serverId: "server-1",
+      connectionMethod: "SSE",
+      isGuest: true,
+      expiresAt,
+      channelIds: ["ch-1"],
+      capabilities: ["messages:send"],
+    });
+
+    const regData = mockRegistrationCreate.mock.calls[0][0].data;
+    expect(regData.isGuest).toBe(true);
+    expect(regData.expiresAt).toEqual(expiresAt);
+    expect(regData.revokedAt).toBeNull();
+    expect(regData.capabilities).toEqual(["messages:send"]);
+    expect(mockChannelFindMany).toHaveBeenCalledWith({
+      where: { serverId: "server-1", id: { in: ["ch-1"] } },
+      select: { id: true },
+    });
   });
 
   it("throws AgentNameConflictError on duplicate name", async () => {

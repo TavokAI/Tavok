@@ -55,12 +55,24 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const { name, serverId, connectionMethod, webhookUrl, channelIds } = body as {
+  const {
+    name,
+    serverId,
+    connectionMethod,
+    webhookUrl,
+    channelIds,
+    capabilities,
+    isGuest,
+    expiresAt,
+  } = body as {
     name?: string;
     serverId?: string;
     connectionMethod?: string;
     webhookUrl?: string;
     channelIds?: string[];
+    capabilities?: string[];
+    isGuest?: boolean;
+    expiresAt?: string;
   };
 
   // Validate required fields
@@ -94,6 +106,9 @@ export async function POST(request: NextRequest) {
     const validatedChannelIds = Array.isArray(channelIds)
       ? channelIds.filter((id): id is string => typeof id === "string")
       : undefined;
+    const validatedCapabilities = Array.isArray(capabilities)
+      ? capabilities.filter((cap): cap is string => typeof cap === "string")
+      : undefined;
 
     const result = await bootstrapCreateAgent({
       name: name.trim(),
@@ -101,12 +116,22 @@ export async function POST(request: NextRequest) {
       connectionMethod: resolvedMethod,
       webhookUrl,
       channelIds: validatedChannelIds,
+      capabilities: validatedCapabilities,
+      isGuest: isGuest === true,
+      expiresAt: typeof expiresAt === "string" ? expiresAt : undefined,
     });
 
     return NextResponse.json(result, { status: 201 });
   } catch (error) {
     if (error instanceof AgentNameConflictError) {
       return NextResponse.json({ error: error.message }, { status: 409 });
+    }
+    if (
+      error instanceof Error &&
+      (error.message.includes("Guest agents") ||
+        error.message.includes("External agents"))
+    ) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
     }
     console.error(
       "[v1/bootstrap/agents] Bootstrap agent creation failed:",

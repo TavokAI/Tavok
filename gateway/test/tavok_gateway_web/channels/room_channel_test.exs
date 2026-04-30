@@ -44,7 +44,47 @@ defmodule TavokGatewayWeb.RoomChannelTest do
     end
   end
 
+  describe "agent cascade hardening" do
+    test "new messages schedule trigger checks through an author-aware helper" do
+      source = room_channel_source!()
+
+      assert source =~ "maybe_schedule_agent_trigger(socket, message_id, content)"
+    end
+
+    test "context history does not trust prior agent messages as local assistant output" do
+      function_body = private_function_body!(:fetch_context_messages, 2)
+      rendered = Macro.to_string(function_body)
+
+      refute rendered =~ ~s("AGENT" -> "assistant")
+      assert rendered =~ "untrusted"
+    end
+
+    test "agent room joins require live read capability and explicit assignment" do
+      function_body = private_function_body!(:authorize_agent_join, 2)
+      rendered = Macro.to_string(function_body)
+
+      assert rendered =~ "@cap_history_read"
+      assert rendered =~ "force: true"
+      assert rendered =~ "WebClient.get_channel_agents(channel_id)"
+      refute rendered =~ "{:ok}\n"
+    end
+
+    test "agent sync and history reads are gated by history read capability" do
+      source = room_channel_source!()
+
+      assert source =~ ~s|defp require_agent_read_access(socket, opts)|
+      assert source =~ ~s|push_read_error(socket, "sync_response", "sync"|
+      assert source =~ ~s|push_read_error(socket, "history_response", "history"|
+      assert source =~ ":revalidate_agent_presence"
+    end
+  end
+
   describe "new_message content validation" do
+    setup do
+      deny_send_messages("channel-1", "user-1")
+      :ok
+    end
+
     test "rejects empty string content before sequence allocation" do
       socket = %Phoenix.Socket{}
 
@@ -65,8 +105,7 @@ defmodule TavokGatewayWeb.RoomChannelTest do
       }
 
       # Content validation passes (trimmed "  hello  " is not empty), so the code
-      # proceeds past validation to rate limiter / Redis. In the test environment
-      # (no Redis), it will fail downstream with "rate_limited" or "sequence_failed".
+      # proceeds to the next deterministic gate: SEND_MESSAGES permission.
       # The key assertion: the error is NOT "empty_content", proving validation passed.
       {:reply, {:error, %{reason: reason}}, _socket} =
         RoomChannel.handle_in("new_message", %{"content" => "  hello  "}, socket)
@@ -308,6 +347,23 @@ defmodule TavokGatewayWeb.RoomChannelTest do
   # ---------------------------------------------------------------------------
 
   describe "agent streaming permission" do
+    test "guest agents need stream capability to stream_start" do
+      socket = %Phoenix.Socket{
+        assigns: %{
+          author_type: "AGENT",
+          agent_is_guest: true,
+          agent_capabilities: [],
+          channel_id: "channel-1"
+        }
+      }
+
+      {:reply, {:error, %{reason: reason, capability: capability}}, _socket} =
+        RoomChannel.handle_in("stream_start", %{}, socket)
+
+      assert reason == "missing_capability"
+      assert capability == "streams:write"
+    end
+
     test "non-AGENT users cannot stream_start" do
       socket = %Phoenix.Socket{assigns: %{author_type: "USER"}}
 
@@ -383,6 +439,27 @@ defmodule TavokGatewayWeb.RoomChannelTest do
   # ---------------------------------------------------------------------------
 
   describe "typed_message permission" do
+    test "guest agents need artifact capability to send typed messages" do
+      socket = %Phoenix.Socket{
+        assigns: %{
+          author_type: "AGENT",
+          agent_is_guest: true,
+          agent_capabilities: [],
+          channel_id: "channel-1"
+        }
+      }
+
+      {:reply, {:error, %{reason: reason, capability: capability}}, _socket} =
+        RoomChannel.handle_in(
+          "typed_message",
+          %{"type" => "ARTIFACT", "content" => %{"artifactType" => "html"}},
+          socket
+        )
+
+      assert reason == "missing_capability"
+      assert capability == "artifacts:send"
+    end
+
     test "non-AGENT users cannot send typed messages" do
       socket = %Phoenix.Socket{assigns: %{author_type: "USER"}}
 
@@ -652,10 +729,7 @@ defmodule TavokGatewayWeb.RoomChannelTest do
   end
 
   defp private_function_body!(name, arity) do
-    room_channel_path =
-      Path.expand(Path.join(__DIR__, "../../../lib/tavok_gateway_web/channels/room_channel.ex"))
-
-    source = File.read!(room_channel_path)
+    source = room_channel_source!()
     {:ok, ast} = Code.string_to_quoted(source)
 
     {_ast, function_body} =
@@ -672,6 +746,13 @@ defmodule TavokGatewayWeb.RoomChannelTest do
       end)
 
     function_body || flunk("could not find #{name}/#{arity} in room_channel.ex")
+  end
+
+  defp room_channel_source! do
+    room_channel_path =
+      Path.expand(Path.join(__DIR__, "../../../lib/tavok_gateway_web/channels/room_channel.ex"))
+
+    File.read!(room_channel_path)
   end
 
   defp remote_call_order(ast) do
@@ -700,5 +781,14 @@ defmodule TavokGatewayWeb.RoomChannelTest do
   defp remote_call_index(call_order, expected_call) do
     Enum.find_index(call_order, &(&1 == expected_call)) ||
       flunk("could not find #{inspect(expected_call)} in call order #{inspect(call_order)}")
+  end
+
+  defp deny_send_messages(channel_id, user_id) do
+    expires_at = System.monotonic_time(:millisecond) + 60_000
+
+    :ets.insert(
+      :hive_config_cache,
+      {{:member, channel_id, user_id}, %{"canSendMessages" => false}, expires_at}
+    )
   end
 end

@@ -8,6 +8,12 @@ import {
 } from "@/lib/gateway-client";
 import { getInternalBaseUrl } from "@/lib/internal-auth";
 import { verifyAgentChannelAccess } from "@/lib/agent-channel-acl";
+import { checkAgentRateLimit } from "@/lib/rate-limit";
+import { logAgentAction } from "@/lib/agent-audit";
+import {
+  AGENT_CAPABILITIES,
+  getAgentCapabilityError,
+} from "@/lib/agent-capabilities";
 
 /**
  * POST /api/v1/chat/completions — OpenAI-compatible chat completions (DEC-0046)
@@ -107,6 +113,51 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  const capabilityError = getAgentCapabilityError(
+    agent,
+    AGENT_CAPABILITIES.SEND_MESSAGES,
+  );
+  if (capabilityError) {
+    return NextResponse.json(
+      {
+        error: {
+          message: capabilityError,
+          type: "permission_error",
+          code: "missing_capability",
+        },
+      },
+      { status: 403 },
+    );
+  }
+
+  const rateCheck = checkAgentRateLimit(agent.agentId);
+  if (!rateCheck.allowed) {
+    await logAgentAction({
+      agentId: agent.agentId,
+      serverId: agent.serverId,
+      action: "rate_limited",
+      channelId,
+      metadata: { route: "chat_completions", resetAt: rateCheck.resetAt },
+    });
+    return NextResponse.json(
+      {
+        error: {
+          message: "Rate limit exceeded",
+          type: "rate_limit_error",
+          code: "rate_limited",
+        },
+      },
+      {
+        status: 429,
+        headers: {
+          "Retry-After": String(
+            Math.ceil((rateCheck.resetAt - Date.now()) / 1000),
+          ),
+        },
+      },
+    );
+  }
+
   const channelAccess = await verifyAgentChannelAccess(agent, channelId);
   if (!channelAccess.ok) {
     return NextResponse.json(
@@ -189,6 +240,15 @@ export async function POST(request: NextRequest) {
       streamingStatus: null,
       sequence,
       createdAt: new Date().toISOString(),
+    });
+
+    await logAgentAction({
+      agentId: agent.agentId,
+      serverId: agent.serverId,
+      action: "message_send",
+      channelId,
+      messageId: userMessageId,
+      metadata: { route: "chat_completions" },
     });
 
     // Wait for agent response by polling messages

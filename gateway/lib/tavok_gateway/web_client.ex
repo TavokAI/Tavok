@@ -670,6 +670,40 @@ defmodule TavokGateway.WebClient do
   end
 
   @doc """
+  Revalidate an already-connected agent by ID.
+  Used by Gateway channels to pick up revocation/expiry/capability changes
+  without waiting for the WebSocket to reconnect.
+  """
+  def get_agent_status(agent_id) do
+    traced_call(
+      "web_client.get_agent_status",
+      %{"http.method": "GET", "http.url": "/api/internal/agents/:agent_id/status"},
+      fn ->
+        url = "#{web_url()}/api/internal/agents/#{agent_id}/status"
+
+        case Req.get(url,
+               headers: req_headers(),
+               receive_timeout: 10_000
+             ) do
+          {:ok, %Req.Response{status: 200, body: response_body}} ->
+            {:ok, response_body}
+
+          {:ok, %Req.Response{status: status, body: response_body}} ->
+            Logger.warning(
+              "get_agent_status rejected: agent=#{agent_id} status=#{status} body=#{inspect(response_body)}"
+            )
+
+            {:error, {:http_error, status, response_body}}
+
+          {:error, reason} ->
+            Logger.error("get_agent_status request failed: #{inspect(reason)}")
+            {:error, reason}
+        end
+      end
+    )
+  end
+
+  @doc """
   Control charter session via POST /api/internal/channels/{channelId}/charter-control.
   Called by RoomChannel when a user sends a charter_control event. (TASK-0020)
 

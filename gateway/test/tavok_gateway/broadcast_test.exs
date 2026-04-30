@@ -38,7 +38,7 @@ defmodule TavokGateway.BroadcastTest do
           %{emoji: "thumbsup", count: 3, users: ["u1", "u2", "u3"]},
           %{emoji: "heart", count: 1, users: ["u4"]}
         ],
-        metadata: %{provider: "openai", model: "gpt-4"}
+        metadata: %{provider: "openai", model: "gpt-5.5"}
       }
 
       encoded = Jason.encode!(payload)

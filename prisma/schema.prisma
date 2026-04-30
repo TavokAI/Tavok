@@ -69,94 +69,95 @@ model User {
   avatarUrl   String?
   password    String // bcrypt hashed
   status      String   @default("online") // online, away, busy, invisible
-  theme       String   @default("dark")   // dark, light
+  theme       String   @default("dark") // dark, light
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   // Relations
   accounts       Account[]
   sessions       Session[]
-  ownedServers   Server[]     @relation("ServerOwner")
+  ownedServers   Server[]           @relation("ServerOwner")
   members        Member[]
-  createdInvites Invite[]     @relation("InviteCreator")
+  createdInvites Invite[]           @relation("InviteCreator")
   reactions      Reaction[]
   attachments    Attachment[]
   mentions       MessageMention[]
   readStates     ChannelReadState[]
   dmParticipants DmParticipant[]
-  directMessages DirectMessage[]  @relation("DirectMessageAuthor")
+  directMessages DirectMessage[]    @relation("DirectMessageAuthor")
   dmReactions    DmReaction[]
 }
 
 model Server {
-  id        String   @id @db.VarChar(26)
-  name      String
-  iconUrl   String?
-  ownerId   String   @db.VarChar(26)
+  id      String  @id @db.VarChar(26)
+  name    String
+  iconUrl String?
+  ownerId String  @db.VarChar(26)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   // Relations
-  owner    User      @relation("ServerOwner", fields: [ownerId], references: [id])
-  channels Channel[]
-  members  Member[]
-  invites  Invite[]
-  roles    Role[]
-  agents   Agent[]
+  owner          User            @relation("ServerOwner", fields: [ownerId], references: [id])
+  channels       Channel[]
+  members        Member[]
+  invites        Invite[]
+  roles          Role[]
+  agents         Agent[]
+  agentAuditLogs AgentAuditLog[]
 
   @@index([ownerId])
 }
 
 model Channel {
-  id           String      @id @db.VarChar(26)
-  serverId     String      @db.VarChar(26)
-  name         String
-  topic        String?
-  type         ChannelType @default(TEXT)
-  position     Int         @default(0)
+  id             String      @id @db.VarChar(26)
+  serverId       String      @db.VarChar(26)
+  name           String
+  topic          String?
+  type           ChannelType @default(TEXT)
+  position       Int         @default(0)
   defaultAgentId String?     @db.VarChar(26)
-  lastSequence BigInt      @default(0) // tracks highest sequence for reconnection seed
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
+  lastSequence   BigInt      @default(0) // tracks highest sequence for reconnection seed
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
 
   // Swarm / Charter fields (TASK-0020, DEC-0050)
-  swarmMode          SwarmMode      @default(HUMAN_IN_THE_LOOP)
-  charterGoal        String?        @db.Text     // What agents should accomplish
-  charterRules       String?        @db.Text     // Custom rules / instructions
-  charterAgentOrder  String?        @db.Text     // JSON array of agentIds for ordered modes
-  charterMaxTurns    Int            @default(0)  // 0 = unlimited
-  charterCurrentTurn Int            @default(0)  // Current turn counter
-  charterStatus      CharterStatus  @default(INACTIVE)
+  swarmMode          SwarmMode     @default(HUMAN_IN_THE_LOOP)
+  charterGoal        String?       @db.Text // What agents should accomplish
+  charterRules       String?       @db.Text // Custom rules / instructions
+  charterAgentOrder  String?       @db.Text // JSON array of agentIds for ordered modes
+  charterMaxTurns    Int           @default(0) // 0 = unlimited
+  charterCurrentTurn Int           @default(0) // Current turn counter
+  charterStatus      CharterStatus @default(INACTIVE)
 
   // Relations
-  server           Server           @relation(fields: [serverId], references: [id], onDelete: Cascade)
-  defaultAgent     Agent?           @relation("ChannelDefaultAgent", fields: [defaultAgentId], references: [id], onDelete: SetNull)
-  messages         Message[]
-  channelAgents    ChannelAgent[]
-  readStates       ChannelReadState[]
-  inboundWebhooks  InboundWebhook[] // Discord-style incoming webhooks (DEC-0043)
+  server          Server             @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  defaultAgent    Agent?             @relation("ChannelDefaultAgent", fields: [defaultAgentId], references: [id], onDelete: SetNull)
+  messages        Message[]
+  channelAgents   ChannelAgent[]
+  readStates      ChannelReadState[]
+  inboundWebhooks InboundWebhook[] // Discord-style incoming webhooks (DEC-0043)
 
   @@index([serverId, position])
 }
 
 model Message {
-  id              String        @id @db.VarChar(26) // ULID: time-sortable
-  channelId       String        @db.VarChar(26)
-  authorId        String        @db.VarChar(26) // User.id or Agent.id
-  authorType      AuthorType    @default(USER)
-  content         String        @db.Text
-  type            MessageType   @default(STANDARD)
-  streamingStatus StreamStatus?
-  sequence        BigInt // per-channel sequence number (assigned via Redis INCR)
-  metadata        Json?         // Agent execution metadata: {model, provider, tokensIn, tokensOut, latencyMs, ...} (TASK-0039)
+  id               String        @id @db.VarChar(26) // ULID: time-sortable
+  channelId        String        @db.VarChar(26)
+  authorId         String        @db.VarChar(26) // User.id or Agent.id
+  authorType       AuthorType    @default(USER)
+  content          String        @db.Text
+  type             MessageType   @default(STANDARD)
+  streamingStatus  StreamStatus?
+  sequence         BigInt // per-channel sequence number (assigned via Redis INCR)
+  metadata         Json? // Agent execution metadata: {model, provider, tokensIn, tokensOut, latencyMs, ...} (TASK-0039)
   thinkingTimeline String?       @db.Text // JSON array of {phase, timestamp} for thinking timeline replay (TASK-0011)
-  tokenHistory    String?       @db.Text // JSON array of {o: contentOffset, t: relativeMs} for stream rewind (TASK-0021)
-  checkpoints     String?       @db.Text // JSON array of {index, label, contentOffset, timestamp} for checkpoint resume (TASK-0021)
-  editedAt        DateTime?                // null if never edited (TASK-0014)
-  isDeleted       Boolean       @default(false)  // soft delete (TASK-0014)
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
+  tokenHistory     String?       @db.Text // JSON array of {o: contentOffset, t: relativeMs} for stream rewind (TASK-0021)
+  checkpoints      String?       @db.Text // JSON array of {index, label, contentOffset, timestamp} for checkpoint resume (TASK-0021)
+  editedAt         DateTime? // null if never edited (TASK-0014)
+  isDeleted        Boolean       @default(false) // soft delete (TASK-0014)
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
 
   // Relations
   channel     Channel          @relation(fields: [channelId], references: [id], onDelete: Cascade)
@@ -182,10 +183,10 @@ model Reaction {
   // Relations
   message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
   user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([messageId, userId, emoji])
   // @@index([messageId]) — removed: composite unique index on (messageId, userId, emoji)
   // already serves messageId lookups via its leading column (ISSUE-029)
+
+  @@unique([messageId, userId, emoji])
 }
 
 model Attachment {
@@ -253,9 +254,9 @@ model Invite {
   // Relations
   server  Server @relation(fields: [serverId], references: [id], onDelete: Cascade)
   creator User   @relation("InviteCreator", fields: [creatorId], references: [id], onDelete: Cascade)
+  // @@index([code]) — removed: @unique on code already creates an index (ISSUE-029)
 
   @@index([serverId])
-  // @@index([code]) — removed: @unique on code already creates an index (ISSUE-029)
 }
 
 // ============================================================
@@ -263,19 +264,19 @@ model Invite {
 // ============================================================
 
 model Agent {
-  id              String      @id @db.VarChar(26)
-  name            String
-  avatarUrl       String?
-  serverId        String      @db.VarChar(26)
-  llmProvider     String // "anthropic" | "openai" | "ollama" | "openrouter" | "custom"
-  llmModel        String // "claude-sonnet-4-20250514" | "gpt-4" | "llama3" | etc.
-  apiEndpoint     String // full URL to the API endpoint
-  apiKeyEncrypted String      @db.Text // encrypted at rest in application layer
-  systemPrompt    String      @db.Text
-  temperature     Float       @default(0.7)
-  maxTokens       Int         @default(4096)
-  isActive        Boolean     @default(true)
-  triggerMode     TriggerMode @default(MENTION)
+  id               String            @id @db.VarChar(26)
+  name             String
+  avatarUrl        String?
+  serverId         String            @db.VarChar(26)
+  llmProvider      String // "anthropic" | "openai" | "ollama" | "openrouter" | "custom"
+  llmModel         String // "claude-sonnet-4-20250514" | "gpt-5.5" | "llama3" | etc.
+  apiEndpoint      String // full URL to the API endpoint
+  apiKeyEncrypted  String            @db.Text // encrypted at rest in application layer
+  systemPrompt     String            @db.Text
+  temperature      Float             @default(0.7)
+  maxTokens        Int               @default(4096)
+  isActive         Boolean           @default(true)
+  triggerMode      TriggerMode       @default(MENTION)
   thinkingSteps    String?           @db.Text // JSON array of phase labels e.g. ["Planning","Researching","Drafting","Reviewing"]
   enabledTools     String?           @db.Text // JSON array of tool names e.g. ["current_time","web_search"] — null/empty = all tools (TASK-0018)
   connectionMethod ConnectionMethod? // null = BYOK (UI-configured), non-null = SDK/webhook/etc (DEC-0047)
@@ -287,7 +288,7 @@ model Agent {
   defaultChannels   Channel[]          @relation("ChannelDefaultAgent")
   channelAgents     ChannelAgent[]
   agentRegistration AgentRegistration? // null for UI-configured agents (DEC-0040)
-  inboundWebhooks   InboundWebhook[]   // Discord-style incoming webhooks (DEC-0043)
+  inboundWebhooks   InboundWebhook[] // Discord-style incoming webhooks (DEC-0043)
 
   @@unique([serverId, name])
   @@index([serverId])
@@ -300,31 +301,53 @@ model Agent {
 // Each AgentRegistration owns an Agent record, so all existing
 // streaming/channel/persistence logic works unchanged.
 model AgentRegistration {
-  id              String   @id @db.VarChar(26)
-  agentId         String   @unique @db.VarChar(26)
-  apiKeyHash      String   @db.VarChar(64) // SHA-256 hex hash (high-entropy key, fast lookup)
-  capabilities    Json     @default("[]") // ["text", "code", "web_search", "tool_use"]
-  healthUrl       String?  // endpoint for health checks
-  webhookUrl      String?  // endpoint for inbound events
-  maxTokensSec    Int      @default(100) // rate limit: max API requests/sec (misnamed — counts requests, not tokens; rename planned in DATA-002)
+  id              String    @id @db.VarChar(26)
+  agentId         String    @unique @db.VarChar(26)
+  apiKeyHash      String    @db.VarChar(64) // SHA-256 hex hash (high-entropy key, fast lookup)
+  capabilities    Json      @default("[]") // ["text", "code", "web_search", "tool_use"]
+  healthUrl       String? // endpoint for health checks
+  webhookUrl      String? // endpoint for inbound events
+  maxTokensSec    Int       @default(100) // rate limit: max API requests/sec (misnamed — counts requests, not tokens; rename planned in DATA-002)
   lastHealthCheck DateTime?
-  lastHealthOk    Boolean  @default(true)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  lastHealthOk    Boolean   @default(true)
+  isGuest         Boolean   @default(false) // guest/external mode: restricted by capabilities and explicit expiry
+  expiresAt       DateTime? // reject auth after this instant
+  revokedAt       DateTime? // non-null means immediately revoked
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   // Universal agent connectivity (DEC-0043)
-  connectionMethod   ConnectionMethod @default(WEBSOCKET)
-  webhookSecret      String?  @db.VarChar(64)  // HMAC-SHA256 signing secret for outbound webhook payloads
-  webhookTimeout     Int      @default(30000)   // ms timeout for webhook HTTP responses
-  inboundWebhookToken String? @db.VarChar(64)  // separate URL-safe token for simple webhook auth
-  sseEnabled         Boolean  @default(false)   // whether SSE event endpoint is active for this agent
-  openaiSystemPrompt String?  @db.Text          // override system prompt for OpenAI-compat mode
+  connectionMethod    ConnectionMethod @default(WEBSOCKET)
+  webhookSecret       String?          @db.VarChar(64) // HMAC-SHA256 signing secret for outbound webhook payloads
+  webhookTimeout      Int              @default(30000) // ms timeout for webhook HTTP responses
+  inboundWebhookToken String?          @db.VarChar(64) // separate URL-safe token for simple webhook auth
+  sseEnabled          Boolean          @default(false) // whether SSE event endpoint is active for this agent
+  openaiSystemPrompt  String?          @db.Text // override system prompt for OpenAI-compat mode
 
   // Relation: each AgentRegistration owns exactly one Agent
   agent Agent @relation(fields: [agentId], references: [id], onDelete: Cascade)
 
   // Fast lookup by API key hash on every WebSocket connect
   @@index([apiKeyHash])
+  @@index([expiresAt])
+  @@index([revokedAt])
+}
+
+model AgentAuditLog {
+  id        String   @id @db.VarChar(26)
+  agentId   String   @db.VarChar(26)
+  serverId  String   @db.VarChar(26)
+  action    String
+  channelId String?  @db.VarChar(26)
+  messageId String?  @db.VarChar(26)
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  server Server @relation(fields: [serverId], references: [id], onDelete: Cascade)
+
+  @@index([serverId, createdAt])
+  @@index([agentId, createdAt])
+  @@index([action, createdAt])
 }
 
 // Multi-agent channel assignment (TASK-0012, DEC-0038, DEC-0062)
@@ -351,7 +374,7 @@ model InboundWebhook {
   channelId String   @db.VarChar(26)
   agentId   String   @db.VarChar(26)
   token     String   @unique @db.VarChar(64) // whk_... token — the URL IS the auth
-  name      String                           // display name for messages sent through this webhook
+  name      String // display name for messages sent through this webhook
   avatarUrl String?
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
@@ -374,7 +397,7 @@ model AgentMessage {
   content    String   @db.Text
   authorId   String   @db.VarChar(26)
   authorName String
-  authorType String   // "USER" | "AGENT"
+  authorType String // "USER" | "AGENT"
   delivered  Boolean  @default(false)
   expiresAt  DateTime // TTL — auto-cleanup after 24h
   createdAt  DateTime @default(now())
@@ -469,11 +492,11 @@ model DirectMessage {
 // DM reaction — emoji reactions on direct messages. (TASK-0030)
 // Mirrors Reaction model but scoped to DirectMessage, not Message.
 model DmReaction {
-  id            String   @id @db.VarChar(26)
-  dmMessageId   String   @db.VarChar(26)
-  userId        String   @db.VarChar(26)
-  emoji         String   @db.VarChar(32) // Unicode emoji or shortcode
-  createdAt     DateTime @default(now())
+  id          String   @id @db.VarChar(26)
+  dmMessageId String   @db.VarChar(26)
+  userId      String   @db.VarChar(26)
+  emoji       String   @db.VarChar(32) // Unicode emoji or shortcode
+  createdAt   DateTime @default(now())
 
   dmMessage DirectMessage @relation(fields: [dmMessageId], references: [id], onDelete: Cascade)
   user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -494,11 +517,11 @@ enum MessageType {
   STANDARD
   STREAMING
   SYSTEM
-  TOOL_CALL    // Agent tool invocation — content is JSON: {callId, toolName, arguments, status} (TASK-0039)
-  TOOL_RESULT  // Agent tool result — content is JSON: {callId, result, error, durationMs} (TASK-0039)
-  CODE_BLOCK   // Agent code output — content is JSON: {language, code, filename?} (TASK-0039)
-  ARTIFACT     // Agent artifact — content is JSON: {artifactType, title, content} (TASK-0039)
-  STATUS       // Agent status update — content is JSON: {state, detail} (TASK-0039)
+  TOOL_CALL // Agent tool invocation — content is JSON: {callId, toolName, arguments, status} (TASK-0039)
+  TOOL_RESULT // Agent tool result — content is JSON: {callId, result, error, durationMs} (TASK-0039)
+  CODE_BLOCK // Agent code output — content is JSON: {language, code, filename?} (TASK-0039)
+  ARTIFACT // Agent artifact — content is JSON: {artifactType, title, content} (TASK-0039)
+  STATUS // Agent status update — content is JSON: {state, detail} (TASK-0039)
 }
 
 enum StreamStatus {
@@ -521,29 +544,29 @@ enum TriggerMode {
 
 // Agent connection method — how an agent communicates with Tavok (DEC-0043)
 enum ConnectionMethod {
-  WEBSOCKET       // Existing: Phoenix Channel V2 (Python SDK, TS SDK)
-  WEBHOOK         // Tavok calls agent's URL on trigger (Slack/Telegram pattern)
+  WEBSOCKET // Existing: Phoenix Channel V2 (Python SDK, TS SDK)
+  WEBHOOK // Tavok calls agent's URL on trigger (Slack/Telegram pattern)
   INBOUND_WEBHOOK // Agent POSTs into Tavok (Discord incoming webhooks pattern)
-  REST_POLL       // Agent polls for messages (serverless/Lambda pattern)
-  SSE             // Agent receives events via SSE, sends via REST
-  OPENAI_COMPAT   // Agent speaks OpenAI Chat Completions format
+  REST_POLL // Agent polls for messages (serverless/Lambda pattern)
+  SSE // Agent receives events via SSE, sends via REST
+  OPENAI_COMPAT // Agent speaks OpenAI Chat Completions format
 }
 
 // Swarm collaboration mode — how agents interact in a channel (TASK-0020, DEC-0050)
 enum SwarmMode {
-  HUMAN_IN_THE_LOOP   // Default — agents only respond when mentioned/triggered
-  LEAD_AGENT          // One agent leads, others assist when asked
-  ROUND_ROBIN         // Agents take turns in defined order
-  STRUCTURED_DEBATE   // Agents present opposing viewpoints
-  CODE_REVIEW_SPRINT  // Sequential review pattern
-  FREEFORM            // Any agent can respond anytime
-  CUSTOM              // User-defined rules via charter text
+  HUMAN_IN_THE_LOOP // Default — agents only respond when mentioned/triggered
+  LEAD_AGENT // One agent leads, others assist when asked
+  ROUND_ROBIN // Agents take turns in defined order
+  STRUCTURED_DEBATE // Agents present opposing viewpoints
+  CODE_REVIEW_SPRINT // Sequential review pattern
+  FREEFORM // Any agent can respond anytime
+  CUSTOM // User-defined rules via charter text
 }
 
 // Charter session status (TASK-0020)
 enum CharterStatus {
-  INACTIVE   // No active swarm session
-  ACTIVE     // Swarm is running
-  PAUSED     // Paused by human override
-  COMPLETED  // Max turns reached or /end issued
+  INACTIVE // No active swarm session
+  ACTIVE // Swarm is running
+  PAUSED // Paused by human override
+  COMPLETED // Max turns reached or /end issued
 }

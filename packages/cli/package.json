@@ -3,22 +3,30 @@
   "version": "0.3.0",
   "description": "Tavok bootstrap CLI",
   "license": "AGPL-3.0-or-later",
+  "main": "./dist/index.js",
   "bin": {
     "tavok": "./bin/tavok.js"
   },
   "files": [
     "bin/",
-    "dist/"
+    "dist/index.js",
+    "dist/install-target.js",
+    "dist/runner.js"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "prepack": "npm run build",
     "pretest": "node -e \"try{require.resolve('vitest')}catch(e){console.error('ERROR: Run pnpm install from workspace root first');process.exit(1)}\"",
     "test": "vitest run",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
+  "engines": {
+    "node": ">=20.19.0"
+  },
   "devDependencies": {
     "@types/node": "^22.0.0",
     "typescript": "^5.4.0",
-    "vitest": "^4.0.18"
+    "vite": "7.3.2",
+    "vitest": "^4.1.5"
   }
 }

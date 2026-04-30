@@ -205,6 +205,9 @@ defmodule TavokGateway.StreamWatchdogTest do
 
     refute_receive {:broadcast, "room:channel-g", "stream_error", _payload}, 180
 
+    assert eventually(fn -> fail_calls() != [] end, 800)
+    refute_received {:broadcast, "room:channel-g", "stream_error", _payload}
+
     [first_fail_call | _] = fail_calls()
     assert first_fail_call.message_id == "message-force-failure"
 
@@ -252,5 +255,24 @@ defmodule TavokGateway.StreamWatchdogTest do
       |> Map.get(:fail_calls, [])
       |> Enum.reverse()
     end)
+  end
+
+  defp eventually(fun, timeout_ms) do
+    deadline = System.monotonic_time(:millisecond) + timeout_ms
+    eventually_until(fun, deadline)
+  end
+
+  defp eventually_until(fun, deadline) do
+    cond do
+      fun.() ->
+        true
+
+      System.monotonic_time(:millisecond) >= deadline ->
+        false
+
+      true ->
+        Process.sleep(10)
+        eventually_until(fun, deadline)
+    end
   end
 end

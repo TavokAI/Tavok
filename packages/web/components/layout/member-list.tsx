@@ -4,7 +4,11 @@ import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { useSession } from "next-auth/react";
-import { useChatContext } from "@/components/providers/chat-provider";
+import {
+  useChatContext,
+  type AgentData,
+} from "@/components/providers/chat-provider";
+import { AgentSummaryTrigger } from "@/components/agent/agent-summary";
 import { useDmList } from "@/lib/hooks/use-dm-list";
 import type { PresenceUser } from "@/lib/hooks/use-channel";
 
@@ -41,8 +45,7 @@ export function MemberList({
             {activeAgents.map((agent) => (
               <AgentItem
                 key={agent.id}
-                name={agent.name}
-                model={agent.llmModel}
+                agent={agent}
                 isStreaming={activeStreamCount > 0}
               />
             ))}
@@ -98,8 +101,7 @@ export function MemberList({
             {inactiveAgents.map((agent) => (
               <AgentItem
                 key={agent.id}
-                name={agent.name}
-                model={agent.llmModel}
+                agent={agent}
                 isStreaming={false}
                 isInactive
               />
@@ -208,13 +210,11 @@ function MemberItem({
 }
 
 function AgentItem({
-  name,
-  model,
+  agent,
   isStreaming,
   isInactive,
 }: {
-  name: string;
-  model?: string;
+  agent: AgentData;
   isStreaming?: boolean;
   isInactive?: boolean;
 }) {
@@ -224,24 +224,12 @@ function AgentItem({
         isInactive ? "opacity-40" : "opacity-100"
       }`}
     >
-      <div className="relative flex-shrink-0">
-        {/* Agent avatar: distinct hexagonal-feel with accent color */}
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent-cyan/15 text-sm font-bold text-accent-cyan">
-          {name.charAt(0).toUpperCase()}
-        </div>
-        {/* Status indicator */}
-        {isStreaming && !isInactive ? (
-          <div className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-background-secondary">
-            <span className="absolute inset-0 rounded-full bg-accent-cyan animate-pulse" />
-          </div>
-        ) : (
-          <div
-            className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-background-secondary ${
-              isInactive ? "bg-status-offline" : "bg-status-online"
-            }`}
-          />
-        )}
-      </div>
+      <AgentSummaryTrigger
+        agent={agent}
+        isStreaming={isStreaming}
+        isInactive={isInactive}
+        hoverPlacement="panel"
+      />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
           <span
@@ -249,15 +237,19 @@ function AgentItem({
               isInactive ? "text-text-muted" : "text-text-primary"
             }`}
           >
-            {name}
+            {agent.name}
           </span>
           {/* Agent badge */}
           <span className="flex-shrink-0 rounded px-1 py-0.5 text-[9px] font-bold uppercase leading-none tracking-wider bg-accent-cyan/10 text-accent-cyan/70">
             Agent
           </span>
         </div>
-        {model && !isInactive && (
-          <p className="truncate text-[10px] text-text-dim">{model}</p>
+        {agent.llmModel && !isInactive && (
+          <p className="truncate text-[10px] text-text-dim">
+            {agent.llmProvider
+              ? `${agent.llmProvider} / ${agent.llmModel}`
+              : agent.llmModel}
+          </p>
         )}
       </div>
     </div>

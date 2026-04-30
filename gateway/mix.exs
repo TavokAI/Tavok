@@ -36,6 +36,7 @@ defmodule TavokGateway.MixProject do
 
       # Redis client (for pub/sub and sequence numbers — DEC-0005)
       {:redix, "~> 1.5"},
+      {:castore, "~> 1.0"},
 
       # CORS support
       {:cors_plug, "~> 3.0"},

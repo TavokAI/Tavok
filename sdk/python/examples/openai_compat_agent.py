@@ -50,7 +50,7 @@ AGENT_ID = os.environ.get("TAVOK_AGENT_ID")
 # OpenAI-compatible provider config
 OPENAI_BASE_URL = os.environ.get("OPENAI_BASE_URL")  # None = default OpenAI
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
-OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o")
+OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-5.5")
 
 agent = Agent(
     url=os.environ.get("TAVOK_WS_URL", "ws://localhost:4001"),

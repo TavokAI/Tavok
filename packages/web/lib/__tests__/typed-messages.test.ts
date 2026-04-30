@@ -309,7 +309,7 @@ describe("TASK-0039: Metadata Persistence", () => {
       },
     });
 
-    const metadata = { model: "gpt-4o" };
+    const metadata = { model: "gpt-5.5" };
 
     const res = await handler(
       makeRequest({
@@ -326,7 +326,7 @@ describe("TASK-0039: Metadata Persistence", () => {
     );
 
     expect(res.status).toBe(201);
-    expect(capturedCreateData.metadata).toEqual({ model: "gpt-4o" });
+    expect(capturedCreateData.metadata).toEqual({ model: "gpt-5.5" });
   });
 
   it("rejects non-object metadata", async () => {

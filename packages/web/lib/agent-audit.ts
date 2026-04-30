@@ -10,6 +10,9 @@
  * grep/jq filtering in dev and structured indexing in production.
  */
 
+import { prisma } from "@/lib/db";
+import { generateId } from "@/lib/ulid";
+
 type AgentAction =
   | "message_send"
   | "message_poll"
@@ -40,7 +43,7 @@ interface AgentAuditEntry {
  * Format:
  * {"level":"audit","agent_id":"01HX...","server_id":"01HX...","action":"message_send","channel_id":"01HX...","ts":"2026-03-12T..."}
  */
-export function logAgentAction(entry: AgentAuditEntry): void {
+export async function logAgentAction(entry: AgentAuditEntry): Promise<void> {
   const log: Record<string, unknown> = {
     level: "audit",
     agent_id: entry.agentId,
@@ -56,4 +59,50 @@ export function logAgentAction(entry: AgentAuditEntry): void {
   // Structured JSON to stdout — compatible with Docker log drivers,
   // CloudWatch, Datadog, and plain `docker logs | jq`
   console.log(JSON.stringify(log));
+
+  await persistAgentAction(entry);
+}
+
+async function persistAgentAction(entry: AgentAuditEntry): Promise<void> {
+  if (entry.serverId === "unknown") {
+    return;
+  }
+
+  const auditDelegate = (
+    prisma as typeof prisma & {
+      agentAuditLog?: {
+        create: (args: {
+          data: {
+            id: string;
+            agentId: string;
+            serverId: string;
+            action: string;
+            channelId?: string;
+            messageId?: string;
+            metadata?: Record<string, unknown>;
+          };
+        }) => Promise<unknown>;
+      };
+    }
+  ).agentAuditLog;
+
+  if (!auditDelegate) {
+    return;
+  }
+
+  try {
+    await auditDelegate.create({
+      data: {
+        id: generateId(),
+        agentId: entry.agentId,
+        serverId: entry.serverId,
+        action: entry.action,
+        ...(entry.channelId ? { channelId: entry.channelId } : {}),
+        ...(entry.messageId ? { messageId: entry.messageId } : {}),
+        ...(entry.metadata ? { metadata: entry.metadata } : {}),
+      },
+    });
+  } catch (error) {
+    console.error("[agent-audit] Failed to persist audit entry:", error);
+  }
 }

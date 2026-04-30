@@ -101,11 +101,11 @@ describe("OpenAICompatAgent", () => {
     });
 
     await agent.chat("ch-abc", [{ role: "user", content: "test" }], {
-      model: "gpt-4",
+      model: "gpt-5.5",
     });
 
     const body = JSON.parse((mockFetch.mock.calls[0] as [string, RequestInit])[1].body as string);
-    expect(body.model).toBe("gpt-4");
+    expect(body.model).toBe("gpt-5.5");
   });
 
   // ---- Auth header --------------------------------------------------------

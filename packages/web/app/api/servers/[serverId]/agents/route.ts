@@ -63,6 +63,9 @@ export async function GET(
         select: {
           connectionMethod: true,
           capabilities: true,
+          isGuest: true,
+          expiresAt: true,
+          revokedAt: true,
         },
       },
       // DEC-0073: Include channel assignments
@@ -105,6 +108,9 @@ export async function GET(
     thinkingSteps: agent.thinkingSteps,
     connectionMethod: agent.connectionMethod || null, // null = BYOK
     capabilities: agent.agentRegistration?.capabilities || null,
+    isGuest: agent.agentRegistration?.isGuest ?? false,
+    expiresAt: agent.agentRegistration?.expiresAt ?? null,
+    revokedAt: agent.agentRegistration?.revokedAt ?? null,
     createdAt: agent.createdAt,
     // DEC-0073: Channel assignments
     channels: agent.channelAgents.map((ca) => ({
@@ -160,6 +166,8 @@ export async function POST(
     // Method-specific fields
     webhookUrl,
     capabilities,
+    isGuest,
+    expiresAt,
     // DEC-0073: Optional channel assignment
     channelIds,
   } = body;
@@ -183,6 +191,8 @@ export async function POST(
       capabilities,
       systemPrompt,
       channelIds: validatedChannelIds,
+      isGuest: isGuest === true,
+      expiresAt: typeof expiresAt === "string" ? expiresAt : undefined,
     });
   }
 
@@ -295,12 +305,15 @@ async function createNonBYOKAgent(
     capabilities?: string[];
     systemPrompt?: string;
     channelIds?: string[];
+    isGuest?: boolean;
+    expiresAt?: string;
   },
 ) {
   try {
     const result = await createAgent({
       ...opts,
       serverId,
+      requireExplicitChannelIds: true,
     });
 
     const connectionInfo = buildConnectionInfo(
@@ -317,6 +330,8 @@ async function createNonBYOKAgent(
         id: result.agent.id,
         name: result.agent.name,
         connectionMethod: result.connectionMethod,
+        isGuest: opts.isGuest === true,
+        expiresAt: opts.expiresAt ?? null,
         apiKey: result.apiKey,
         ...connectionInfo,
       },
@@ -325,6 +340,13 @@ async function createNonBYOKAgent(
   } catch (error) {
     if (error instanceof AgentNameConflictError) {
       return NextResponse.json({ error: error.message }, { status: 409 });
+    }
+    if (
+      error instanceof Error &&
+      (error.message.includes("Guest agents") ||
+        error.message.includes("External agents"))
+    ) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
     }
     console.error("[servers/agents] Non-BYOK agent creation failed:", error);
     return NextResponse.json(

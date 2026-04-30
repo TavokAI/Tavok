@@ -45,10 +45,13 @@ export function useCharter(
     [],
   );
 
-  const sendCharterControl = useCallback((action: CharterAction) => {
-    if (!channelRef.current) return;
-    channelRef.current.push("charter_control", { action });
-  }, []);
+  const sendCharterControl = useCallback(
+    (action: CharterAction) => {
+      if (!channelRef.current) return;
+      channelRef.current.push("charter_control", { action });
+    },
+    [channelRef],
+  );
 
   return {
     charterState,

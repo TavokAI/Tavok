@@ -215,6 +215,30 @@ const {
     agentMessage: {
       findMany: vi.fn(async () => []),
     },
+    inboundWebhook: {
+      findUnique: vi.fn(async () => ({
+        id: "webhook-1",
+        channelId: "channel-assigned",
+        agentId: "agent-1",
+        name: "Build Hook",
+        avatarUrl: null,
+        isActive: true,
+        agent: {
+          isActive: true,
+          agentRegistration: {
+            isGuest: true,
+            capabilities: [],
+            expiresAt: null,
+            revokedAt: null,
+          },
+        },
+      })),
+      create: vi.fn(async ({ data }: any) => data),
+    },
+    message: {
+      findUnique: vi.fn(),
+      findMany: vi.fn(async () => []),
+    },
   };
 
   return {
@@ -233,6 +257,9 @@ vi.mock("@/lib/agent-auth", () => ({
 }));
 vi.mock("@/lib/rate-limit", () => ({
   checkAgentRateLimit: mockCheckAgentRateLimit,
+  webhookLimiter: {
+    check: vi.fn(() => ({ allowed: true, resetAt: Date.now() + 60_000 })),
+  },
 }));
 vi.mock("@/lib/agent-audit", () => ({
   logAgentAction: mockLogAgentAction,
@@ -240,6 +267,7 @@ vi.mock("@/lib/agent-audit", () => ({
 vi.mock("@/lib/gateway-client", () => ({
   broadcastMessageNew: vi.fn(),
   broadcastStreamStart: vi.fn(),
+  broadcastTypedMessage: vi.fn(),
   fetchChannelSequence: vi.fn(async () => "1"),
 }));
 vi.mock("@/lib/internal-auth", () => ({
@@ -248,6 +276,7 @@ vi.mock("@/lib/internal-auth", () => ({
 }));
 vi.mock("@/lib/internal-api-client", () => ({
   persistMessage: vi.fn(),
+  startStreamPlaceholder: vi.fn(),
 }));
 vi.mock("@/lib/ulid", () => ({
   generateId: vi.fn(() => "generated-id"),
@@ -256,10 +285,15 @@ vi.mock("@/lib/ulid", () => ({
 import { GET as getModels } from "@/app/api/v1/models/route";
 import { GET as getEvents } from "@/app/api/v1/agents/[id]/events/route";
 import { GET as getServer } from "@/app/api/v1/agents/[id]/server/route";
-import { GET as getMessages } from "@/app/api/v1/agents/[id]/messages/route";
+import {
+  GET as getMessages,
+  POST as postAgentMessage,
+} from "@/app/api/v1/agents/[id]/messages/route";
 import { GET as getChannelMessages } from "@/app/api/v1/agents/[id]/channels/[channelId]/messages/route";
 import { POST as postChatCompletions } from "@/app/api/v1/chat/completions/route";
 import { POST as postWebhook } from "@/app/api/v1/webhooks/route";
+import { POST as postWebhookToken } from "@/app/api/v1/webhooks/[token]/route";
+import { POST as postWebhookStream } from "@/app/api/v1/webhooks/[token]/stream/route";
 
 const agentAuth = {
   agentId: "agent-1",
@@ -268,6 +302,9 @@ const agentAuth = {
   serverId: "server-1",
   capabilities: [],
   connectionMethod: "SSE",
+  isGuest: false,
+  expiresAt: null,
+  revokedAt: null,
 };
 
 function makeRequest(url: string, init: RequestInit = {}) {
@@ -364,6 +401,187 @@ describe("agent route ACL normalization", () => {
     });
   });
 
+  it("rejects guest channel history reads without read history capability", async () => {
+    mockAuthenticateAgentRequest.mockResolvedValueOnce({
+      ...agentAuth,
+      isGuest: true,
+      capabilities: [],
+    });
+
+    const response = await getChannelMessages(
+      makeRequest(
+        "http://localhost/api/v1/agents/agent-1/channels/channel-assigned/messages",
+      ),
+      {
+        params: Promise.resolve({
+          id: "agent-1",
+          channelId: "channel-assigned",
+        }),
+      },
+    );
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toEqual({
+      error: "Missing capability: history:read",
+    });
+  });
+
+  it("rejects guest SSE subscriptions without history read capability", async () => {
+    mockAuthenticateAgentRequest.mockResolvedValueOnce({
+      ...agentAuth,
+      isGuest: true,
+      capabilities: ["streams:write"],
+    });
+
+    const response = await getEvents(
+      makeRequest(
+        "http://localhost/api/v1/agents/agent-1/events?channels=channel-assigned",
+      ),
+      { params: Promise.resolve({ id: "agent-1" }) },
+    );
+
+    expect(response.status).toBe(403);
+    expect(response.headers.get("Content-Type")).toBe("application/json");
+    await expect(response.json()).resolves.toEqual({
+      error: "Missing capability: history:read",
+    });
+  });
+
+  it("rejects guest message sends without send messages capability", async () => {
+    mockAuthenticateAgentRequest.mockResolvedValueOnce({
+      ...agentAuth,
+      isGuest: true,
+      capabilities: ["history:read"],
+    });
+
+    const response = await postAgentMessage(
+      makeRequest("http://localhost/api/v1/agents/agent-1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          channelId: "channel-assigned",
+          content: "hello",
+        }),
+      }),
+      { params: Promise.resolve({ id: "agent-1" }) },
+    );
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toEqual({
+      error: "Missing capability: messages:send",
+    });
+  });
+
+  it("rejects guest stream starts without streaming capability", async () => {
+    mockAuthenticateAgentRequest.mockResolvedValueOnce({
+      ...agentAuth,
+      isGuest: true,
+      capabilities: ["messages:send"],
+    });
+
+    const response = await postAgentMessage(
+      makeRequest("http://localhost/api/v1/agents/agent-1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          channelId: "channel-assigned",
+          streaming: true,
+        }),
+      }),
+      { params: Promise.resolve({ id: "agent-1" }) },
+    );
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toEqual({
+      error: "Missing capability: streams:write",
+    });
+  });
+
+  it("rejects guest typed artifact sends without artifact capability", async () => {
+    mockAuthenticateAgentRequest.mockResolvedValueOnce({
+      ...agentAuth,
+      isGuest: true,
+      capabilities: ["messages:send"],
+    });
+
+    const response = await postAgentMessage(
+      makeRequest("http://localhost/api/v1/agents/agent-1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          channelId: "channel-assigned",
+          content: JSON.stringify({ artifactType: "html", content: "<p/>" }),
+          type: "ARTIFACT",
+        }),
+      }),
+      { params: Promise.resolve({ id: "agent-1" }) },
+    );
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toEqual({
+      error: "Missing capability: artifacts:send",
+    });
+  });
+
+  it("rejects OpenAI-compatible sends without send messages capability", async () => {
+    mockAuthenticateAgentRequest.mockResolvedValueOnce({
+      ...agentAuth,
+      isGuest: true,
+      capabilities: ["history:read"],
+    });
+
+    const response = await postChatCompletions(
+      makeRequest("http://localhost/api/v1/chat/completions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "tavok-channel-channel-assigned",
+          messages: [{ role: "user", content: "hello" }],
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({
+      error: {
+        code: "missing_capability",
+        message: "Missing capability: messages:send",
+      },
+    });
+  });
+
+  it("rejects inbound webhook token sends when the owner lacks send capability", async () => {
+    const response = await postWebhookToken(
+      makeRequest("http://localhost/api/v1/webhooks/whk_test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: "hello" }),
+      }),
+      { params: Promise.resolve({ token: "whk_test" }) },
+    );
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toEqual({
+      error: "Missing capability: messages:send",
+    });
+  });
+
+  it("rejects inbound webhook stream updates when the owner lacks stream capability", async () => {
+    const response = await postWebhookStream(
+      makeRequest("http://localhost/api/v1/webhooks/whk_test/stream", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messageId: "message-1", tokens: ["hi"] }),
+      }),
+      { params: Promise.resolve({ token: "whk_test" }) },
+    );
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toEqual({
+      error: "Missing capability: streams:write",
+    });
+  });
+
   it("rejects OpenAI-compatible completions for same-server channels the agent is not assigned to", async () => {
     const response = await postChatCompletions(
       makeRequest("http://localhost/api/v1/chat/completions", {
@@ -400,6 +618,30 @@ describe("agent route ACL normalization", () => {
     expect(response.status).toBe(403);
     await expect(response.json()).resolves.toEqual({
       error: "Agent is not assigned to this channel",
+    });
+  });
+
+  it("rejects inbound webhook creation when a guest lacks send capability", async () => {
+    mockAuthenticateAgentRequest.mockResolvedValueOnce({
+      ...agentAuth,
+      isGuest: true,
+      capabilities: ["history:read"],
+    });
+
+    const response = await postWebhook(
+      makeRequest("http://localhost/api/v1/webhooks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          channelId: "channel-assigned",
+          name: "Build Hook",
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toEqual({
+      error: "Missing capability: messages:send",
     });
   });
 });

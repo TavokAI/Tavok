@@ -30,14 +30,23 @@ func (r *Registry) Register(tool Tool) {
 	slog.Info("Tool registered", "name", name)
 }
 
-// List returns definitions for all registered tools.
-// If enabledTools is non-empty, only tools in the list are returned.
-func (r *Registry) List(enabledTools []string) []ToolDefinition {
+// List returns definitions for tools available to an agent.
+// If enabledTools is empty, only tools that do not require approval are returned.
+// Tools that can touch network, filesystem, shell, browser, or credentials must
+// be explicitly enabled and approved so they are never advertised by default.
+func (r *Registry) List(enabledTools []string, approvedTools []string) []ToolDefinition {
+	approved := make(map[string]bool, len(approvedTools))
+	for _, name := range approvedTools {
+		approved[name] = true
+	}
+
 	if len(enabledTools) == 0 {
-		// Return all tools
 		defs := make([]ToolDefinition, 0, len(r.tools))
 		for _, t := range r.tools {
-			defs = append(defs, t.Definition())
+			def := t.Definition()
+			if toolDefinitionApproved(def, approved) {
+				defs = append(defs, def)
+			}
 		}
 		return defs
 	}
@@ -50,11 +59,16 @@ func (r *Registry) List(enabledTools []string) []ToolDefinition {
 
 	defs := make([]ToolDefinition, 0, len(enabledTools))
 	for _, t := range r.tools {
-		if enabled[t.Definition().Name] {
-			defs = append(defs, t.Definition())
+		def := t.Definition()
+		if enabled[def.Name] && toolDefinitionApproved(def, approved) {
+			defs = append(defs, def)
 		}
 	}
 	return defs
+}
+
+func toolDefinitionApproved(def ToolDefinition, approved map[string]bool) bool {
+	return !def.RequiresApproval || approved[def.Name]
 }
 
 // Call executes a tool by name and returns the result.

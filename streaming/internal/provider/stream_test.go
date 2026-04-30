@@ -32,7 +32,7 @@ func TestOpenAIStreamSuccess(t *testing.T) {
 	result, err := p.Stream(context.Background(), StreamRequest{
 		APIEndpoint: srv.URL + "/v1/chat/completions",
 		APIKey:      "test-key",
-		Model:       "gpt-4",
+		Model:       "gpt-5.5",
 	}, tokens)
 
 	if err != nil {
@@ -81,7 +81,7 @@ func TestOpenAIStreamRateLimit(t *testing.T) {
 
 	_, err := p.Stream(context.Background(), StreamRequest{
 		APIEndpoint: srv.URL + "/v1/chat/completions",
-		Model:       "gpt-4",
+		Model:       "gpt-5.5",
 		APIKey:      "key",
 	}, tokens)
 
@@ -109,7 +109,7 @@ func TestOpenAIStreamMalformedJSON(t *testing.T) {
 
 	result, err := p.Stream(context.Background(), StreamRequest{
 		APIEndpoint: srv.URL + "/v1/chat/completions",
-		Model:       "gpt-4",
+		Model:       "gpt-5.5",
 	}, tokens)
 
 	// Should succeed (malformed chunks are skipped with a warning)
@@ -134,7 +134,7 @@ func TestOpenAIStreamEmptyResponse(t *testing.T) {
 
 	result, err := p.Stream(context.Background(), StreamRequest{
 		APIEndpoint: srv.URL + "/v1/chat/completions",
-		Model:       "gpt-4",
+		Model:       "gpt-5.5",
 	}, tokens)
 
 	if err != nil {
@@ -165,7 +165,7 @@ func TestOpenAIStreamEndpointAutoSuffix(t *testing.T) {
 	// Don't include /v1/chat/completions — should be auto-appended
 	p.Stream(context.Background(), StreamRequest{
 		APIEndpoint: srv.URL,
-		Model:       "gpt-4",
+		Model:       "gpt-5.5",
 	}, tokens)
 }
 
@@ -189,7 +189,7 @@ func TestOpenAIStreamContextCancellation(t *testing.T) {
 
 	p.Stream(ctx, StreamRequest{
 		APIEndpoint: srv.URL + "/v1/chat/completions",
-		Model:       "gpt-4",
+		Model:       "gpt-5.5",
 	}, tokens)
 
 	// Stream should have been cut short by context cancellation
@@ -361,7 +361,7 @@ func TestTransportInterfaceOpenAI(t *testing.T) {
 
 	result, err := p.Stream(context.Background(), StreamRequest{
 		APIEndpoint: srv.URL + "/v1/chat/completions",
-		Model:       "gpt-4",
+		Model:       "gpt-5.5",
 	}, tokens)
 
 	if err != nil {
@@ -426,7 +426,7 @@ func TestCustomHeadersOpenAI(t *testing.T) {
 	result, err := p.Stream(context.Background(), StreamRequest{
 		APIEndpoint: srv.URL + "/v1/chat/completions",
 		APIKey:      "key",
-		Model:       "gpt-4",
+		Model:       "gpt-5.5",
 		Headers: map[string]string{
 			"HTTP-Referer": "https://tavok.ai",
 			"X-Title":      "Tavok",

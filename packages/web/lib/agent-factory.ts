@@ -4,6 +4,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { getPublicBaseUrl } from "@/lib/internal-auth";
 import type { TriggerMode, ConnectionMethod } from "@tavok/shared/agent";
+import { normalizeAgentCapabilities } from "@/lib/agent-capabilities";
 
 export class AgentNameConflictError extends Error {
   constructor(name: string) {
@@ -40,7 +41,11 @@ interface CreateAgentOptions {
   webhookUrl?: string;
   capabilities?: string[];
   systemPrompt?: string;
-  /** Optional channel IDs to assign. If omitted or empty, assigns to ALL channels (backward compatible). */
+  isGuest?: boolean;
+  expiresAt?: Date | string | null;
+  revokedAt?: Date | string | null;
+  requireExplicitChannelIds?: boolean;
+  /** Optional channel IDs to assign. If omitted or empty for non-guest agents, assigns to ALL channels. */
   channelIds?: string[];
 }
 
@@ -62,6 +67,21 @@ interface CreateAgentResult {
 export async function createAgent(
   opts: CreateAgentOptions,
 ): Promise<CreateAgentResult> {
+  const isGuest = opts.isGuest === true;
+  const requestedChannelIds = opts.channelIds?.filter(Boolean) ?? [];
+
+  if (isGuest && requestedChannelIds.length === 0) {
+    throw new Error("Guest agents require at least one explicit channelId");
+  }
+
+  if (opts.requireExplicitChannelIds && requestedChannelIds.length === 0) {
+    throw new Error("External agents require at least one explicit channelId");
+  }
+
+  if (isGuest && !opts.expiresAt) {
+    throw new Error("Guest agents require an explicit expiresAt");
+  }
+
   const agentId = generateId();
   const registrationId = generateId();
 
@@ -105,21 +125,22 @@ export async function createAgent(
           id: registrationId,
           agentId: agent.id,
           apiKeyHash,
-          capabilities: Array.isArray(opts.capabilities)
-            ? opts.capabilities
-            : [],
+          capabilities: normalizeAgentCapabilities(opts.capabilities),
           webhookUrl: opts.webhookUrl,
           connectionMethod: opts.connectionMethod,
           webhookSecret,
+          isGuest,
+          expiresAt: opts.expiresAt ? new Date(opts.expiresAt) : null,
+          revokedAt: opts.revokedAt ? new Date(opts.revokedAt) : null,
         },
       });
 
       // Assign agent to channels — specific channels if provided, all channels if not (DEC-0073)
       let assignChannelIds: string[];
-      if (opts.channelIds && opts.channelIds.length > 0) {
+      if (requestedChannelIds.length > 0) {
         // Validate that requested channels belong to this server
         const validChannels = await tx.channel.findMany({
-          where: { serverId: opts.serverId, id: { in: opts.channelIds } },
+          where: { serverId: opts.serverId, id: { in: requestedChannelIds } },
           select: { id: true },
         });
         assignChannelIds = validChannels.map((ch) => ch.id);

@@ -13,6 +13,9 @@ interface AgentAuthResult {
   serverId: string;
   capabilities: string[];
   connectionMethod: string;
+  isGuest: boolean;
+  expiresAt: Date | null;
+  revokedAt: Date | null;
 }
 
 /**
@@ -34,6 +37,9 @@ async function authenticateApiKey(
       agentId: true,
       capabilities: true,
       connectionMethod: true,
+      isGuest: true,
+      expiresAt: true,
+      revokedAt: true,
       agent: {
         select: {
           id: true,
@@ -50,6 +56,14 @@ async function authenticateApiKey(
     return null;
   }
 
+  if (registration.revokedAt) {
+    return null;
+  }
+
+  if (registration.expiresAt && registration.expiresAt <= new Date()) {
+    return null;
+  }
+
   return {
     agentId: registration.agentId,
     agentName: registration.agent.name,
@@ -57,6 +71,9 @@ async function authenticateApiKey(
     serverId: registration.agent.serverId,
     capabilities: (registration.capabilities ?? []) as string[],
     connectionMethod: registration.connectionMethod,
+    isGuest: registration.isGuest,
+    expiresAt: registration.expiresAt,
+    revokedAt: registration.revokedAt,
   };
 }
 
@@ -122,7 +139,13 @@ export async function authenticateAgentById(
 
   const registration = await prisma.agentRegistration.findFirst({
     where: { apiKeyHash, agentId },
-    select: { id: true, agent: { select: { isActive: true } } },
+    select: {
+      id: true,
+      isGuest: true,
+      expiresAt: true,
+      revokedAt: true,
+      agent: { select: { isActive: true } },
+    },
   });
 
   if (!registration) {
@@ -131,6 +154,22 @@ export async function authenticateAgentById(
 
   if (!registration.agent.isActive) {
     return { authorized: false, error: "Agent is inactive", status: 403 };
+  }
+
+  if (registration.revokedAt) {
+    return {
+      authorized: false,
+      error: "Agent registration is revoked",
+      status: 403,
+    };
+  }
+
+  if (registration.expiresAt && registration.expiresAt <= new Date()) {
+    return {
+      authorized: false,
+      error: "Agent registration is expired",
+      status: 403,
+    };
   }
 
   return { authorized: true };

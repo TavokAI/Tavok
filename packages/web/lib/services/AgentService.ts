@@ -36,6 +36,9 @@ export async function getRegisteredAgent(
           lastHealthCheck: true,
           lastHealthOk: true,
           connectionMethod: true,
+          isGuest: true,
+          expiresAt: true,
+          revokedAt: true,
         },
       },
     },
@@ -60,6 +63,9 @@ export async function getRegisteredAgent(
     lastHealthCheck: agent.agentRegistration.lastHealthCheck,
     lastHealthOk: agent.agentRegistration.lastHealthOk,
     connectionMethod: agent.agentRegistration.connectionMethod,
+    isGuest: agent.agentRegistration.isGuest,
+    expiresAt: agent.agentRegistration.expiresAt,
+    revokedAt: agent.agentRegistration.revokedAt,
     createdAt: agent.createdAt,
   };
 }
@@ -77,22 +83,14 @@ export async function updateRegisteredAgent(
     healthUrl?: string;
     webhookUrl?: string;
     maxTokensSec?: number;
+    isGuest?: boolean;
+    expiresAt?: Date | string | null;
+    revokedAt?: Date | string | null;
   },
 ) {
   const agentRecord = await prismaClient.agent.findUnique({
     where: { id: input.id },
     select: { serverId: true },
-  });
-
-  logAgentAction({
-    agentId: input.id,
-    serverId: agentRecord?.serverId || "unknown",
-    action: "agent_update",
-    metadata: {
-      fields: Object.entries(input)
-        .filter(([key, value]) => key !== "id" && value !== undefined)
-        .map(([key]) => key),
-    },
   });
 
   await prismaClient.$transaction(async (tx) => {
@@ -117,6 +115,19 @@ export async function updateRegisteredAgent(
     if (input.maxTokensSec !== undefined) {
       registrationUpdate.maxTokensSec = input.maxTokensSec;
     }
+    if (input.isGuest !== undefined) {
+      registrationUpdate.isGuest = input.isGuest;
+    }
+    if (input.expiresAt !== undefined) {
+      registrationUpdate.expiresAt = input.expiresAt
+        ? new Date(input.expiresAt)
+        : null;
+    }
+    if (input.revokedAt !== undefined) {
+      registrationUpdate.revokedAt = input.revokedAt
+        ? new Date(input.revokedAt)
+        : null;
+    }
 
     if (Object.keys(registrationUpdate).length > 0) {
       await tx.agentRegistration.update({
@@ -124,6 +135,17 @@ export async function updateRegisteredAgent(
         data: registrationUpdate,
       });
     }
+  });
+
+  await logAgentAction({
+    agentId: input.id,
+    serverId: agentRecord?.serverId || "unknown",
+    action: "agent_update",
+    metadata: {
+      fields: Object.entries(input)
+        .filter(([key, value]) => key !== "id" && value !== undefined)
+        .map(([key]) => key),
+    },
   });
 }
 
@@ -136,13 +158,13 @@ export async function deleteRegisteredAgent(
     select: { serverId: true },
   });
 
-  logAgentAction({
+  await prismaClient.agent.delete({ where: { id } });
+
+  await logAgentAction({
     agentId: id,
     serverId: agentRecord?.serverId || "unknown",
     action: "agent_deregister",
   });
-
-  await prismaClient.agent.delete({ where: { id } });
 }
 
 export async function ensureServerExists(
@@ -161,6 +183,9 @@ export async function bootstrapCreateAgent(input: {
   connectionMethod: ConnectionMethodValue;
   webhookUrl?: string;
   channelIds?: string[];
+  capabilities?: string[];
+  isGuest?: boolean;
+  expiresAt?: Date | string | null;
 }) {
   const result = await createAgent({
     name: input.name,
@@ -168,6 +193,10 @@ export async function bootstrapCreateAgent(input: {
     connectionMethod: input.connectionMethod,
     webhookUrl: input.webhookUrl,
     channelIds: input.channelIds,
+    capabilities: input.capabilities,
+    isGuest: input.isGuest,
+    expiresAt: input.expiresAt,
+    requireExplicitChannelIds: true,
   });
 
   const connectionInfo = buildConnectionInfo(
@@ -185,6 +214,8 @@ export async function bootstrapCreateAgent(input: {
     apiKey: result.apiKey,
     serverId: input.serverId,
     connectionMethod: result.connectionMethod,
+    isGuest: input.isGuest === true,
+    expiresAt: input.expiresAt ? new Date(input.expiresAt).toISOString() : null,
     ...connectionInfo,
   };
 }

@@ -22,7 +22,8 @@ type AgentConfig struct {
 	MaxTokens     int      `json:"maxTokens"`
 	TriggerMode   string   `json:"triggerMode"`   // "ALWAYS" | "MENTION" | "KEYWORD"
 	ThinkingSteps []string `json:"thinkingSteps"` // configurable phase labels (TASK-0011)
-	EnabledTools  []string `json:"enabledTools"`  // tool names to make available (TASK-0018), empty = all tools
+	EnabledTools  []string `json:"enabledTools"`  // tool names to make available (TASK-0018), empty = safe default tools only
+	ApprovedTools []string `json:"approvedTools"` // approval-required tools authorized for execution
 }
 
 // GetThinkingPhase returns the thinking step at the given index,

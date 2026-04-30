@@ -6,6 +6,10 @@ import {
   finalizeStreamCompletion,
   finalizeStreamError,
 } from "@/lib/stream-finalization";
+import {
+  AGENT_CAPABILITIES,
+  getAgentCapabilityError,
+} from "@/lib/agent-capabilities";
 
 /**
  * POST /api/v1/webhooks/{token}/stream — Send streaming tokens (DEC-0045)
@@ -34,7 +38,24 @@ export async function POST(
   // Verify webhook token
   const webhook = await prisma.inboundWebhook.findUnique({
     where: { token },
-    select: { channelId: true, agentId: true, isActive: true },
+    select: {
+      channelId: true,
+      agentId: true,
+      isActive: true,
+      agent: {
+        select: {
+          isActive: true,
+          agentRegistration: {
+            select: {
+              capabilities: true,
+              isGuest: true,
+              expiresAt: true,
+              revokedAt: true,
+            },
+          },
+        },
+      },
+    },
   });
 
   if (!webhook || !webhook.isActive) {
@@ -42,6 +63,14 @@ export async function POST(
       { error: "Invalid or disabled webhook" },
       { status: 404 },
     );
+  }
+
+  const capabilityError = getAgentCapabilityError(
+    getWebhookAgentPolicy(webhook),
+    AGENT_CAPABILITIES.STREAM,
+  );
+  if (capabilityError) {
+    return NextResponse.json({ error: capabilityError }, { status: 403 });
   }
 
   let body: Record<string, unknown>;
@@ -221,4 +250,25 @@ async function verifyWebhookMessageOwnership(
   }
 
   return { valid: true };
+}
+
+function getWebhookAgentPolicy(webhook: {
+  agent: {
+    isActive: boolean;
+    agentRegistration: {
+      capabilities: unknown;
+      isGuest: boolean;
+      expiresAt: Date | null;
+      revokedAt: Date | null;
+    } | null;
+  };
+}) {
+  const registration = webhook.agent.agentRegistration;
+  return {
+    isActive: webhook.agent.isActive,
+    capabilities: registration?.capabilities ?? [],
+    isGuest: registration?.isGuest ?? false,
+    expiresAt: registration?.expiresAt ?? null,
+    revokedAt: registration?.revokedAt ?? null,
+  };
 }

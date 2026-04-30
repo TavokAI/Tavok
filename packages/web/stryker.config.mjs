@@ -11,7 +11,7 @@
  * to identify test coverage gaps in critical paths.
  */
 /** @type {import('@stryker-mutator/api/core').PartialStrykerOptions} */
-export default {
+const config = {
   testRunner: "vitest",
   vitest: {
     configFile: "vitest.config.ts",
@@ -39,3 +39,5 @@ export default {
   timeoutMS: 30000,
   concurrency: 4,
 };
+
+export default config;
