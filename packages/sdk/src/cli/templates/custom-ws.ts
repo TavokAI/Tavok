@@ -15,7 +15,8 @@ export const customWsTemplate: Template = {
  * Replace the handler body with your own LLM or logic.
  *
  * Environment variables:
- *   TAVOK_AGENT_API_KEY — your Tavok agent API key
+ *   TAVOK_API_KEY       — your Tavok agent API key
+ *   TAVOK_AGENT_ID      — your Tavok agent ID
  */
 
 import { Agent } from "@tavok/sdk";

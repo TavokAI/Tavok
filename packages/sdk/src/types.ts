@@ -21,13 +21,18 @@ export enum MessageType {
   STANDARD = "STANDARD",
   STREAMING = "STREAMING",
   SYSTEM = "SYSTEM",
+  TOOL_CALL = "TOOL_CALL",
+  TOOL_RESULT = "TOOL_RESULT",
+  CODE_BLOCK = "CODE_BLOCK",
+  ARTIFACT = "ARTIFACT",
+  STATUS = "STATUS",
 }
 
 /** Streaming message lifecycle state. */
 export enum StreamStatus {
-  ACTIVE = "active",
-  COMPLETE = "complete",
-  ERROR = "error",
+  ACTIVE = "ACTIVE",
+  COMPLETE = "COMPLETE",
+  ERROR = "ERROR",
 }
 
 // ---------------------------------------------------------------------------
@@ -48,6 +53,9 @@ export interface Message {
   editedAt: string | null;
   authorAvatarUrl: string | null;
   streamingStatus: StreamStatus | null;
+  metadata: Record<string, unknown> | null;
+  tokenHistory: Array<Record<string, unknown>> | null;
+  checkpoints: Array<Record<string, unknown>> | null;
 }
 
 /** A single streaming token from an LLM response. */
@@ -64,13 +72,15 @@ export interface StreamStart {
   agentName: string;
   agentAvatarUrl: string | null;
   sequence: string;
+  status: string;
 }
 
 /** Broadcast when an agent finishes streaming. */
 export interface StreamComplete {
   messageId: string;
   finalContent: string;
-  thinkingTimeline: Array<{ phase: string; detail?: string }>;
+  thinkingTimeline: Array<Record<string, unknown>>;
+  metadata: Record<string, unknown> | null;
 }
 
 /** Broadcast when streaming fails. */
@@ -78,6 +88,7 @@ export interface StreamError {
   messageId: string;
   error: string;
   partialContent: string | null;
+  code: string | null;
 }
 
 /** A message from the poll endpoint. */
@@ -147,6 +158,9 @@ export function messageFromPayload(payload: Record<string, any>): Message {
     editedAt: payload.editedAt ?? payload.edited_at ?? null,
     authorAvatarUrl: payload.authorAvatarUrl ?? payload.author_avatar_url ?? null,
     streamingStatus: streaming ? (streaming as StreamStatus) : null,
+    metadata: payload.metadata ?? null,
+    tokenHistory: payload.tokenHistory ?? payload.token_history ?? null,
+    checkpoints: payload.checkpoints ?? null,
   };
 }
 
@@ -167,6 +181,7 @@ export function streamStartFromPayload(payload: Record<string, any>): StreamStar
     agentName: payload.agentName ?? payload.agent_name ?? "",
     agentAvatarUrl: payload.agentAvatarUrl ?? payload.agent_avatar_url ?? null,
     sequence: String(payload.sequence ?? "0"),
+    status: payload.status ?? "active",
   };
 }
 
@@ -176,6 +191,7 @@ export function streamCompleteFromPayload(payload: Record<string, any>): StreamC
     messageId: payload.messageId ?? payload.message_id,
     finalContent: payload.finalContent ?? payload.final_content ?? "",
     thinkingTimeline: payload.thinkingTimeline ?? payload.thinking_timeline ?? [],
+    metadata: payload.metadata ?? null,
   };
 }
 
@@ -185,5 +201,6 @@ export function streamErrorFromPayload(payload: Record<string, any>): StreamErro
     messageId: payload.messageId ?? payload.message_id,
     error: payload.error ?? "Unknown error",
     partialContent: payload.partialContent ?? payload.partial_content ?? null,
+    code: payload.code ?? null,
   };
 }

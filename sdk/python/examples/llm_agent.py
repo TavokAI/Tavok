@@ -4,9 +4,9 @@ Uses the Anthropic API to generate responses and streams them
 through Tavok's real-time pipeline.
 
 Usage:
+    tavok init
+    # Create an SDK agent named "Claude Agent" during init.
     export ANTHROPIC_API_KEY="sk-ant-..."
-    export TAVOK_SERVER_ID="01HXY..."
-    export TAVOK_CHANNEL_ID="01HXY..."
 
     pip install anthropic
     python llm_agent.py
@@ -22,18 +22,12 @@ logging.basicConfig(
     format="%(asctime)s %(name)s %(levelname)s %(message)s",
 )
 
-SERVER_ID = os.environ.get("TAVOK_SERVER_ID", "YOUR_SERVER_ID")
-CHANNEL_ID = os.environ.get("TAVOK_CHANNEL_ID", "YOUR_CHANNEL_ID")
-API_KEY = os.environ.get("TAVOK_API_KEY")
-AGENT_ID = os.environ.get("TAVOK_AGENT_ID")
+SERVER_ID = os.environ.get("TAVOK_SERVER_ID")
+CHANNEL_ID = os.environ.get("TAVOK_CHANNEL_ID")
 ANTHROPIC_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 
 agent = Agent(
-    url=os.environ.get("TAVOK_WS_URL", "ws://localhost:4001"),
-    api_url=os.environ.get("TAVOK_API_URL", "http://localhost:5555"),
     name="Claude Agent",
-    api_key=API_KEY,
-    agent_id=AGENT_ID,
     model="claude-sonnet-4-20250514",
     capabilities=["chat", "code", "streaming"],
 )
@@ -71,4 +65,9 @@ async def respond(msg: Message) -> None:
 
 
 if __name__ == "__main__":
-    agent.run(server_id=SERVER_ID, channel_ids=[CHANNEL_ID])
+    run_opts = {}
+    if SERVER_ID:
+        run_opts["server_id"] = SERVER_ID
+    if CHANNEL_ID:
+        run_opts["channel_ids"] = [CHANNEL_ID]
+    agent.run(**run_opts)

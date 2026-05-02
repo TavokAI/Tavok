@@ -5,6 +5,8 @@ environments (AWS Lambda, Cloud Functions), cron jobs, or systems
 that cannot hold persistent connections.
 
 Usage:
+    tavok init
+    # Create a REST_POLL agent, then export the credentials shown once:
     export TAVOK_API_KEY="sk-tvk-..."
     export TAVOK_AGENT_ID="01HXY..."
 
@@ -23,7 +25,9 @@ logging.basicConfig(
     format="%(asctime)s %(name)s %(levelname)s %(message)s",
 )
 
-API_URL = os.environ.get("TAVOK_API_URL", "http://localhost:5555")
+API_URL = os.environ.get(
+    "TAVOK_URL", os.environ.get("TAVOK_API_URL", "http://localhost:5555")
+)
 API_KEY = os.environ.get("TAVOK_API_KEY", "")
 AGENT_ID = os.environ.get("TAVOK_AGENT_ID", "")
 

@@ -27,8 +27,8 @@ Usage:
     python openai_compat_agent.py
 
 Requires:
-    export TAVOK_SERVER_ID="01HXY..."
-    export TAVOK_CHANNEL_ID="01HXY..."
+    tavok init
+    # Create an SDK agent named after OPENAI_MODEL, for example "gpt-4o Agent".
     pip install openai
 """
 
@@ -42,10 +42,8 @@ logging.basicConfig(
     format="%(asctime)s %(name)s %(levelname)s %(message)s",
 )
 
-SERVER_ID = os.environ.get("TAVOK_SERVER_ID", "YOUR_SERVER_ID")
-CHANNEL_ID = os.environ.get("TAVOK_CHANNEL_ID", "YOUR_CHANNEL_ID")
-API_KEY = os.environ.get("TAVOK_API_KEY")
-AGENT_ID = os.environ.get("TAVOK_AGENT_ID")
+SERVER_ID = os.environ.get("TAVOK_SERVER_ID")
+CHANNEL_ID = os.environ.get("TAVOK_CHANNEL_ID")
 
 # OpenAI-compatible provider config
 OPENAI_BASE_URL = os.environ.get("OPENAI_BASE_URL")  # None = default OpenAI
@@ -53,11 +51,7 @@ OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
 OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o")
 
 agent = Agent(
-    url=os.environ.get("TAVOK_WS_URL", "ws://localhost:4001"),
-    api_url=os.environ.get("TAVOK_API_URL", "http://localhost:5555"),
     name=f"{OPENAI_MODEL} Agent",
-    api_key=API_KEY,
-    agent_id=AGENT_ID,
     model=OPENAI_MODEL,
     capabilities=["chat", "streaming"],
 )
@@ -106,4 +100,9 @@ if __name__ == "__main__":
     print(f"Starting {OPENAI_MODEL} agent...")
     if OPENAI_BASE_URL:
         print(f"Using endpoint: {OPENAI_BASE_URL}")
-    agent.run(server_id=SERVER_ID, channel_ids=[CHANNEL_ID])
+    run_opts = {}
+    if SERVER_ID:
+        run_opts["server_id"] = SERVER_ID
+    if CHANNEL_ID:
+        run_opts["channel_ids"] = [CHANNEL_ID]
+    agent.run(**run_opts)

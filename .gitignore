@@ -86,6 +86,8 @@ backups/
 cookies.txt
 test_*.png
 test_*.py
+!sdk/python/tests/
+!sdk/python/tests/test_*.py
 
 # === Build artifacts ===
 build-log.txt

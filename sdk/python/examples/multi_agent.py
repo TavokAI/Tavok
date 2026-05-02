@@ -4,8 +4,8 @@ Demonstrates running multiple agents simultaneously. Agent 1 echoes
 messages; Agent 2 counts words.
 
 Usage:
-    export TAVOK_SERVER_ID="01HXY..."
-    export TAVOK_CHANNEL_ID="01HXY..."
+    tavok init
+    # Create SDK agents named "Echo Agent" and "Word Counter" during init.
 
     python multi_agent.py
 """
@@ -21,13 +21,11 @@ logging.basicConfig(
     format="%(asctime)s %(name)s %(levelname)s %(message)s",
 )
 
-SERVER_ID = os.environ.get("TAVOK_SERVER_ID", "YOUR_SERVER_ID")
-CHANNEL_ID = os.environ.get("TAVOK_CHANNEL_ID", "YOUR_CHANNEL_ID")
+SERVER_ID = os.environ.get("TAVOK_SERVER_ID")
+CHANNEL_ID = os.environ.get("TAVOK_CHANNEL_ID")
 
 # --- Agent 1: Echo ---
 echo_agent = Agent(
-    url=os.environ.get("TAVOK_WS_URL", "ws://localhost:4001"),
-    api_url=os.environ.get("TAVOK_API_URL", "http://localhost:5555"),
     name="Echo Agent",
     capabilities=["chat", "echo"],
 )
@@ -43,8 +41,6 @@ async def echo(msg: Message) -> None:
 
 # --- Agent 2: Word Counter ---
 counter_agent = Agent(
-    url=os.environ.get("TAVOK_WS_URL", "ws://localhost:4001"),
-    api_url=os.environ.get("TAVOK_API_URL", "http://localhost:5555"),
     name="Word Counter",
     capabilities=["chat", "analysis"],
 )
@@ -67,9 +63,15 @@ async def count_words(msg: Message) -> None:
 
 # --- Run both ---
 async def main() -> None:
+    start_opts = {}
+    if SERVER_ID:
+        start_opts["server_id"] = SERVER_ID
+    if CHANNEL_ID:
+        start_opts["channel_ids"] = [CHANNEL_ID]
+
     await asyncio.gather(
-        echo_agent.start(server_id=SERVER_ID, channel_ids=[CHANNEL_ID]),
-        counter_agent.start(server_id=SERVER_ID, channel_ids=[CHANNEL_ID]),
+        echo_agent.start(**start_opts),
+        counter_agent.start(**start_opts),
     )
     print(f"Echo Agent running (id={echo_agent.agent_id})")
     print(f"Word Counter running (id={counter_agent.agent_id})")

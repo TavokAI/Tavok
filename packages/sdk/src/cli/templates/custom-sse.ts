@@ -16,7 +16,8 @@ export const customSseTemplate: Template = {
  * but you still want real-time message delivery.
  *
  * Environment variables:
- *   TAVOK_AGENT_API_KEY — your Tavok agent API key
+ *   TAVOK_API_KEY       — your Tavok agent API key
+ *   TAVOK_AGENT_ID      — your Tavok agent ID
  */
 
 import { SseAgent } from "@tavok/sdk";

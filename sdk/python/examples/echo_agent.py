@@ -3,15 +3,10 @@
 Echoes back any message that @mentions it.
 
 Usage:
-    # Set these to your Tavok instance values:
-    export TAVOK_SERVER_ID="01HXY..."
-    export TAVOK_CHANNEL_ID="01HXY..."
-
-    python echo_agent.py
-
-    # Or pass an existing API key:
-    export TAVOK_API_KEY="sk-tvk-..."
-    export TAVOK_AGENT_ID="01HXY..."
+    tavok init
+    # Create an SDK agent named "Echo Agent" during init, or set:
+    # export TAVOK_API_KEY="sk-tvk-..."
+    # export TAVOK_AGENT_ID="01HXY..."
     python echo_agent.py
 """
 
@@ -25,17 +20,11 @@ logging.basicConfig(
     format="%(asctime)s %(name)s %(levelname)s %(message)s",
 )
 
-SERVER_ID = os.environ.get("TAVOK_SERVER_ID", "YOUR_SERVER_ID")
-CHANNEL_ID = os.environ.get("TAVOK_CHANNEL_ID", "YOUR_CHANNEL_ID")
-API_KEY = os.environ.get("TAVOK_API_KEY")
-AGENT_ID = os.environ.get("TAVOK_AGENT_ID")
+SERVER_ID = os.environ.get("TAVOK_SERVER_ID")
+CHANNEL_ID = os.environ.get("TAVOK_CHANNEL_ID")
 
 agent = Agent(
-    url=os.environ.get("TAVOK_WS_URL", "ws://localhost:4001"),
-    api_url=os.environ.get("TAVOK_API_URL", "http://localhost:5555"),
     name="Echo Agent",
-    api_key=API_KEY,
-    agent_id=AGENT_ID,
     capabilities=["chat", "echo"],
 )
 
@@ -52,4 +41,9 @@ async def echo(msg: Message) -> None:
 
 
 if __name__ == "__main__":
-    agent.run(server_id=SERVER_ID, channel_ids=[CHANNEL_ID])
+    run_opts = {}
+    if SERVER_ID:
+        run_opts["server_id"] = SERVER_ID
+    if CHANNEL_ID:
+        run_opts["channel_ids"] = [CHANNEL_ID]
+    agent.run(**run_opts)

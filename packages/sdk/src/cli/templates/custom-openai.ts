@@ -20,7 +20,8 @@ export const customOpenaiTemplate: Template = {
  * Together AI, Anyscale, etc.).
  *
  * Environment variables:
- *   TAVOK_AGENT_API_KEY     — your Tavok agent API key
+ *   TAVOK_API_KEY           — your Tavok agent API key
+ *   TAVOK_AGENT_ID          — your Tavok agent ID
  *   OPENAI_COMPAT_BASE_URL  — base URL for the OpenAI-compatible API
  *   OPENAI_COMPAT_API_KEY   — API key (if required by the provider)
  *   OPENAI_COMPAT_MODEL     — model name to use

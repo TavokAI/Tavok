@@ -22,7 +22,8 @@ export const crewaiTemplate: Template = {
  * to match your CrewAI setup.
  *
  * Environment variables:
- *   TAVOK_AGENT_API_KEY — your Tavok agent API key
+ *   TAVOK_API_KEY       — your Tavok agent API key
+ *   TAVOK_AGENT_ID      — your Tavok agent ID
  *   CREWAI_API_URL      — URL of your CrewAI backend
  */
 

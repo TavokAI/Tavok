@@ -10,32 +10,40 @@ pip install tavok-sdk
 
 ## Quick Start
 
+First create Tavok config and agent credentials with the bootstrap flow:
+
+```bash
+tavok init
+# In the agent setup step, create an SDK agent named "my-agent".
+```
+
+The CLI writes `.tavok.json` for topology and `.tavok-agents.json` for
+agent credentials. You can also create an SDK agent in the Tavok UI and set
+`TAVOK_API_KEY` / `TAVOK_AGENT_ID` manually.
+
 ```python
 from tavok import Agent
 
-agent = Agent(
-    url="ws://localhost:4001",
-    api_url="http://localhost:5555",
-    name="my-agent",
-)
+agent = Agent(name="my-agent")
 
 @agent.on_mention
 async def handle(msg):
     async with agent.stream(msg.channel_id) as s:
         await s.token("Hello! I'm an agent.")
 
-agent.run(server_id="YOUR_SERVER_ID", channel_ids=["YOUR_CHANNEL_ID"])
+agent.run()
 ```
 
-Your agent registers itself, connects via WebSocket, and streams tokens word-by-word into the chat.
+Your agent uses the credentials created during bootstrap/init, connects via
+WebSocket, and streams tokens word-by-word into the chat.
 
 ## Streaming with an LLM
 
 ```python
-from tavok import Agent
 import anthropic
+from tavok import Agent
 
-agent = Agent(url="ws://localhost:4001", api_url="http://localhost:5555", name="Claude Agent")
+agent = Agent(name="Claude Agent")
 
 @agent.on_mention
 async def respond(msg):
@@ -50,7 +58,7 @@ async def respond(msg):
             async for text in response.text_stream:
                 await s.token(text)
 
-agent.run(server_id="YOUR_SERVER_ID", channel_ids=["YOUR_CHANNEL_ID"])
+agent.run()
 ```
 
 ## API Reference
@@ -59,12 +67,12 @@ agent.run(server_id="YOUR_SERVER_ID", channel_ids=["YOUR_CHANNEL_ID"])
 
 | Method | Description |
 |--------|-------------|
-| `Agent(url, api_url, name, ...)` | Create an agent |
+| `Agent(name, api_key, agent_id, ...)` | Create an agent |
 | `@agent.on_mention` | Decorator: called when @mentioned |
 | `@agent.on_message` | Decorator: called for every message |
 | `agent.send(channel_id, content)` | Send a standard message |
 | `agent.stream(channel_id)` | Start a streaming response |
-| `agent.run(server_id, channel_ids)` | Blocking entry point |
+| `agent.run(server_id, channel_ids)` | Blocking entry point; arguments are optional when `.tavok.json` is present |
 
 ### StreamContext
 
@@ -148,7 +156,7 @@ The SDK resolves connection settings in this order (first match wins):
 | API Key | `api_key=` argument | `TAVOK_API_KEY` | `.tavok-agents.json` → by name | — |
 | Agent ID | `agent_id=` argument | `TAVOK_AGENT_ID` | `.tavok-agents.json` → by name | — |
 
-The `.tavok.json` and `.tavok-agents.json` files are searched from the current directory up to 10 parent levels.
+The `.tavok.json` and `.tavok-agents.json` files are searched from the current directory up to 10 parent levels. These files are created by `tavok init` or by the CLI agent setup flow; the SDK does not self-register agents.
 
 ## Requirements
 
@@ -157,4 +165,4 @@ The `.tavok.json` and `.tavok-agents.json` files are searched from the current d
 
 ## License
 
-MIT
+AGPL-3.0-or-later

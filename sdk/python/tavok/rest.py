@@ -92,15 +92,16 @@ class RestStream:
         client: httpx.AsyncClient,
         stream_url: str,
         message_id: str,
-        channel_id: str,
-        headers: dict[str, str],
+        channel_id: str | None = None,
+        headers: dict[str, str] | None = None,
     ) -> None:
         self._client = client
         self._stream_url = stream_url
         self._message_id = message_id
         self._channel_id = channel_id
-        self._headers = headers
+        self._headers = headers or {}
         self._tokens: list[str] = []
+        self._token_offset = 0
 
     @property
     def message_id(self) -> str:
@@ -114,15 +115,17 @@ class RestStream:
             text: The token text to send.
         """
         self._tokens.append(text)
-        await self._client.post(
+        response = await self._client.post(
             self._stream_url,
             json={
                 "tokens": [text],
                 "done": False,
-                "channelId": self._channel_id,
+                "tokenOffset": self._token_offset,
             },
             headers=self._headers,
         )
+        response.raise_for_status()
+        self._token_offset = _next_token_offset(response, self._token_offset + 1)
 
     async def thinking(self, phase: str, detail: str | None = None) -> None:
         """Send a thinking/status update.
@@ -131,18 +134,16 @@ class RestStream:
             phase: The thinking phase name (e.g. "Searching", "Processing").
             detail: Optional detail text.
         """
-        payload: dict[str, Any] = {
-            "thinking": {"phase": phase},
-            "channelId": self._channel_id,
-        }
+        payload: dict[str, Any] = {"thinking": {"phase": phase}}
         if detail:
             payload["thinking"]["detail"] = detail
 
-        await self._client.post(
+        response = await self._client.post(
             self._stream_url,
             json=payload,
             headers=self._headers,
         )
+        response.raise_for_status()
 
     async def complete(
         self,
@@ -161,16 +162,16 @@ class RestStream:
             "tokens": [],
             "done": True,
             "finalContent": content,
-            "channelId": self._channel_id,
         }
         if metadata:
             payload["metadata"] = metadata
 
-        await self._client.post(
+        response = await self._client.post(
             self._stream_url,
             json=payload,
             headers=self._headers,
         )
+        response.raise_for_status()
 
     async def error(self, error_msg: str, partial_content: str | None = None) -> None:
         """Signal a stream error.
@@ -179,18 +180,16 @@ class RestStream:
             error_msg: The error description.
             partial_content: Any partial content generated before the error.
         """
-        payload: dict[str, Any] = {
-            "error": error_msg,
-            "channelId": self._channel_id,
-        }
+        payload: dict[str, Any] = {"error": error_msg}
         if partial_content:
             payload["finalContent"] = partial_content
 
-        await self._client.post(
+        response = await self._client.post(
             self._stream_url,
             json=payload,
             headers=self._headers,
         )
+        response.raise_for_status()
 
 
 class RestAgent:
@@ -305,7 +304,6 @@ class RestAgent:
             client=self._client,
             stream_url=data["streamUrl"],
             message_id=data["messageId"],
-            channel_id=channel_id,
             headers=self._headers,
         )
 
@@ -318,3 +316,13 @@ class RestAgent:
 
     async def __aexit__(self, *args: Any) -> None:
         await self.close()
+
+
+def _next_token_offset(response: httpx.Response, fallback: int) -> int:
+    """Read nextTokenOffset when present, otherwise use a local fallback."""
+    try:
+        data = response.json()
+    except Exception:
+        return fallback
+    value = data.get("nextTokenOffset") if isinstance(data, dict) else None
+    return value if isinstance(value, int) else fallback

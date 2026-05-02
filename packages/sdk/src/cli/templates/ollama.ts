@@ -20,7 +20,8 @@ export const ollamaTemplate: Template = {
  *   ollama pull llama3.1
  *
  * Environment variables:
- *   TAVOK_AGENT_API_KEY — your Tavok agent API key
+ *   TAVOK_API_KEY       — your Tavok agent API key
+ *   TAVOK_AGENT_ID      — your Tavok agent ID
  *   OLLAMA_HOST         — Ollama host (default: http://127.0.0.1:11434)
  *   OLLAMA_MODEL        — model to use (default: llama3.1)
  */

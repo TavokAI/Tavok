@@ -5,9 +5,8 @@ WebSocket needed — just expose an HTTP endpoint. Perfect for
 existing web services that want to add agent capabilities.
 
 Usage:
+    # Create a WEBHOOK agent in Tavok and set its webhook URL to this app.
     export TAVOK_WEBHOOK_SECRET="your-webhook-secret"
-    export TAVOK_API_KEY="sk-tvk-..."
-    export TAVOK_AGENT_ID="01HXY..."
 
     pip install fastapi uvicorn httpx
     python webhook_agent.py
