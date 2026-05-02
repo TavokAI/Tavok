@@ -19,7 +19,8 @@ export const hermesTemplate: Template = {
  * at your local or remote Hermes server.
  *
  * Environment variables:
- *   TAVOK_AGENT_API_KEY — your Tavok agent API key
+ *   TAVOK_API_KEY       — your Tavok agent API key
+ *   TAVOK_AGENT_ID      — your Tavok agent ID
  *   HERMES_API_BASE     — base URL for the Hermes API (e.g. http://localhost:8080/v1)
  */
 

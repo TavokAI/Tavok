@@ -83,7 +83,9 @@ describe("scaffolder", () => {
     const envPath = path.join(tmpDir, "test-env", ".env.example");
     const envContent = fs.readFileSync(envPath, "utf-8");
 
-    expect(envContent).toContain("TAVOK_AGENT_API_KEY");
+    expect(envContent).toContain("TAVOK_API_KEY");
+    expect(envContent).toContain("TAVOK_AGENT_ID");
+    expect(envContent).not.toContain("TAVOK_AGENT_API_KEY");
     expect(envContent).toContain("OPENAI_API_KEY");
     expect(envContent).toContain("TAVOK_URL");
     expect(envContent).toContain("TAVOK_GATEWAY_URL");

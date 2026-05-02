@@ -43,7 +43,7 @@ export interface OpenAICompatAgentOptions {
  * @example
  * ```typescript
  * const agent = new OpenAICompatAgent({
- *   apiKey: "ak_...",
+ *   apiKey: "sk-tvk-...",
  *   agentId: "agent-001",
  * });
  *

@@ -22,7 +22,7 @@ export interface SseAgentOptions {
   apiKey: string;
   /** The agent's unique ID. */
   agentId: string;
-  /** Channel IDs to subscribe to. If omitted, subscribes to all assigned channels. */
+  /** Assigned channel IDs to subscribe to. Required by the Tavok SSE endpoint. */
   channelIds?: string[];
 }
 
@@ -37,7 +37,7 @@ export interface SseAgentOptions {
  * @example
  * ```typescript
  * const agent = new SseAgent({
- *   apiKey: "ak_...",
+ *   apiKey: "sk-tvk-...",
  *   agentId: "agent-001",
  *   channelIds: ["ch-abc"],
  * });
@@ -86,12 +86,14 @@ export class SseAgent {
    * consuming the response body as a stream of server-sent events.
    */
   async connect(): Promise<void> {
+    if (this._channelIds.length === 0) {
+      throw new Error("SseAgent channelIds are required by the Tavok SSE endpoint");
+    }
+
     this._abortController = new AbortController();
 
     let url = `${this._apiUrl}/api/v1/agents/${this._agentId}/events`;
-    if (this._channelIds.length > 0) {
-      url += `?channel_ids=${this._channelIds.join(",")}`;
-    }
+    url += `?channels=${this._channelIds.join(",")}`;
 
     const response = await fetch(url, {
       method: "GET",

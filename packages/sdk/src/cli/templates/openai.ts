@@ -16,7 +16,8 @@ export const openaiTemplate: Template = {
  * Tavok agent using OpenAI GPT-4o with streaming.
  *
  * Environment variables:
- *   TAVOK_AGENT_API_KEY — your Tavok agent API key
+ *   TAVOK_API_KEY       — your Tavok agent API key
+ *   TAVOK_AGENT_ID      — your Tavok agent ID
  *   OPENAI_API_KEY      — your OpenAI API key
  */
 

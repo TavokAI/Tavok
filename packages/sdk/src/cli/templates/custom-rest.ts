@@ -15,7 +15,8 @@ export const customRestTemplate: Template = {
  * Replace the handler body with your own logic.
  *
  * Environment variables:
- *   TAVOK_AGENT_API_KEY — your Tavok agent API key
+ *   TAVOK_API_KEY       — your Tavok agent API key
+ *   TAVOK_AGENT_ID      — your Tavok agent ID
  */
 
 import { RestAgent } from "@tavok/sdk";

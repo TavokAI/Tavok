@@ -18,7 +18,8 @@ export const semanticKernelTemplate: Template = {
  * your Semantic Kernel setup (typically a .NET or Python service).
  *
  * Environment variables:
- *   TAVOK_AGENT_API_KEY — your Tavok agent API key
+ *   TAVOK_API_KEY       — your Tavok agent API key
+ *   TAVOK_AGENT_ID      — your Tavok agent ID
  *   SK_API_URL          — URL of your Semantic Kernel backend
  */
 

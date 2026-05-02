@@ -18,7 +18,8 @@ export const autogenTemplate: Template = {
  * to match your AutoGen setup.
  *
  * Environment variables:
- *   TAVOK_AGENT_API_KEY — your Tavok agent API key
+ *   TAVOK_API_KEY       — your Tavok agent API key
+ *   TAVOK_AGENT_ID      — your Tavok agent ID
  *   AUTOGEN_API_URL     — URL of your AutoGen backend
  */
 

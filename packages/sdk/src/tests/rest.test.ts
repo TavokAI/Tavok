@@ -169,8 +169,12 @@ describe("RestAgent", () => {
   // ---- startStream() ----------------------------------------------------
 
   describe("startStream()", () => {
-    it("should POST to streams endpoint and return RestStream", async () => {
-      const { fn, calls } = mockFetch({ messageId: "stream-msg-1" });
+    it("should start a stream through the current messages endpoint", async () => {
+      const { fn, calls } = mockFetch({
+        messageId: "stream-msg-1",
+        streamUrl:
+          "http://localhost:5555/api/v1/agents/agent-001/messages/stream-msg-1/stream",
+      });
       globalThis.fetch = fn;
 
       const agent = new RestAgent({ apiUrl, apiKey, agentId });
@@ -180,10 +184,10 @@ describe("RestAgent", () => {
       expect(stream.messageId).toBe("stream-msg-1");
 
       const url = new URL(calls[0].url);
-      expect(url.pathname).toBe("/api/v1/agents/agent-001/streams");
+      expect(url.pathname).toBe("/api/v1/agents/agent-001/messages");
 
       const body = JSON.parse(calls[0].init?.body as string);
-      expect(body).toEqual({ channelId: "ch-abc" });
+      expect(body).toEqual({ channelId: "ch-abc", streaming: true });
     });
   });
 
@@ -238,11 +242,17 @@ describe("RestStream", () => {
     globalThis.fetch = originalFetch;
   });
 
-  it("should POST token to correct endpoint with index", async () => {
+  it("should POST tokens to the current streamUrl with monotonic tokenOffset", async () => {
     const { fn, calls } = mockFetch({});
     globalThis.fetch = fn;
 
-    const stream = new RestStream(apiUrl, apiKey, agentId, messageId);
+    const stream = new RestStream(
+      apiUrl,
+      apiKey,
+      agentId,
+      messageId,
+      `${apiUrl}/api/v1/agents/${agentId}/messages/${messageId}/stream`,
+    );
     await stream.token("Hello ");
     await stream.token("world!");
 
@@ -250,67 +260,91 @@ describe("RestStream", () => {
 
     const url0 = new URL(calls[0].url);
     expect(url0.pathname).toBe(
-      "/api/v1/agents/agent-001/streams/stream-msg-1/tokens",
+      "/api/v1/agents/agent-001/messages/stream-msg-1/stream",
     );
     expect(JSON.parse(calls[0].init?.body as string)).toEqual({
-      token: "Hello ",
-      index: 0,
+      tokens: ["Hello "],
+      done: false,
+      tokenOffset: 0,
     });
 
     expect(JSON.parse(calls[1].init?.body as string)).toEqual({
-      token: "world!",
-      index: 1,
+      tokens: ["world!"],
+      done: false,
+      tokenOffset: 1,
     });
   });
 
-  it("should POST thinking to correct endpoint", async () => {
+  it("should POST thinking to the current streamUrl", async () => {
     const { fn, calls } = mockFetch({});
     globalThis.fetch = fn;
 
-    const stream = new RestStream(apiUrl, apiKey, agentId, messageId);
+    const stream = new RestStream(
+      apiUrl,
+      apiKey,
+      agentId,
+      messageId,
+      `${apiUrl}/api/v1/agents/${agentId}/messages/${messageId}/stream`,
+    );
     await stream.thinking("Searching", "querying vector DB");
 
     const url = new URL(calls[0].url);
     expect(url.pathname).toBe(
-      "/api/v1/agents/agent-001/streams/stream-msg-1/thinking",
+      "/api/v1/agents/agent-001/messages/stream-msg-1/stream",
     );
     expect(JSON.parse(calls[0].init?.body as string)).toEqual({
-      phase: "Searching",
-      detail: "querying vector DB",
+      thinking: {
+        phase: "Searching",
+        detail: "querying vector DB",
+      },
     });
   });
 
-  it("should POST complete to correct endpoint", async () => {
+  it("should POST completion to the current streamUrl", async () => {
     const { fn, calls } = mockFetch({});
     globalThis.fetch = fn;
 
-    const stream = new RestStream(apiUrl, apiKey, agentId, messageId);
+    const stream = new RestStream(
+      apiUrl,
+      apiKey,
+      agentId,
+      messageId,
+      `${apiUrl}/api/v1/agents/${agentId}/messages/${messageId}/stream`,
+    );
     await stream.complete("Final answer", { model: "gpt-4" });
 
     const url = new URL(calls[0].url);
     expect(url.pathname).toBe(
-      "/api/v1/agents/agent-001/streams/stream-msg-1/complete",
+      "/api/v1/agents/agent-001/messages/stream-msg-1/stream",
     );
     expect(JSON.parse(calls[0].init?.body as string)).toEqual({
+      tokens: [],
+      done: true,
       finalContent: "Final answer",
       metadata: { model: "gpt-4" },
     });
   });
 
-  it("should POST error to correct endpoint", async () => {
+  it("should POST errors to the current streamUrl", async () => {
     const { fn, calls } = mockFetch({});
     globalThis.fetch = fn;
 
-    const stream = new RestStream(apiUrl, apiKey, agentId, messageId);
+    const stream = new RestStream(
+      apiUrl,
+      apiKey,
+      agentId,
+      messageId,
+      `${apiUrl}/api/v1/agents/${agentId}/messages/${messageId}/stream`,
+    );
     await stream.error("LLM timeout", "partial content here");
 
     const url = new URL(calls[0].url);
     expect(url.pathname).toBe(
-      "/api/v1/agents/agent-001/streams/stream-msg-1/error",
+      "/api/v1/agents/agent-001/messages/stream-msg-1/stream",
     );
     expect(JSON.parse(calls[0].init?.body as string)).toEqual({
       error: "LLM timeout",
-      partialContent: "partial content here",
+      finalContent: "partial content here",
     });
   });
 
@@ -318,7 +352,13 @@ describe("RestStream", () => {
     const { fn } = mockFetch({}, 500);
     globalThis.fetch = fn;
 
-    const stream = new RestStream(apiUrl, apiKey, agentId, messageId);
+    const stream = new RestStream(
+      apiUrl,
+      apiKey,
+      agentId,
+      messageId,
+      `${apiUrl}/api/v1/agents/${agentId}/messages/${messageId}/stream`,
+    );
     await expect(stream.token("fail")).rejects.toThrow("Stream token failed");
   });
 
@@ -326,7 +366,13 @@ describe("RestStream", () => {
     const { fn, calls } = mockFetch({});
     globalThis.fetch = fn;
 
-    const stream = new RestStream(apiUrl, apiKey, agentId, messageId);
+    const stream = new RestStream(
+      apiUrl,
+      apiKey,
+      agentId,
+      messageId,
+      `${apiUrl}/api/v1/agents/${agentId}/messages/${messageId}/stream`,
+    );
     await stream.token("test");
 
     const headers = calls[0].init?.headers as Record<string, string>;

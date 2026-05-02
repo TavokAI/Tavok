@@ -23,7 +23,8 @@ export const langchainTemplate: Template = {
  * processes them through a LangChain chain, and streams the response back.
  *
  * Environment variables:
- *   TAVOK_AGENT_API_KEY — your Tavok agent API key
+ *   TAVOK_API_KEY       — your Tavok agent API key
+ *   TAVOK_AGENT_ID      — your Tavok agent ID
  *   OPENAI_API_KEY      — your OpenAI API key (used by LangChain)
  */
 

@@ -83,7 +83,8 @@ export async function scaffold(opts: ScaffoldOptions): Promise<void> {
     "# Tavok agent credentials",
     "TAVOK_URL=http://localhost:5555",
     "TAVOK_GATEWAY_URL=ws://localhost:4001/socket",
-    "TAVOK_AGENT_API_KEY=your-agent-api-key",
+    "TAVOK_API_KEY=sk-tvk-...",
+    "TAVOK_AGENT_ID=01HXY...",
     "",
   ];
 

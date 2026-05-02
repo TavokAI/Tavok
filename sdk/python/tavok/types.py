@@ -24,14 +24,19 @@ class MessageType(str, Enum):
     STANDARD = "STANDARD"
     STREAMING = "STREAMING"
     SYSTEM = "SYSTEM"
+    TOOL_CALL = "TOOL_CALL"
+    TOOL_RESULT = "TOOL_RESULT"
+    CODE_BLOCK = "CODE_BLOCK"
+    ARTIFACT = "ARTIFACT"
+    STATUS = "STATUS"
 
 
 class StreamStatus(str, Enum):
     """Streaming message lifecycle state."""
 
-    ACTIVE = "active"
-    COMPLETE = "complete"
-    ERROR = "error"
+    ACTIVE = "ACTIVE"
+    COMPLETE = "COMPLETE"
+    ERROR = "ERROR"
 
 
 @dataclass(frozen=True, slots=True)
@@ -51,6 +56,9 @@ class Message:
         edited_at: ISO 8601 timestamp if edited, else None.
         author_avatar_url: Avatar URL or None.
         streaming_status: Streaming lifecycle state or None.
+        metadata: Optional agent execution metadata.
+        token_history: Optional token rewind data.
+        checkpoints: Optional checkpoint resume data.
     """
 
     id: str
@@ -65,6 +73,9 @@ class Message:
     edited_at: str | None = None
     author_avatar_url: str | None = None
     streaming_status: StreamStatus | None = None
+    metadata: dict[str, Any] | None = None
+    token_history: list[dict[str, Any]] | None = None
+    checkpoints: list[dict[str, Any]] | None = None
 
     def mentions_me(self, agent_id: str) -> bool:
         """Check if this message mentions the given agent ID.
@@ -80,6 +91,9 @@ class Message:
         author_type = payload.get("authorType", "USER")
         msg_type = payload.get("type", "STANDARD")
         streaming = payload.get("streamingStatus")
+        stream_status = (
+            StreamStatus(str(streaming).upper()) if streaming else None
+        )
 
         return cls(
             id=payload["id"],
@@ -93,7 +107,10 @@ class Message:
             created_at=payload.get("createdAt", ""),
             edited_at=payload.get("editedAt"),
             author_avatar_url=payload.get("authorAvatarUrl"),
-            streaming_status=StreamStatus(streaming) if streaming else None,
+            streaming_status=stream_status,
+            metadata=payload.get("metadata"),
+            token_history=payload.get("tokenHistory"),
+            checkpoints=payload.get("checkpoints"),
         )
 
 
@@ -129,6 +146,7 @@ class StreamStart:
     agent_name: str
     agent_avatar_url: str | None
     sequence: str
+    status: str = "active"
 
     @classmethod
     def from_payload(cls, payload: dict[str, Any]) -> StreamStart:
@@ -138,6 +156,7 @@ class StreamStart:
             agent_name=payload.get("agentName", ""),
             agent_avatar_url=payload.get("agentAvatarUrl"),
             sequence=str(payload.get("sequence", "0")),
+            status=payload.get("status", "active"),
         )
 
 
@@ -147,7 +166,8 @@ class StreamComplete:
 
     message_id: str
     final_content: str
-    thinking_timeline: list[dict[str, str]] = field(default_factory=list)
+    thinking_timeline: list[dict[str, Any]] = field(default_factory=list)
+    metadata: dict[str, Any] | None = None
 
     @classmethod
     def from_payload(cls, payload: dict[str, Any]) -> StreamComplete:
@@ -155,6 +175,7 @@ class StreamComplete:
             message_id=payload["messageId"],
             final_content=payload.get("finalContent", ""),
             thinking_timeline=payload.get("thinkingTimeline", []),
+            metadata=payload.get("metadata"),
         )
 
 
@@ -165,6 +186,7 @@ class StreamError:
     message_id: str
     error: str
     partial_content: str | None
+    code: str | None = None
 
     @classmethod
     def from_payload(cls, payload: dict[str, Any]) -> StreamError:
@@ -172,6 +194,7 @@ class StreamError:
             message_id=payload["messageId"],
             error=payload.get("error", "Unknown error"),
             partial_content=payload.get("partialContent"),
+            code=payload.get("code"),
         )
 
 

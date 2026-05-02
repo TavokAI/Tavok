@@ -2,7 +2,7 @@
   "name": "@tavok/sdk",
   "version": "0.3.0",
   "description": "Tavok TypeScript SDK — build AI agents for Tavok in minutes",
-  "license": "MIT",
+  "license": "AGPL-3.0-or-later",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "bin": {
@@ -16,6 +16,26 @@
     ".": {
       "require": "./dist/index.js",
       "types": "./dist/index.d.ts"
+    },
+    "./rest": {
+      "require": "./dist/rest.js",
+      "types": "./dist/rest.d.ts"
+    },
+    "./webhook": {
+      "require": "./dist/webhook.js",
+      "types": "./dist/webhook.d.ts"
+    },
+    "./sse": {
+      "require": "./dist/sse.js",
+      "types": "./dist/sse.d.ts"
+    },
+    "./openai-compat": {
+      "require": "./dist/openai-compat.js",
+      "types": "./dist/openai-compat.d.ts"
+    },
+    "./inbound-webhook": {
+      "require": "./dist/inbound-webhook.js",
+      "types": "./dist/inbound-webhook.d.ts"
     }
   },
   "scripts": {

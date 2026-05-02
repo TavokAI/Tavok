@@ -17,7 +17,8 @@ export const openclawTemplate: Template = {
  * the OpenClaw client library is available.
  *
  * Environment variables:
- *   TAVOK_AGENT_API_KEY — your Tavok agent API key
+ *   TAVOK_API_KEY       — your Tavok agent API key
+ *   TAVOK_AGENT_ID      — your Tavok agent ID
  *   OPENCLAW_API_KEY    — your OpenClaw API key
  */
 

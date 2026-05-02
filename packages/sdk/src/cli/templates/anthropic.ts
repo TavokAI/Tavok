@@ -16,7 +16,8 @@ export const anthropicTemplate: Template = {
  * Tavok agent using Anthropic Claude with streaming.
  *
  * Environment variables:
- *   TAVOK_AGENT_API_KEY — your Tavok agent API key
+ *   TAVOK_API_KEY       — your Tavok agent API key
+ *   TAVOK_AGENT_ID      — your Tavok agent ID
  *   ANTHROPIC_API_KEY   — your Anthropic API key
  */
 

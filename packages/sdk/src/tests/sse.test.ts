@@ -73,7 +73,7 @@ describe("SseAgent", () => {
     expect(mockFetch).toHaveBeenCalledOnce();
 
     const [url, opts] = mockFetch.mock.calls[0] as [string, RequestInit];
-    expect(url).toBe("http://localhost:5555/api/v1/agents/agent-001/events?channel_ids=ch-abc,ch-def");
+    expect(url).toBe("http://localhost:5555/api/v1/agents/agent-001/events?channels=ch-abc,ch-def");
     expect(opts.method).toBe("GET");
     expect(opts.headers).toMatchObject({
       Accept: "text/event-stream",
@@ -83,7 +83,7 @@ describe("SseAgent", () => {
     agent.disconnect();
   });
 
-  it("should connect without channel_ids query param when none provided", async () => {
+  it("should reject connect without channelIds because the SSE contract requires channels", async () => {
     const mockFetch = vi.fn().mockResolvedValue({
       ok: true,
       body: createSseStream([]),
@@ -95,12 +95,8 @@ describe("SseAgent", () => {
       agentId: "agent-001",
     });
 
-    await agent.connect();
-
-    const [url] = mockFetch.mock.calls[0] as [string, RequestInit];
-    expect(url).toBe("http://localhost:5555/api/v1/agents/agent-001/events");
-
-    agent.disconnect();
+    await expect(agent.connect()).rejects.toThrow("channelIds");
+    expect(mockFetch).not.toHaveBeenCalled();
   });
 
   // ---- SSE event parsing --------------------------------------------------
@@ -119,6 +115,7 @@ describe("SseAgent", () => {
     const agent = new SseAgent({
       apiKey: "ak_test",
       agentId: "agent-001",
+      channelIds: ["ch-abc"],
     });
 
     agent.onMessage((m) => {
@@ -151,6 +148,7 @@ describe("SseAgent", () => {
     const agent = new SseAgent({
       apiKey: "ak_test",
       agentId: "agent-001",
+      channelIds: ["ch-abc"],
     });
 
     agent
@@ -181,6 +179,7 @@ describe("SseAgent", () => {
     const agent = new SseAgent({
       apiKey: "ak_test",
       agentId: "agent-001",
+      channelIds: ["ch-abc"],
     });
 
     agent.onMessage((m) => { received.push(m); });
@@ -206,6 +205,7 @@ describe("SseAgent", () => {
     const agent = new SseAgent({
       apiKey: "ak_test",
       agentId: "agent-001",
+      channelIds: ["ch-abc"],
     });
 
     await agent.connect();
@@ -283,6 +283,7 @@ describe("SseAgent", () => {
     const agent = new SseAgent({
       apiKey: "bad_key",
       agentId: "agent-001",
+      channelIds: ["ch-abc"],
     });
 
     await expect(agent.connect()).rejects.toThrow("SSE connect failed: 401 Unauthorized");
